@@ -54,9 +54,11 @@ Install from TestPyPI:
 pip install -i https://test.pypi.org/simple/ featrix-modelcard
 ```
 
-## NPM Package
+## NPM Packages
 
-### Prerequisites
+### React Component
+
+#### Prerequisites
 
 1. Create an npm account at https://www.npmjs.com
 2. Login to npm:
@@ -66,10 +68,50 @@ npm login
 
 3. Ensure you have access to the `@featrix` scope (or publish as unscoped)
 
-### Publishing
+#### Publishing
 
 ```bash
 cd react
+./publish.sh
+```
+
+### Standalone JavaScript
+
+#### Prerequisites
+
+1. Create an npm account at https://www.npmjs.com
+2. Login to npm:
+```bash
+npm login
+```
+
+3. Ensure you have access to the `@featrix` scope (or publish as unscoped)
+
+#### Publishing
+
+```bash
+cd javascript
+./publish.sh
+```
+
+After publishing, users can use it via CDN:
+- **Featrix CDN**: `https://bits.featrix.com/js/featrix-modelcard/model-card.js`
+- **unpkg**: `https://unpkg.com/@featrix/modelcard-js/model-card.js`
+- **jsDelivr**: `https://cdn.jsdelivr.net/npm/@featrix/modelcard-js/model-card.js`
+
+#### Publishing to Featrix CDN
+
+```bash
+cd javascript
+./publish-cdn.sh
+```
+
+This will upload files to `bits:/var/www/html/js/featrix-modelcard/` via scp.
+
+#### Publishing to npm
+
+```bash
+cd javascript
 ./publish.sh
 ```
 
@@ -128,5 +170,6 @@ Or edit `react/package.json` manually.
 ## Package Names
 
 - **PyPI**: `featrix-modelcard`
-- **NPM**: `@featrix/modelcard`
+- **NPM (React)**: `@featrix/modelcard`
+- **NPM (Standalone JS)**: `@featrix/modelcard-js`
 

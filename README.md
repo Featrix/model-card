@@ -40,7 +40,7 @@ html = render_html(model_card)
 ### JavaScript (Standalone)
 
 ```html
-<script src="model-card.js"></script>
+<script src="https://bits.featrix.com/js/featrix-modelcard/model-card.js"></script>
 <script>
     const html = FeatrixModelCard.renderHTML(modelCardJson);
     document.getElementById('container').innerHTML = html;
@@ -147,6 +147,26 @@ cd react
 ```
 
 The package will be published as `@featrix/modelcard` on npm.
+
+### NPM (Standalone JavaScript)
+
+```bash
+cd javascript
+./publish.sh
+```
+
+The package will be published as `@featrix/modelcard-js` on npm. 
+
+**Publishing to Featrix CDN:**
+```bash
+cd javascript
+./publish-cdn.sh
+```
+
+After publishing, users can use it via:
+- **Featrix CDN**: `https://bits.featrix.com/js/featrix-modelcard/model-card.js`
+- **unpkg**: `https://unpkg.com/@featrix/modelcard-js/model-card.js`
+- **jsDelivr**: `https://cdn.jsdelivr.net/npm/@featrix/modelcard-js/model-card.js`
 
 See [PUBLISH.md](PUBLISH.md) for detailed publishing instructions.
 

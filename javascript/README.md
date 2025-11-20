@@ -2,12 +2,45 @@
 
 Standalone JavaScript renderer for Featrix Sphere Model Card JSON. No dependencies required.
 
+## Installation
+
+### Via Featrix CDN (Recommended)
+
+```html
+<script src="https://bits.featrix.com/js/featrix-modelcard/model-card.js"></script>
+```
+
+### Via npm CDN
+
+```html
+<!-- Using unpkg -->
+<script src="https://unpkg.com/@featrix/modelcard-js@latest/model-card.js"></script>
+
+<!-- Or using jsDelivr -->
+<script src="https://cdn.jsdelivr.net/npm/@featrix/modelcard-js@latest/model-card.js"></script>
+```
+
+### Via npm
+
+```bash
+npm install @featrix/modelcard-js
+```
+
+Then include from `node_modules`:
+```html
+<script src="node_modules/@featrix/modelcard-js/model-card.js"></script>
+```
+
+### Direct Download
+
+Download `model-card.js` from the repository and host it yourself.
+
 ## Usage
 
 ### Include the script
 
 ```html
-<script src="model-card.js"></script>
+<script src="https://bits.featrix.com/js/featrix-modelcard/model-card.js"></script>
 ```
 
 ### Render HTML
@@ -38,7 +71,7 @@ document.getElementById('container').innerHTML = html;
 <body>
     <div id="model-card-container"></div>
     
-    <script src="model-card.js"></script>
+    <script src="https://bits.featrix.com/js/featrix-modelcard/model-card.js"></script>
     <script>
         // Load your model card JSON
         fetch('model_card.json')

@@ -1,0 +1,26 @@
+{
+  "name": "@featrix/model-card-react",
+  "version": "1.0.0",
+  "description": "React component for rendering Featrix Sphere Model Cards",
+  "main": "ModelCard.tsx",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "featrix",
+    "model-card",
+    "react",
+    "typescript"
+  ],
+  "author": "",
+  "license": "ISC",
+  "peerDependencies": {
+    "react": "^16.8.0 || ^17.0.0 || ^18.0.0",
+    "recharts": "^2.0.0"
+  },
+  "devDependencies": {
+    "@types/react": "^18.0.0",
+    "typescript": "^4.9.0"
+  }
+}
+

@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Featrix Model Card - Example</title>
+</head>
+<body>
+    <h1>Featrix Model Card Renderer Example</h1>
+    <div id="model-card-container"></div>
+
+    <script src="model-card.js"></script>
+    <script>
+        // Example model card JSON
+        const modelCardJson = {
+            model_identification: {
+                session_id: "public-alphafreight-mini-8c482fa5-1304-442d-8875-4263d5bf79d6",
+                job_id: "cadab2-20251118-010809",
+                name: "alphafreight-mini",
+                target_column: "has_fuel_card_Comdata",
+                target_column_type: "set",
+                compute_cluster: "BURRITO",
+                training_date: "2025-11-18",
+                status: "DONE",
+                model_type: "Single Predictor",
+                framework: "FeatrixSphere v0.2.968"
+            },
+            training_dataset: {
+                train_rows: 431,
+                val_rows: 108,
+                total_rows: 539,
+                total_features: 15,
+                feature_names: [
+                    "fleet_size",
+                    "annual_revenue",
+                    "primary_operation",
+                    "vehicle_types",
+                    "operating_regions"
+                ],
+                target_column: "has_fuel_card_Comdata"
+            },
+            training_metrics: {
+                best_epoch: {
+                    epoch: 28,
+                    validation_loss: 0.1334,
+                    train_loss: 0.1256
+                },
+                classification_metrics: {
+                    accuracy: 0.925,
+                    precision: 0.912,
+                    recall: 0.887,
+                    f1: 0.899,
+                    auc: 0.967,
+                    is_binary: true
+                }
+            },
+            model_quality: {
+                warnings: [
+                    {
+                        type: "CLASS_IMBALANCE",
+                        severity: "MODERATE",
+                        message: "Class imbalance detected: positive class represents 35% of training data"
+                    }
+                ]
+            }
+        };
+
+        // Render the model card
+        const html = FeatrixModelCard.renderHTML(modelCardJson);
+        const container = document.getElementById('model-card-container');
+        container.innerHTML = html;
+        
+        // Attach event listeners after HTML is inserted
+        // The script tag in the HTML should handle it, but this ensures it works
+        setTimeout(function() {
+            FeatrixModelCard.attachEventListeners(container);
+        }, 0);
+    </script>
+</body>
+</html>
+

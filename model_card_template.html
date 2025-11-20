@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Model Card -  Insurance Risk Prediction</title>
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; background: #f0f2f5; }
+        .container { max-width: 1400px; margin: 20px auto; background: white; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+        .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; border-radius: 12px 12px 0 0; }
+        .header h1 { margin: 0; font-size: 32px; }
+        .header .subtitle { opacity: 0.9; margin-top: 10px; }
+        .content { padding: 30px; }
+        .section { margin: 30px 0; }
+        .section h2 { color: #333; border-bottom: 3px solid #667eea; padding-bottom: 10px; }
+        .metric-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 15px; margin: 20px 0; }
+        .metric-card { background: #f8f9fa; padding: 20px; border-radius: 8px; border-left: 4px solid #667eea; }
+        .metric-card .label { color: #666; font-size: 14px; margin-bottom: 5px; }
+        .metric-card .value { color: #333; font-size: 24px; font-weight: bold; }
+        .chart { margin: 20px 0; border-radius: 8px; background: #fafafa; padding: 15px; }
+        .tag { display: inline-block; background: #e3f2fd; color: #1976d2; padding: 4px 12px; border-radius: 12px; font-size: 12px; margin: 2px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎯 Model Card:  Insurance Risk Prediction</h1>
+            <div class="subtitle">AI Model for Predicting Bad Account Risk</div>
+            <div class="subtitle" id="generated-date"></div>
+        </div>
+        
+        <div class="content">
+            <div class="section">
+                <h2>📋 Model Identification</h2>
+                <div class="metric-grid" id="model-id-grid"></div>
+            </div>
+            
+            <div class="section">
+                <h2>📊 Training Data</h2>
+                <div class="metric-grid" id="training-grid"></div>
+                <div id="features-list"></div>
+            </div>
+            
+            <div class="section">
+                <h2>🎯 Prediction Results</h2>
+                <div class="metric-grid" id="results-grid"></div>
+            </div>
+            
+            <div class="section">
+                <h2>📈 Visualizations</h2>
+                <div id="dist-chart" class="chart"></div>
+                <div id="prob-chart" class="chart"></div>
+                <div id="conf-chart" class="chart"></div>
+            </div>
+        </div>
+    </div>
+    
+    <script id="model-data" type="application/json">
+    {MODEL_DATA_JSON}
+    </script>
+    
+    <script id="chart-script">
+    {CHART_JAVASCRIPT}
+    </script>
+</body>
+</html>
+

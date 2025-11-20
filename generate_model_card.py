@@ -602,7 +602,7 @@ def generate_model_card(csv_file, session_id, output_html='model_card.html', per
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>Model Card</title>
+    <title>Model Card - Insurance Risk Prediction</title>
     <style>
         * {{ margin: 0; padding: 0; box-sizing: border-box; }}
         body {{ font-family: 'Courier New', monospace; background: #fff; color: #000; line-height: 1.4; }}
@@ -658,7 +658,7 @@ def generate_model_card(csv_file, session_id, output_html='model_card.html', per
 <body>
     <div class="page">
         <div class="header">
-            <h1>MODEL CARD</h1>
+            <h1>MODEL CARD: INSURANCE RISK PREDICTION</h1>
             <div class="meta">
                 <strong>Session:</strong> {meta['session_id']} &nbsp;|&nbsp; 
                 <strong>Generated:</strong> {datetime.now().strftime('%Y-%m-%d %H:%M:%S UTC')} &nbsp;|&nbsp; 

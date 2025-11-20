@@ -79,50 +79,73 @@ def render_model_identification(data: Dict[str, Any]) -> str:
     status_color = get_status_color(mi.get('status', ''))
     session_id_short = mi.get('session_id', 'N/A')[:20] if mi.get('session_id') else 'N/A'
     
+    # Map model type to display format
+    model_type = mi.get('model_type', '')
+    target_type = mi.get('target_column_type', '')
+    model_type_display = 'N/A'
+    
+    if model_type:
+        model_type_lower = model_type.lower()
+        target_type_lower = target_type.lower() if target_type else ''
+        
+        if model_type_lower == 'embedding space' or model_type_lower == 'es':
+            model_type_display = 'Foundational Embedding Space'
+        elif model_type_lower == 'single predictor' or model_type_lower == 'sp':
+            if target_type_lower == 'set':
+                model_type_display = 'Classifier'
+            elif target_type_lower == 'scalar':
+                model_type_display = 'Regression'
+            else:
+                model_type_display = 'Single Predictor'
+        else:
+            model_type_display = model_type
+    
     html = f"""
-    <div class="section">
-        <div class="section-title">Model Identification</div>
+    <details class="section" open>
+        <summary>MODEL IDENTIFICATION</summary>
+        <div style="padding: 20px;">
         <div class="grid">
             <div class="metric">
-                <div class="metric-label">Session ID</div>
-                <div class="metric-value" style="font-size: 18px;">{session_id_short}</div>
+                <div class="metric-label">Target Column</div>
+                <div class="metric-value" style="font-size: 20px; font-weight: bold;">{mi.get('target_column', 'N/A')}</div>
             </div>
             <div class="metric">
-                <div class="metric-label">Compute Cluster</div>
-                <div class="metric-value">{mi.get('compute_cluster', 'N/A').upper()}</div>
-            </div>
-            <div class="metric">
-                <div class="metric-label">Training Date</div>
-                <div class="metric-value" style="font-size: 18px;">{mi.get('training_date', 'N/A')}</div>
+                <div class="metric-label">Model Type</div>
+                <div class="metric-value" style="font-size: 20px; font-weight: bold;">{model_type_display}</div>
             </div>
             <div class="metric">
                 <div class="metric-label">Status</div>
                 <div class="metric-value"><span class="status-badge" style="background-color: {status_color}">{mi.get('status', 'N/A').upper()}</span></div>
             </div>
+            <div class="metric">
+                <div class="metric-label">Training Date</div>
+                <div class="metric-value" style="font-size: 18px;">{mi.get('training_date', 'N/A')}</div>
+            </div>
         </div>
         <table class="info-table">
             <tr>
-                <th style="width: 250px;">Job ID</th>
+                <th style="width: 250px;">Session ID</th>
+                <td><code>{session_id_short}</code></td>
+            </tr>
+            <tr>
+                <th>Compute Cluster</th>
+                <td>{mi.get('compute_cluster', 'N/A').upper()}</td>
+            </tr>
+            <tr>
+                <th>Job ID</th>
                 <td><code>{mi.get('job_id', 'N/A')}</code></td>
             </tr>
             <tr>
-                <th>Model Type</th>
-                <td>{mi.get('model_type', 'N/A')}</td>
-            </tr>
-            <tr>
-                <th>Target Column</th>
-                <td>{mi.get('target_column', 'N/A')}</td>
-            </tr>
-            <tr>
                 <th>Target Type</th>
-                <td>{mi.get('target_column_type', 'N/A')}</td>
+                <td>{mi.get('target_column_type', 'N/A').upper() if mi.get('target_column_type') else 'N/A'}</td>
             </tr>
             <tr>
                 <th>Framework</th>
                 <td>{mi.get('framework', 'N/A')}</td>
             </tr>
         </table>
-    </div>
+        </div>
+    </details>
     """
     return html
 
@@ -581,12 +604,12 @@ def render_html(model_card_json: Dict[str, Any]) -> str:
     # Render all sections
     sections = [
         render_model_identification(model_card_json),
+        render_training_metrics(model_card_json),
+        render_model_quality(model_card_json),
         render_training_dataset(model_card_json),
         render_feature_inventory(model_card_json),
         render_training_configuration(model_card_json),
-        render_training_metrics(model_card_json),
         render_model_architecture(model_card_json),
-        render_model_quality(model_card_json),
         render_technical_details(model_card_json),
         render_provenance(model_card_json),
         render_column_statistics(model_card_json),

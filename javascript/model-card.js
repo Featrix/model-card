@@ -87,50 +87,73 @@
       var statusColor = this.getStatusColor(mi.status);
       var sessionIdShort = mi.session_id ? mi.session_id.substring(0, 20) : 'N/A';
       
+      // Map model type to display format
+      var modelTypeDisplay = 'N/A';
+      if (mi.model_type) {
+        var modelTypeLower = mi.model_type.toLowerCase();
+        var targetTypeLower = (mi.target_column_type || '').toLowerCase();
+        
+        if (modelTypeLower === 'embedding space' || modelTypeLower === 'es') {
+          modelTypeDisplay = 'Foundational Embedding Space';
+        } else if (modelTypeLower === 'single predictor' || modelTypeLower === 'sp') {
+          if (targetTypeLower === 'set') {
+            modelTypeDisplay = 'Classifier';
+          } else if (targetTypeLower === 'scalar') {
+            modelTypeDisplay = 'Regression';
+          } else {
+            modelTypeDisplay = 'Single Predictor';
+          }
+        } else {
+          modelTypeDisplay = mi.model_type;
+        }
+      }
+      
       return `
-    <div class="section">
-        <div class="section-title">Model Identification</div>
+    <details class="section" open>
+        <summary>MODEL IDENTIFICATION</summary>
+        <div style="padding: 20px;">
         <div class="grid">
             <div class="metric">
-                <div class="metric-label">Session ID</div>
-                <div class="metric-value" style="font-size: 18px;">${sessionIdShort}</div>
+                <div class="metric-label">Target Column</div>
+                <div class="metric-value" style="font-size: 20px; font-weight: bold;">${mi.target_column || 'N/A'}</div>
             </div>
             <div class="metric">
-                <div class="metric-label">Compute Cluster</div>
-                <div class="metric-value">${(mi.compute_cluster || 'N/A').toUpperCase()}</div>
-            </div>
-            <div class="metric">
-                <div class="metric-label">Training Date</div>
-                <div class="metric-value" style="font-size: 18px;">${mi.training_date || 'N/A'}</div>
+                <div class="metric-label">Model Type</div>
+                <div class="metric-value" style="font-size: 20px; font-weight: bold;">${modelTypeDisplay}</div>
             </div>
             <div class="metric">
                 <div class="metric-label">Status</div>
                 <div class="metric-value"><span class="status-badge" style="background-color: ${statusColor}">${(mi.status || 'N/A').toUpperCase()}</span></div>
             </div>
+            <div class="metric">
+                <div class="metric-label">Training Date</div>
+                <div class="metric-value" style="font-size: 18px;">${mi.training_date || 'N/A'}</div>
+            </div>
         </div>
         <table>
             <tr>
-                <th style="width: 250px;">Job ID</th>
+                <th style="width: 250px;">Session ID</th>
+                <td><code>${sessionIdShort}</code></td>
+            </tr>
+            <tr>
+                <th>Compute Cluster</th>
+                <td>${(mi.compute_cluster || 'N/A').toUpperCase()}</td>
+            </tr>
+            <tr>
+                <th>Job ID</th>
                 <td><code>${mi.job_id || 'N/A'}</code></td>
             </tr>
             <tr>
-                <th>Model Type</th>
-                <td>${mi.model_type || 'N/A'}</td>
-            </tr>
-            <tr>
-                <th>Target Column</th>
-                <td>${mi.target_column || 'N/A'}</td>
-            </tr>
-            <tr>
                 <th>Target Type</th>
-                <td>${mi.target_column_type || 'N/A'}</td>
+                <td>${(mi.target_column_type || 'N/A').toUpperCase()}</td>
             </tr>
             <tr>
                 <th>Framework</th>
                 <td>${mi.framework || 'N/A'}</td>
             </tr>
         </table>
-    </div>
+        </div>
+    </details>
       `;
     },
 
@@ -142,8 +165,9 @@
       var mi = data.model_identification || {};
       
       return `
-    <div class="section">
-        <div class="section-title">Training Dataset</div>
+    <details class="section" open>
+        <summary>TRAINING DATASET</summary>
+        <div style="padding: 20px;">
         <div class="grid">
             <div class="metric">
                 <div class="metric-label">Training Rows</div>
@@ -162,7 +186,8 @@
                 <div class="metric-value">${(mi.target_column_type || 'N/A').toUpperCase()}</div>
             </div>
         </div>
-    </div>
+        </div>
+    </details>
       `;
     },
 
@@ -174,8 +199,9 @@
       var modelType = (data.model_identification || {}).model_type || '';
       
       var html = `
-    <div class="section">
-        <div class="section-title">Model Performance Metrics</div>
+    <details class="section" open>
+        <summary>MODEL PERFORMANCE METRICS</summary>
+        <div style="padding: 20px;">
       `;
       
       // Classification metrics (Single Predictor)
@@ -216,8 +242,9 @@
     renderModelQuality: function(data) {
       var mq = data.model_quality || {};
       var html = `
-    <div class="section">
-        <div class="section-title">Model Quality</div>
+    <details class="section" open>
+        <summary>MODEL QUALITY</summary>
+        <div style="padding: 20px;">
       `;
       
       if (mq.assessment) {
@@ -263,65 +290,39 @@
      */
     attachEventListeners: function(containerElement) {
       containerElement = containerElement || document;
-      var expandBtn = containerElement.getElementById ? 
-        containerElement.getElementById('expand-all-btn') :
-        containerElement.querySelector('#expand-all-btn');
-      var collapseBtn = containerElement.getElementById ?
-        containerElement.getElementById('collapse-all-btn') :
-        containerElement.querySelector('#collapse-all-btn');
+      
+      // Find the model card container
+      var modelCard = containerElement.querySelector ? 
+        containerElement.querySelector('.featrix-model-card') :
+        (containerElement.classList && containerElement.classList.contains('featrix-model-card') ? containerElement : null);
+      
+      if (!modelCard && containerElement.querySelector) {
+        modelCard = containerElement.querySelector('.featrix-model-card');
+      }
+      if (!modelCard) {
+        modelCard = containerElement;
+      }
+      
+      var expandBtn = modelCard.querySelector('.featrix-expand-all');
+      var collapseBtn = modelCard.querySelector('.featrix-collapse-all');
       
       if (expandBtn) {
         expandBtn.addEventListener('click', function() {
-          var page = containerElement.querySelector ? 
-            containerElement.querySelector('.page') :
-            document.querySelector('.page');
-          if (page) {
-            var sections = page.querySelectorAll('.section');
-            sections.forEach(function(section) {
-              var table = section.querySelector('#feature-table');
-              if (table) {
-                table.style.display = 'block';
-                var icon = section.querySelector('#toggle-icon');
-                if (icon) icon.textContent = '▲';
-              }
-            });
-          }
+          var details = modelCard.querySelectorAll('details');
+          details.forEach(function(detail) {
+            detail.open = true;
+          });
         });
       }
       
       if (collapseBtn) {
         collapseBtn.addEventListener('click', function() {
-          var page = containerElement.querySelector ?
-            containerElement.querySelector('.page') :
-            document.querySelector('.page');
-          if (page) {
-            var sections = page.querySelectorAll('.section');
-            sections.forEach(function(section) {
-              var table = section.querySelector('#feature-table');
-              if (table) {
-                table.style.display = 'none';
-                var icon = section.querySelector('#toggle-icon');
-                if (icon) icon.textContent = '▼';
-              }
-            });
-          }
+          var details = modelCard.querySelectorAll('details');
+          details.forEach(function(detail) {
+            detail.open = false;
+          });
         });
       }
-      
-      // Make toggleFeatures available
-      window.toggleFeatures = function() {
-        var table = document.getElementById('feature-table');
-        var icon = document.getElementById('toggle-icon');
-        if (table && icon) {
-          if (table.style.display === 'none') {
-            table.style.display = 'block';
-            icon.textContent = '▲';
-          } else {
-            table.style.display = 'none';
-            icon.textContent = '▼';
-          }
-        }
-      };
     },
 
     /**
@@ -339,39 +340,42 @@
       
       var sections = [
         this.renderModelIdentification(modelCardJson),
-        this.renderTrainingDataset(modelCardJson),
         this.renderTrainingMetrics(modelCardJson),
-        this.renderModelQuality(modelCardJson)
+        this.renderModelQuality(modelCardJson),
+        this.renderTrainingDataset(modelCardJson)
       ].join('');
       
-      return `<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="UTF-8">
-    <title>Model Card - ${modelName}</title>
+      // Return a fragment wrapped in a scoped container, not a full HTML document
+      return `
+<div class="featrix-model-card">
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: 'Courier New', monospace; background: #fff; color: #000; line-height: 1.4; }
-        .page { max-width: 1400px; margin: 0 auto; padding: 40px; }
+        .featrix-model-card * { margin: 0; padding: 0; box-sizing: border-box; }
+        .featrix-model-card { font-family: 'Courier New', monospace; background: #fff; color: #000; line-height: 1.4; }
+        .featrix-model-card .page { max-width: 1400px; margin: 0 auto; padding: 40px; }
         
-        .header { border-bottom: 4px solid #000; padding-bottom: 20px; margin-bottom: 30px; }
-        .header h1 { font-size: 36px; font-weight: bold; letter-spacing: -1px; }
-        .header .meta { font-size: 14px; margin-top: 8px; }
+        .featrix-model-card .header { border-bottom: 4px solid #000; padding-bottom: 20px; margin-bottom: 30px; }
+        .featrix-model-card .header h1 { font-size: 36px; font-weight: bold; letter-spacing: -1px; }
+        .featrix-model-card .header .meta { font-size: 14px; margin-top: 8px; }
         
-        .section { margin: 30px 0; page-break-inside: avoid; }
-        .section-title { font-size: 18px; font-weight: bold; text-transform: uppercase; border-bottom: 2px solid #000; padding-bottom: 5px; margin-bottom: 15px; letter-spacing: 1px; }
+        .featrix-model-card details { margin: 30px 0; border: 3px double #000; background: white; page-break-inside: avoid; }
+        .featrix-model-card details summary { padding: 15px 20px; cursor: pointer; font-weight: bold; background: #fff; border-bottom: 2px solid #000; user-select: none; text-transform: uppercase; font-size: 18px; letter-spacing: 1px; }
+        .featrix-model-card details summary:hover { background: #f5f5f5; }
+        .featrix-model-card details[open] summary { border-bottom: 2px solid #000; }
         
-        .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin: 15px 0; }
-        .metric { border: 1px solid #000; padding: 12px; }
-        .metric-label { font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
-        .metric-value { font-size: 24px; font-weight: bold; }
+        .featrix-model-card .section { margin: 30px 0; page-break-inside: avoid; }
+        .featrix-model-card .section-title { font-size: 18px; font-weight: bold; text-transform: uppercase; border-bottom: 2px solid #000; padding-bottom: 5px; margin-bottom: 15px; letter-spacing: 1px; }
         
-        table { width: 100%; border-collapse: collapse; font-size: 14px; margin: 15px 0; }
-        th { background: #000; color: #fff; padding: 10px; text-align: left; font-weight: bold; font-size: 13px; text-transform: uppercase; }
-        td { border-bottom: 1px solid #ccc; padding: 8px 10px; }
-        tr:hover { background: #f5f5f5; }
+        .featrix-model-card .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin: 15px 0; }
+        .featrix-model-card .metric { border: 1px solid #000; padding: 12px; }
+        .featrix-model-card .metric-label { font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
+        .featrix-model-card .metric-value { font-size: 24px; font-weight: bold; }
         
-        .controls {
+        .featrix-model-card table { width: 100%; border-collapse: collapse; font-size: 14px; margin: 15px 0; }
+        .featrix-model-card th { background: #000; color: #fff; padding: 10px; text-align: left; font-weight: bold; font-size: 13px; text-transform: uppercase; }
+        .featrix-model-card td { border-bottom: 1px solid #ccc; padding: 8px 10px; }
+        .featrix-model-card tr:hover { background: #f5f5f5; }
+        
+        .featrix-model-card .controls {
             margin-bottom: 20px;
             padding: 15px;
             background: #fff;
@@ -381,7 +385,7 @@
             flex-wrap: wrap;
         }
         
-        .btn {
+        .featrix-model-card .btn {
             padding: 8px 16px;
             background: #000;
             color: #fff;
@@ -391,20 +395,20 @@
             font-family: 'Courier New', monospace;
         }
         
-        .btn:hover {
+        .featrix-model-card .btn:hover {
             background: #333;
         }
         
-        .btn-secondary {
+        .featrix-model-card .btn-secondary {
             background: #fff;
             color: #000;
         }
         
-        .btn-secondary:hover {
+        .featrix-model-card .btn-secondary:hover {
             background: #f5f5f5;
         }
         
-        .status-badge, .quality-badge, .severity-badge {
+        .featrix-model-card .status-badge, .featrix-model-card .quality-badge, .featrix-model-card .severity-badge {
             display: inline-block;
             padding: 4px 12px;
             color: white;
@@ -412,21 +416,21 @@
             font-weight: 600;
         }
         
-        .warning-item {
+        .featrix-model-card .warning-item {
             padding: 15px;
             margin-bottom: 15px;
             background: #fff3cd;
             border-left: 4px solid #ffc107;
         }
         
-        .warning-header {
+        .featrix-model-card .warning-header {
             display: flex;
             align-items: center;
             gap: 10px;
             margin-bottom: 10px;
         }
         
-        code {
+        .featrix-model-card code {
             background: #fff;
             padding: 2px 6px;
             border: 1px solid #000;
@@ -435,17 +439,14 @@
         }
         
         @media print { 
-            @page { size: letter; margin: 0.75in; }
-            .page { padding: 0; max-width: 100%; }
-            .section { page-break-inside: avoid; }
-            .header { page-break-after: always; }
-            .controls { display: none; }
-            table { font-size: 10pt; }
-            .grid { grid-template-columns: repeat(2, 1fr) !important; }
+            .featrix-model-card .page { padding: 0; max-width: 100%; }
+            .featrix-model-card .section { page-break-inside: avoid; }
+            .featrix-model-card .header { page-break-after: always; }
+            .featrix-model-card .controls { display: none; }
+            .featrix-model-card table { font-size: 10pt; }
+            .featrix-model-card .grid { grid-template-columns: repeat(2, 1fr) !important; }
         }
     </style>
-</head>
-<body>
     <div class="page">
         <div class="header">
             <h1>MODEL CARD: ${modelName.toUpperCase()}</h1>
@@ -455,78 +456,13 @@
         </div>
         
         <div class="controls">
-            <button class="btn" id="expand-all-btn">Expand All</button>
-            <button class="btn btn-secondary" id="collapse-all-btn">Collapse All</button>
+            <button class="btn featrix-expand-all">Expand All</button>
+            <button class="btn btn-secondary featrix-collapse-all">Collapse All</button>
         </div>
         
         ${sections}
     </div>
-    
-    <script>
-        (function() {
-            function expandAll() {
-                var sections = document.querySelectorAll('.section');
-                sections.forEach(function(section) {
-                    var table = section.querySelector('#feature-table');
-                    if (table) {
-                        table.style.display = 'block';
-                        var icon = section.querySelector('#toggle-icon');
-                        if (icon) icon.textContent = '▲';
-                    }
-                });
-            }
-            
-            function collapseAll() {
-                var sections = document.querySelectorAll('.section');
-                sections.forEach(function(section) {
-                    var table = section.querySelector('#feature-table');
-                    if (table) {
-                        table.style.display = 'none';
-                        var icon = section.querySelector('#toggle-icon');
-                        if (icon) icon.textContent = '▼';
-                    }
-                });
-            }
-            
-            function toggleFeatures() {
-                var table = document.getElementById('feature-table');
-                var icon = document.getElementById('toggle-icon');
-                if (table && icon) {
-                    if (table.style.display === 'none') {
-                        table.style.display = 'block';
-                        icon.textContent = '▲';
-                    } else {
-                        table.style.display = 'none';
-                        icon.textContent = '▼';
-                    }
-                }
-            }
-            
-            // Attach event listeners when DOM is ready
-            function attachListeners() {
-                var expandBtn = document.getElementById('expand-all-btn');
-                var collapseBtn = document.getElementById('collapse-all-btn');
-                
-                if (expandBtn) {
-                    expandBtn.addEventListener('click', expandAll);
-                }
-                if (collapseBtn) {
-                    collapseBtn.addEventListener('click', collapseAll);
-                }
-                
-                // Make toggleFeatures available globally
-                window.toggleFeatures = toggleFeatures;
-            }
-            
-            if (document.readyState === 'loading') {
-                document.addEventListener('DOMContentLoaded', attachListeners);
-            } else {
-                attachListeners();
-            }
-        })();
-    </script>
-</body>
-</html>`;
+</div>`;
     }
   };
 

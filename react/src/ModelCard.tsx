@@ -199,6 +199,25 @@ const formatPercentage = (value: number | null): string => {
   return `${(value * 100).toFixed(2)}%`;
 };
 
+const getModelTypeDisplay = (modelType: string, targetType: string | null): string => {
+  if (!modelType) return 'N/A';
+  const modelTypeLower = modelType.toLowerCase();
+  const targetTypeLower = (targetType || '').toLowerCase();
+  
+  if (modelTypeLower === 'embedding space' || modelTypeLower === 'es') {
+    return 'Foundational Embedding Space';
+  } else if (modelTypeLower === 'single predictor' || modelTypeLower === 'sp') {
+    if (targetTypeLower === 'set') {
+      return 'Classifier';
+    } else if (targetTypeLower === 'scalar') {
+      return 'Regression';
+    } else {
+      return 'Single Predictor';
+    }
+  }
+  return modelType;
+};
+
 export const ModelCard: React.FC<ModelCardProps> = ({ data, className = '' }) => {
   const [expandedSections, setExpandedSections] = useState<Set<string>>(
     new Set(['model-identification', 'training-metrics', 'model-quality'])
@@ -508,13 +527,51 @@ export const ModelCard: React.FC<ModelCardProps> = ({ data, className = '' }) =>
         'model-identification',
         'Model Identification',
         <div>
+          <div className="metrics-grid">
+            <div className="metric-card">
+              <div className="metric-label">Target Column</div>
+              <div className="metric-value" style={{ fontSize: '20px', fontWeight: 'bold' }}>
+                {data.model_identification.target_column || 'N/A'}
+              </div>
+            </div>
+            <div className="metric-card">
+              <div className="metric-label">Model Type</div>
+              <div className="metric-value" style={{ fontSize: '20px', fontWeight: 'bold' }}>
+                {getModelTypeDisplay(
+                  data.model_identification.model_type,
+                  data.model_identification.target_column_type
+                )}
+              </div>
+            </div>
+            <div className="metric-card">
+              <div className="metric-label">Status</div>
+              <div className="metric-value">
+                <span
+                  className="badge"
+                  style={{ backgroundColor: getStatusColor(data.model_identification.status) }}
+                >
+                  {data.model_identification.status}
+                </span>
+              </div>
+            </div>
+            <div className="metric-card">
+              <div className="metric-label">Training Date</div>
+              <div className="metric-value" style={{ fontSize: '18px' }}>
+                {data.model_identification.training_date}
+              </div>
+            </div>
+          </div>
           <table className="info-table">
             <tbody>
               <tr>
-                <th>Session ID</th>
+                <th style={{ width: '250px' }}>Session ID</th>
                 <td>
-                  <code>{data.model_identification.session_id}</code>
+                  <code>{data.model_identification.session_id.substring(0, 20)}</code>
                 </td>
+              </tr>
+              <tr>
+                <th>Compute Cluster</th>
+                <td>{data.model_identification.compute_cluster}</td>
               </tr>
               <tr>
                 <th>Job ID</th>
@@ -523,31 +580,8 @@ export const ModelCard: React.FC<ModelCardProps> = ({ data, className = '' }) =>
                 </td>
               </tr>
               <tr>
-                <th>Model Type</th>
-                <td>{data.model_identification.model_type}</td>
-              </tr>
-              <tr>
-                <th>Status</th>
-                <td>
-                  <span
-                    className="badge"
-                    style={{ backgroundColor: getStatusColor(data.model_identification.status) }}
-                  >
-                    {data.model_identification.status}
-                  </span>
-                </td>
-              </tr>
-              <tr>
-                <th>Target Column</th>
-                <td>{data.model_identification.target_column || 'N/A'}</td>
-              </tr>
-              <tr>
                 <th>Target Type</th>
-                <td>{data.model_identification.target_column_type || 'N/A'}</td>
-              </tr>
-              <tr>
-                <th>Compute Cluster</th>
-                <td>{data.model_identification.compute_cluster}</td>
+                <td>{(data.model_identification.target_column_type || 'N/A').toUpperCase()}</td>
               </tr>
               <tr>
                 <th>Framework</th>
@@ -555,6 +589,170 @@ export const ModelCard: React.FC<ModelCardProps> = ({ data, className = '' }) =>
               </tr>
             </tbody>
           </table>
+        </div>,
+        true
+      )}
+
+      {renderSection(
+        'training-metrics',
+        'Model Performance Metrics',
+        <div>
+          <div>
+            <h3>Best Epoch</h3>
+            <table className="info-table">
+              <tbody>
+                <tr>
+                  <th>Epoch</th>
+                  <td>{data.training_metrics.best_epoch.epoch}</td>
+                </tr>
+                <tr>
+                  <th>Validation Loss</th>
+                  <td>{formatValue(data.training_metrics.best_epoch.validation_loss)}</td>
+                </tr>
+                <tr>
+                  <th>Train Loss</th>
+                  <td>{formatValue(data.training_metrics.best_epoch.train_loss)}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          {data.training_metrics.classification_metrics && (
+            <div>
+              <h3>Classification Metrics</h3>
+              <div className="metrics-grid">
+                <div className="metric-card">
+                  <div className="metric-label">Precision</div>
+                  <div className="metric-value">
+                    {formatValue(data.training_metrics.classification_metrics.precision, 3)}
+                  </div>
+                </div>
+                <div className="metric-card">
+                  <div className="metric-label">Recall</div>
+                  <div className="metric-value">
+                    {formatValue(data.training_metrics.classification_metrics.recall, 3)}
+                  </div>
+                </div>
+                <div className="metric-card">
+                  <div className="metric-label">F1 Score</div>
+                  <div className="metric-value">
+                    {formatValue(data.training_metrics.classification_metrics.f1, 3)}
+                  </div>
+                </div>
+                <div className="metric-card">
+                  <div className="metric-label">AUC</div>
+                  <div className="metric-value">
+                    {formatValue(data.training_metrics.classification_metrics.auc, 3)}
+                  </div>
+                </div>
+              </div>
+              {metricsChartData && metricsChartData.length > 0 && (
+                <div className="chart-container">
+                  <h3>Metrics Visualization</h3>
+                  <ResponsiveContainer width="100%" height={300}>
+                    <BarChart data={metricsChartData}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="name" />
+                      <YAxis domain={[0, 1]} />
+                      <Tooltip formatter={(value: number) => formatPercentage(value)} />
+                      <Bar dataKey="value" fill="#333" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              )}
+            </div>
+          )}
+
+          {data.training_metrics.optimal_threshold && (
+            <div>
+              <h3>Optimal Threshold</h3>
+              <table className="info-table">
+                <tbody>
+                  <tr>
+                    <th>Optimal Threshold</th>
+                    <td>{formatValue(data.training_metrics.optimal_threshold.optimal_threshold)}</td>
+                  </tr>
+                  <tr>
+                    <th>Positive Label</th>
+                    <td>{data.training_metrics.optimal_threshold.pos_label || 'N/A'}</td>
+                  </tr>
+                  <tr>
+                    <th>F1 at Optimal Threshold</th>
+                    <td>
+                      {formatPercentage(data.training_metrics.optimal_threshold.optimal_threshold_f1)}
+                    </td>
+                  </tr>
+                  <tr>
+                    <th>Accuracy at Optimal Threshold</th>
+                    <td>
+                      {formatPercentage(
+                        data.training_metrics.optimal_threshold.accuracy_at_optimal_threshold
+                      )}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>,
+        true
+      )}
+
+      {renderSection(
+        'model-quality',
+        'Model Quality',
+        <div>
+          {data.model_quality.assessment && (
+            <div>
+              <h3>Assessment</h3>
+              <span
+                className="badge"
+                style={{ backgroundColor: getQualityColor(data.model_quality.assessment) }}
+              >
+                {data.model_quality.assessment}
+              </span>
+            </div>
+          )}
+
+          {data.model_quality.recommendations && data.model_quality.recommendations.length > 0 && (
+            <div>
+              <h3>Recommendations</h3>
+              <ul>
+                {data.model_quality.recommendations.map((rec, idx) => (
+                  <li key={idx} style={{ marginBottom: '10px' }}>
+                    <strong>Issue:</strong> {rec.issue}
+                    <br />
+                    <strong>Suggestion:</strong> {rec.suggestion}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {data.model_quality.warnings.length > 0 && (
+            <div>
+              <h3>Warnings</h3>
+              {data.model_quality.warnings.map((warning, idx) => (
+                <div key={idx} className="warning-item">
+                  <div className="warning-header">
+                    <span
+                      className="badge"
+                      style={{ backgroundColor: getSeverityColor(warning.severity) }}
+                    >
+                      {warning.severity}
+                    </span>
+                    <strong>{warning.type}</strong>
+                  </div>
+                  <div>{warning.message}</div>
+                  {warning.recommendation && (
+                    <div style={{ marginTop: '10px' }}>
+                      <strong>Recommendation:</strong> {warning.recommendation}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
         </div>,
         true
       )}
@@ -720,117 +918,6 @@ export const ModelCard: React.FC<ModelCardProps> = ({ data, className = '' }) =>
       )}
 
       {renderSection(
-        'training-metrics',
-        'Training Metrics',
-        <div>
-          <div>
-            <h3>Best Epoch</h3>
-            <table className="info-table">
-              <tbody>
-                <tr>
-                  <th>Epoch</th>
-                  <td>{data.training_metrics.best_epoch.epoch}</td>
-                </tr>
-                <tr>
-                  <th>Validation Loss</th>
-                  <td>{formatValue(data.training_metrics.best_epoch.validation_loss)}</td>
-                </tr>
-                <tr>
-                  <th>Train Loss</th>
-                  <td>{formatValue(data.training_metrics.best_epoch.train_loss)}</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-
-          {data.training_metrics.classification_metrics && (
-            <div>
-              <h3>Classification Metrics</h3>
-              <div className="metrics-grid">
-                <div className="metric-card">
-                  <div className="metric-label">Accuracy</div>
-                  <div className="metric-value">
-                    {formatPercentage(data.training_metrics.classification_metrics.accuracy)}
-                  </div>
-                </div>
-                <div className="metric-card">
-                  <div className="metric-label">Precision</div>
-                  <div className="metric-value">
-                    {formatPercentage(data.training_metrics.classification_metrics.precision)}
-                  </div>
-                </div>
-                <div className="metric-card">
-                  <div className="metric-label">Recall</div>
-                  <div className="metric-value">
-                    {formatPercentage(data.training_metrics.classification_metrics.recall)}
-                  </div>
-                </div>
-                <div className="metric-card">
-                  <div className="metric-label">F1 Score</div>
-                  <div className="metric-value">
-                    {formatPercentage(data.training_metrics.classification_metrics.f1)}
-                  </div>
-                </div>
-                <div className="metric-card">
-                  <div className="metric-label">AUC</div>
-                  <div className="metric-value">
-                    {formatPercentage(data.training_metrics.classification_metrics.auc)}
-                  </div>
-                </div>
-              </div>
-              {metricsChartData && metricsChartData.length > 0 && (
-                <div className="chart-container">
-                  <h3>Metrics Visualization</h3>
-                  <ResponsiveContainer width="100%" height={300}>
-                    <BarChart data={metricsChartData}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="name" />
-                      <YAxis domain={[0, 1]} />
-                      <Tooltip formatter={(value: number) => formatPercentage(value)} />
-                      <Bar dataKey="value" fill="#333" />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-              )}
-            </div>
-          )}
-
-          {data.training_metrics.optimal_threshold && (
-            <div>
-              <h3>Optimal Threshold</h3>
-              <table className="info-table">
-                <tbody>
-                  <tr>
-                    <th>Optimal Threshold</th>
-                    <td>{formatValue(data.training_metrics.optimal_threshold.optimal_threshold)}</td>
-                  </tr>
-                  <tr>
-                    <th>Positive Label</th>
-                    <td>{data.training_metrics.optimal_threshold.pos_label || 'N/A'}</td>
-                  </tr>
-                  <tr>
-                    <th>F1 at Optimal Threshold</th>
-                    <td>
-                      {formatPercentage(data.training_metrics.optimal_threshold.optimal_threshold_f1)}
-                    </td>
-                  </tr>
-                  <tr>
-                    <th>Accuracy at Optimal Threshold</th>
-                    <td>
-                      {formatPercentage(
-                        data.training_metrics.optimal_threshold.accuracy_at_optimal_threshold
-                      )}
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>,
-        true
-      )}
-
-      {renderSection(
         'model-architecture',
         'Model Architecture',
         <div>
@@ -857,65 +944,6 @@ export const ModelCard: React.FC<ModelCardProps> = ({ data, className = '' }) =>
             </tbody>
           </table>
         </div>
-      )}
-
-      {renderSection(
-        'model-quality',
-        'Model Quality',
-        <div>
-          {data.model_quality.assessment && (
-            <div>
-              <h3>Assessment</h3>
-              <span
-                className="badge"
-                style={{ backgroundColor: getQualityColor(data.model_quality.assessment) }}
-              >
-                {data.model_quality.assessment}
-              </span>
-            </div>
-          )}
-
-          {data.model_quality.recommendations && data.model_quality.recommendations.length > 0 && (
-            <div>
-              <h3>Recommendations</h3>
-              <ul>
-                {data.model_quality.recommendations.map((rec, idx) => (
-                  <li key={idx} style={{ marginBottom: '10px' }}>
-                    <strong>Issue:</strong> {rec.issue}
-                    <br />
-                    <strong>Suggestion:</strong> {rec.suggestion}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          {data.model_quality.warnings.length > 0 && (
-            <div>
-              <h3>Warnings</h3>
-              {data.model_quality.warnings.map((warning, idx) => (
-                <div key={idx} className="warning-item">
-                  <div className="warning-header">
-                    <span
-                      className="badge"
-                      style={{ backgroundColor: getSeverityColor(warning.severity) }}
-                    >
-                      {warning.severity}
-                    </span>
-                    <strong>{warning.type}</strong>
-                  </div>
-                  <div>{warning.message}</div>
-                  {warning.recommendation && (
-                    <div style={{ marginTop: '10px' }}>
-                      <strong>Recommendation:</strong> {warning.recommendation}
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-        </div>,
-        true
       )}
 
       {renderSection(

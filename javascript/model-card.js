@@ -167,7 +167,6 @@
       return `
     <details class="section" open>
         <summary>TRAINING DATASET</summary>
-        <div style="padding: 20px;">
         <div class="grid">
             <div class="metric">
                 <div class="metric-label">Training Rows</div>
@@ -186,7 +185,6 @@
                 <div class="metric-value">${(mi.target_column_type || 'N/A').toUpperCase()}</div>
             </div>
         </div>
-        </div>
     </details>
       `;
     },
@@ -201,7 +199,6 @@
       var html = `
     <details class="section" open>
         <summary>MODEL PERFORMANCE METRICS</summary>
-        <div style="padding: 20px;">
       `;
       
       // Classification metrics (Single Predictor)
@@ -230,7 +227,7 @@
       }
       
       html += `
-    </div>
+    </details>
       `;
       
       return html;
@@ -244,7 +241,6 @@
       var html = `
     <details class="section" open>
         <summary>MODEL QUALITY</summary>
-        <div style="padding: 20px;">
       `;
       
       if (mq.assessment) {
@@ -278,7 +274,7 @@
       }
       
       html += `
-    </div>
+    </details>
       `;
       
       return html;
@@ -361,6 +357,7 @@
         .featrix-model-card details summary { padding: 15px 20px; cursor: pointer; font-weight: bold; background: #fff; border-bottom: 2px solid #000; user-select: none; text-transform: uppercase; font-size: 18px; letter-spacing: 1px; }
         .featrix-model-card details summary:hover { background: #f5f5f5; }
         .featrix-model-card details[open] summary { border-bottom: 2px solid #000; }
+        .featrix-model-card details > *:not(summary) { padding: 20px; }
         
         .featrix-model-card .section { margin: 30px 0; page-break-inside: avoid; }
         .featrix-model-card .section-title { font-size: 18px; font-weight: bold; text-transform: uppercase; border-bottom: 2px solid #000; padding-bottom: 5px; margin-bottom: 15px; letter-spacing: 1px; }

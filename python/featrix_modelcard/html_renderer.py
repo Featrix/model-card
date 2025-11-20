@@ -103,7 +103,6 @@ def render_model_identification(data: Dict[str, Any]) -> str:
     html = f"""
     <details class="section" open>
         <summary>MODEL IDENTIFICATION</summary>
-        <div style="padding: 20px;">
         <div class="grid">
             <div class="metric">
                 <div class="metric-label">Target Column</div>
@@ -144,7 +143,6 @@ def render_model_identification(data: Dict[str, Any]) -> str:
                 <td>{mi.get('framework', 'N/A')}</td>
             </tr>
         </table>
-        </div>
     </details>
     """
     return html
@@ -641,6 +639,37 @@ def render_html(model_card_json: Dict[str, Any]) -> str:
             max-width: 1400px;
             margin: 0 auto;
             padding: 40px;
+        }}
+        
+        details {{
+            margin: 30px 0;
+            border: 3px double #000;
+            background: white;
+            page-break-inside: avoid;
+        }}
+        
+        details summary {{
+            padding: 15px 20px;
+            cursor: pointer;
+            font-weight: bold;
+            background: #fff;
+            border-bottom: 2px solid #000;
+            user-select: none;
+            text-transform: uppercase;
+            font-size: 18px;
+            letter-spacing: 1px;
+        }}
+        
+        details summary:hover {{
+            background: #f5f5f5;
+        }}
+        
+        details[open] summary {{
+            border-bottom: 2px solid #000;
+        }}
+        
+        details > *:not(summary) {{
+            padding: 20px;
         }}
         
         .section {{

@@ -323,6 +323,11 @@ export const ModelCard: React.FC<ModelCardProps> = ({ data, className = '' }) =>
           margin: 0 auto;
           padding: 20px;
           background: #f5f5f5;
+          color: #000;
+        }
+        
+        .model-card * {
+          color: #000;
         }
         
         .model-card-header {
@@ -336,12 +341,18 @@ export const ModelCard: React.FC<ModelCardProps> = ({ data, className = '' }) =>
         .model-card-header h1 {
           margin: 0 0 10px 0;
           font-size: 32px;
+          color: white;
+        }
+        
+        .model-card-header div {
+          color: white;
         }
         
         .model-card-controls {
           display: flex;
           gap: 10px;
           margin-bottom: 20px;
+          color: #000;
         }
         
         .model-card-controls button {
@@ -356,6 +367,7 @@ export const ModelCard: React.FC<ModelCardProps> = ({ data, className = '' }) =>
         
         .model-card-controls button:hover {
           background: #5568d3;
+          color: white;
         }
         
         .model-card-section {
@@ -364,6 +376,7 @@ export const ModelCard: React.FC<ModelCardProps> = ({ data, className = '' }) =>
           margin-bottom: 20px;
           box-shadow: 0 2px 4px rgba(0,0,0,0.1);
           border: 3px double ${COLORS.primary};
+          color: #000;
         }
         
         .section-header {
@@ -372,21 +385,23 @@ export const ModelCard: React.FC<ModelCardProps> = ({ data, className = '' }) =>
           justify-content: space-between;
           align-items: center;
           border-bottom: 2px solid ${COLORS.primary};
+          color: #000;
         }
         
         .section-header h2 {
           margin: 0;
           font-size: 20px;
-          color: #333;
+          color: #000;
         }
         
         .toggle-icon {
           font-size: 12px;
-          color: #666;
+          color: #000;
         }
         
         .section-content {
           padding: 20px;
+          color: #000;
         }
         
         .metrics-grid {
@@ -394,6 +409,7 @@ export const ModelCard: React.FC<ModelCardProps> = ({ data, className = '' }) =>
           grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
           gap: 15px;
           margin: 20px 0;
+          color: #000;
         }
         
         .metric-card {
@@ -401,11 +417,12 @@ export const ModelCard: React.FC<ModelCardProps> = ({ data, className = '' }) =>
           padding: 15px;
           border-radius: 5px;
           border-left: 4px solid ${COLORS.primary};
+          color: #000;
         }
         
         .metric-label {
           font-size: 12px;
-          color: #666;
+          color: #000;
           text-transform: uppercase;
           letter-spacing: 0.5px;
           margin-bottom: 5px;
@@ -414,13 +431,14 @@ export const ModelCard: React.FC<ModelCardProps> = ({ data, className = '' }) =>
         .metric-value {
           font-size: 24px;
           font-weight: bold;
-          color: #333;
+          color: #000;
         }
         
         .info-table {
           width: 100%;
           border-collapse: collapse;
           margin: 15px 0;
+          color: #000;
         }
         
         .info-table th {
@@ -430,11 +448,13 @@ export const ModelCard: React.FC<ModelCardProps> = ({ data, className = '' }) =>
           font-weight: 600;
           width: 200px;
           border-bottom: 1px solid #ddd;
+          color: #000;
         }
         
         .info-table td {
           padding: 10px;
           border-bottom: 1px solid #ddd;
+          color: #000;
         }
         
         .data-table {
@@ -442,6 +462,7 @@ export const ModelCard: React.FC<ModelCardProps> = ({ data, className = '' }) =>
           border-collapse: collapse;
           margin: 15px 0;
           font-size: 14px;
+          color: #000;
         }
         
         .data-table th {
@@ -455,10 +476,12 @@ export const ModelCard: React.FC<ModelCardProps> = ({ data, className = '' }) =>
         .data-table td {
           padding: 10px 12px;
           border-bottom: 1px solid #ddd;
+          color: #000;
         }
         
         .data-table tr:hover {
           background: #f8f9fa;
+          color: #000;
         }
         
         .tag-list {
@@ -466,13 +489,14 @@ export const ModelCard: React.FC<ModelCardProps> = ({ data, className = '' }) =>
           flex-wrap: wrap;
           gap: 8px;
           margin-top: 10px;
+          color: #000;
         }
         
         .tag {
           display: inline-block;
           padding: 4px 12px;
           background: #f0f0f0;
-          color: #333;
+          color: #000;
           border: 1px solid #ccc;
           border-radius: 12px;
           font-size: 12px;
@@ -493,6 +517,7 @@ export const ModelCard: React.FC<ModelCardProps> = ({ data, className = '' }) =>
           background: #fff3cd;
           border-left: 4px solid ${COLORS.warning};
           border-radius: 4px;
+          color: #000;
         }
         
         .warning-header {
@@ -500,6 +525,11 @@ export const ModelCard: React.FC<ModelCardProps> = ({ data, className = '' }) =>
           align-items: center;
           gap: 10px;
           margin-bottom: 10px;
+          color: #000;
+        }
+        
+        .warning-message {
+          color: #000;
         }
         
         .chart-container {
@@ -507,6 +537,31 @@ export const ModelCard: React.FC<ModelCardProps> = ({ data, className = '' }) =>
           padding: 20px;
           background: #f8f9fa;
           border-radius: 5px;
+          color: #000;
+        }
+        
+        h3 {
+          color: #000;
+        }
+        
+        strong {
+          color: #000;
+        }
+        
+        em {
+          color: #000;
+        }
+        
+        code {
+          color: #000;
+        }
+        
+        li {
+          color: #000;
+        }
+        
+        ul {
+          color: #000;
         }
       `}</style>
 

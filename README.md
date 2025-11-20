@@ -152,4 +152,4 @@ See [PUBLISH.md](PUBLISH.md) for detailed publishing instructions.
 
 ## License
 
-ISC
+MIT

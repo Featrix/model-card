@@ -345,32 +345,32 @@
       return `
 <div class="featrix-model-card">
     <style>
-        .featrix-model-card * { margin: 0; padding: 0; box-sizing: border-box; }
+        .featrix-model-card * { margin: 0; padding: 0; box-sizing: border-box; color: #000; }
         .featrix-model-card { font-family: 'Courier New', monospace; background: #fff; color: #000; line-height: 1.4; }
-        .featrix-model-card .page { max-width: 1400px; margin: 0 auto; padding: 40px; }
+        .featrix-model-card .page { max-width: 1400px; margin: 0 auto; padding: 40px; color: #000; }
         
-        .featrix-model-card .header { border-bottom: 4px solid #000; padding-bottom: 20px; margin-bottom: 30px; }
-        .featrix-model-card .header h1 { font-size: 36px; font-weight: bold; letter-spacing: -1px; }
-        .featrix-model-card .header .meta { font-size: 14px; margin-top: 8px; }
+        .featrix-model-card .header { border-bottom: 4px solid #000; padding-bottom: 20px; margin-bottom: 30px; color: #000; }
+        .featrix-model-card .header h1 { font-size: 36px; font-weight: bold; letter-spacing: -1px; color: #000; }
+        .featrix-model-card .header .meta { font-size: 14px; margin-top: 8px; color: #000; }
         
-        .featrix-model-card details { margin: 30px 0; border: 3px double #000; background: white; page-break-inside: avoid; }
-        .featrix-model-card details summary { padding: 15px 20px; cursor: pointer; font-weight: bold; background: #fff; border-bottom: 2px solid #000; user-select: none; text-transform: uppercase; font-size: 18px; letter-spacing: 1px; }
-        .featrix-model-card details summary:hover { background: #f5f5f5; }
-        .featrix-model-card details[open] summary { border-bottom: 2px solid #000; }
-        .featrix-model-card details > *:not(summary) { padding: 20px; }
+        .featrix-model-card details { margin: 30px 0; border: 3px double #000; background: white; page-break-inside: avoid; color: #000; }
+        .featrix-model-card details summary { padding: 15px 20px; cursor: pointer; font-weight: bold; background: #fff; border-bottom: 2px solid #000; user-select: none; text-transform: uppercase; font-size: 18px; letter-spacing: 1px; color: #000; }
+        .featrix-model-card details summary:hover { background: #f5f5f5; color: #000; }
+        .featrix-model-card details[open] summary { border-bottom: 2px solid #000; color: #000; }
+        .featrix-model-card details > *:not(summary) { padding: 20px; color: #000; }
         
-        .featrix-model-card .section { margin: 30px 0; page-break-inside: avoid; }
-        .featrix-model-card .section-title { font-size: 18px; font-weight: bold; text-transform: uppercase; border-bottom: 2px solid #000; padding-bottom: 5px; margin-bottom: 15px; letter-spacing: 1px; }
+        .featrix-model-card .section { margin: 30px 0; page-break-inside: avoid; color: #000; }
+        .featrix-model-card .section-title { font-size: 18px; font-weight: bold; text-transform: uppercase; border-bottom: 2px solid #000; padding-bottom: 5px; margin-bottom: 15px; letter-spacing: 1px; color: #000; }
         
-        .featrix-model-card .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin: 15px 0; }
-        .featrix-model-card .metric { border: 1px solid #000; padding: 12px; }
-        .featrix-model-card .metric-label { font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
-        .featrix-model-card .metric-value { font-size: 24px; font-weight: bold; }
+        .featrix-model-card .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin: 15px 0; color: #000; }
+        .featrix-model-card .metric { border: 1px solid #000; padding: 12px; color: #000; }
+        .featrix-model-card .metric-label { font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; color: #000; }
+        .featrix-model-card .metric-value { font-size: 24px; font-weight: bold; color: #000; }
         
-        .featrix-model-card table { width: 100%; border-collapse: collapse; font-size: 14px; margin: 15px 0; }
+        .featrix-model-card table { width: 100%; border-collapse: collapse; font-size: 14px; margin: 15px 0; color: #000; }
         .featrix-model-card th { background: #000; color: #fff; padding: 10px; text-align: left; font-weight: bold; font-size: 13px; text-transform: uppercase; }
-        .featrix-model-card td { border-bottom: 1px solid #ccc; padding: 8px 10px; }
-        .featrix-model-card tr:hover { background: #f5f5f5; }
+        .featrix-model-card td { border-bottom: 1px solid #ccc; padding: 8px 10px; color: #000; }
+        .featrix-model-card tr:hover { background: #f5f5f5; color: #000; }
         
         .featrix-model-card .controls {
             margin-bottom: 20px;
@@ -418,6 +418,7 @@
             margin-bottom: 15px;
             background: #fff3cd;
             border-left: 4px solid #ffc107;
+            color: #000;
         }
         
         .featrix-model-card .warning-header {
@@ -425,6 +426,11 @@
             align-items: center;
             gap: 10px;
             margin-bottom: 10px;
+            color: #000;
+        }
+        
+        .featrix-model-card .warning-message {
+            color: #000;
         }
         
         .featrix-model-card code {
@@ -433,6 +439,19 @@
             border: 1px solid #000;
             font-family: 'Courier New', monospace;
             font-size: 13px;
+            color: #000;
+        }
+        
+        .featrix-model-card h3 {
+            color: #000;
+        }
+        
+        .featrix-model-card strong {
+            color: #000;
+        }
+        
+        .featrix-model-card em {
+            color: #000;
         }
         
         @media print { 

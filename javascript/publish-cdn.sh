@@ -38,19 +38,6 @@ if [ -f "README.md" ]; then
     cp README.md "$TEMP_DIR/"
 fi
 
-# Show what will be uploaded
-echo ""
-echo "Files to upload:"
-ls -lh "$TEMP_DIR"
-
-# Ask for confirmation
-read -p "Continue with upload to bits.featrix.com? (y/N): " -n 1 -r
-echo
-if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-    echo "❌ Upload cancelled"
-    exit 1
-fi
-
 # Upload to CDN
 echo "⬆️  Uploading to bits.featrix.com..."
 scp -r "$TEMP_DIR"/* bits:/var/www/html/js/featrix-modelcard/

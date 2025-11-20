@@ -36,19 +36,6 @@ if [ ! -d "dist" ]; then
     exit 1
 fi
 
-# Show what will be uploaded
-echo ""
-echo "📋 Files to be uploaded:"
-ls -lh dist/
-
-# Ask for confirmation
-read -p "Continue with upload to PyPI? (y/N): " -n 1 -r
-echo
-if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-    echo "❌ Upload cancelled"
-    exit 1
-fi
-
 # Upload to PyPI
 echo "⬆️  Uploading to PyPI..."
 python3 -m twine upload dist/*

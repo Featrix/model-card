@@ -50,33 +50,8 @@ if grep -q '"test"' package.json; then
     npm test || echo "⚠️  Tests failed, but continuing..."
 fi
 
-# Check if package.json has the correct name
+# Get package name
 PACKAGE_NAME=$(node -p "require('./package.json').name")
-if [ "$PACKAGE_NAME" != "@featrix/model-card-react" ]; then
-    echo "⚠️  Warning: package.json name is '$PACKAGE_NAME', expected '@featrix/model-card-react'"
-    read -p "Continue anyway? (y/N): " -n 1 -r
-    echo
-    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-        echo "❌ Publish cancelled"
-        exit 1
-    fi
-fi
-
-# Show what will be published
-echo ""
-echo "📋 Package details:"
-echo "  Name: $PACKAGE_NAME"
-echo "  Version: $CURRENT_VERSION"
-echo "  Files to publish:"
-npm pack --dry-run 2>&1 | grep -A 100 "npm notice === Tarball Contents ===" | head -20
-
-# Ask for confirmation
-read -p "Continue with publish to npm? (y/N): " -n 1 -r
-echo
-if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-    echo "❌ Publish cancelled"
-    exit 1
-fi
 
 # Publish to npm
 echo "⬆️  Publishing to npm..."

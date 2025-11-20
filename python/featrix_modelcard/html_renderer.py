@@ -625,6 +625,7 @@ def render_html(model_card_json: Dict[str, Any]) -> str:
             margin: 0;
             padding: 0;
             box-sizing: border-box;
+            color: #000;
         }}
         
         body {{
@@ -639,6 +640,7 @@ def render_html(model_card_json: Dict[str, Any]) -> str:
             max-width: 1400px;
             margin: 0 auto;
             padding: 40px;
+            color: #000;
         }}
         
         details {{
@@ -646,6 +648,7 @@ def render_html(model_card_json: Dict[str, Any]) -> str:
             border: 3px double #000;
             background: white;
             page-break-inside: avoid;
+            color: #000;
         }}
         
         details summary {{
@@ -658,23 +661,28 @@ def render_html(model_card_json: Dict[str, Any]) -> str:
             text-transform: uppercase;
             font-size: 18px;
             letter-spacing: 1px;
+            color: #000;
         }}
         
         details summary:hover {{
             background: #f5f5f5;
+            color: #000;
         }}
         
         details[open] summary {{
             border-bottom: 2px solid #000;
+            color: #000;
         }}
         
         details > *:not(summary) {{
             padding: 20px;
+            color: #000;
         }}
         
         .section {{
             margin: 30px 0;
             page-break-inside: avoid;
+            color: #000;
         }}
         
         .section-title {{
@@ -685,12 +693,14 @@ def render_html(model_card_json: Dict[str, Any]) -> str:
             padding-bottom: 5px;
             margin-bottom: 15px;
             letter-spacing: 1px;
+            color: #000;
         }}
         
         .header {{
             border-bottom: 4px solid #000;
             padding-bottom: 20px;
             margin-bottom: 30px;
+            color: #000;
         }}
         
         .header h1 {{
@@ -715,6 +725,7 @@ def render_html(model_card_json: Dict[str, Any]) -> str:
             display: flex;
             gap: 10px;
             flex-wrap: wrap;
+            color: #000;
         }}
         
         .btn {{
@@ -746,11 +757,13 @@ def render_html(model_card_json: Dict[str, Any]) -> str:
             grid-template-columns: repeat(4, 1fr);
             gap: 15px;
             margin: 15px 0;
+            color: #000;
         }}
         
         .metric {{
             border: 1px solid #000;
             padding: 12px;
+            color: #000;
         }}
         
         .metric-label {{
@@ -758,11 +771,13 @@ def render_html(model_card_json: Dict[str, Any]) -> str:
             text-transform: uppercase;
             letter-spacing: 0.5px;
             margin-bottom: 4px;
+            color: #000;
         }}
         
         .metric-value {{
             font-size: 24px;
             font-weight: bold;
+            color: #000;
         }}
         
         table {{
@@ -770,6 +785,7 @@ def render_html(model_card_json: Dict[str, Any]) -> str:
             border-collapse: collapse;
             font-size: 14px;
             margin: 15px 0;
+            color: #000;
         }}
         
         th {{
@@ -785,10 +801,12 @@ def render_html(model_card_json: Dict[str, Any]) -> str:
         td {{
             border-bottom: 1px solid #ccc;
             padding: 8px 10px;
+            color: #000;
         }}
         
         tr:hover {{
             background: #f5f5f5;
+            color: #000;
         }}
         
         .technical-appendix tr:hover {{

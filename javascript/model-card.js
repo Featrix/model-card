@@ -207,11 +207,11 @@
         html += `
         <div class="grid">
             <div class="metric">
-                <div class="metric-label">Precision</div>
+                <div class="metric-label" title="How often we are correct when we raise an alert">Precision</div>
                 <div class="metric-value">${cm.precision !== null && cm.precision !== undefined ? cm.precision.toFixed(3) : 'N/A'}</div>
             </div>
             <div class="metric">
-                <div class="metric-label">Recall</div>
+                <div class="metric-label" title="How many true rare events we catch">Recall</div>
                 <div class="metric-value">${cm.recall !== null && cm.recall !== undefined ? cm.recall.toFixed(3) : 'N/A'}</div>
             </div>
             <div class="metric">

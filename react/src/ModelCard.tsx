@@ -677,13 +677,13 @@ export const ModelCard: React.FC<ModelCardProps> = ({ data, className = '' }) =>
               <h3>Classification Metrics</h3>
               <div className="metrics-grid">
                 <div className="metric-card">
-                  <div className="metric-label">Precision</div>
+                  <div className="metric-label" title="How often we are correct when we raise an alert">Precision</div>
                   <div className="metric-value">
                     {formatValue(data.training_metrics.classification_metrics.precision, 3)}
                   </div>
                 </div>
                 <div className="metric-card">
-                  <div className="metric-label">Recall</div>
+                  <div className="metric-label" title="How many true rare events we catch">Recall</div>
                   <div className="metric-value">
                     {formatValue(data.training_metrics.classification_metrics.recall, 3)}
                   </div>

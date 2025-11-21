@@ -309,11 +309,11 @@ def render_training_metrics(data: Dict[str, Any]) -> str:
             html += f"""
         <div class="grid">
             <div class="metric">
-                <div class="metric-label">Precision</div>
+                <div class="metric-label" title="How often we are correct when we raise an alert">Precision</div>
                 <div class="metric-value">{format_value(cm.get('precision'), 3) if cm.get('precision') is not None else 'N/A'}</div>
             </div>
             <div class="metric">
-                <div class="metric-label">Recall</div>
+                <div class="metric-label" title="How many true rare events we catch">Recall</div>
                 <div class="metric-value">{format_value(cm.get('recall'), 3) if cm.get('recall') is not None else 'N/A'}</div>
             </div>
             <div class="metric">

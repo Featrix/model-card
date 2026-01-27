@@ -142,6 +142,15 @@ export interface ModelCardData {
       marginal_loss: number | null;
     };
   };
+  embedding_space?: {
+    num_columns: number;
+    num_layers: number;
+    num_parameters: number;
+    d_model: number;
+    num_rows: number;
+    train_rows: number;
+    val_rows: number;
+  };
 }
 
 interface ModelCardProps {
@@ -199,6 +208,25 @@ const formatPercentage = (value: number | null): string => {
   return `${(value * 100).toFixed(2)}%`;
 };
 
+const formatLargeNumber = (value: number | null | undefined): string => {
+  if (value === null || value === undefined) return 'N/A';
+  if (value >= 1_000_000_000) {
+    return `${(value / 1_000_000_000).toFixed(1)}B`;
+  }
+  if (value >= 1_000_000) {
+    return `${(value / 1_000_000).toFixed(1)}M`;
+  }
+  if (value >= 1_000) {
+    return `${(value / 1_000).toFixed(1)}K`;
+  }
+  return value.toLocaleString();
+};
+
+const formatFramework = (framework: string): string => {
+  if (!framework) return 'N/A';
+  return framework.replace(/\s+unknown$/i, '').trim() || 'N/A';
+};
+
 const getModelTypeDisplay = (modelType: string, targetType: string | null): string => {
   if (!modelType) return 'N/A';
   const modelTypeLower = modelType.toLowerCase();
@@ -244,6 +272,7 @@ export const ModelCard: React.FC<ModelCardProps> = ({ data, className = '' }) =>
         'training-configuration',
         'training-metrics',
         'model-architecture',
+        'embedding-space',
         'model-quality',
         'technical-details',
         'provenance',
@@ -342,6 +371,8 @@ export const ModelCard: React.FC<ModelCardProps> = ({ data, className = '' }) =>
           margin: 0 0 10px 0;
           font-size: 32px;
           color: white;
+          letter-spacing: 3px;
+          word-spacing: 8px;
         }
         
         .model-card-header div {
@@ -566,9 +597,12 @@ export const ModelCard: React.FC<ModelCardProps> = ({ data, className = '' }) =>
       `}</style>
 
       <div className="model-card-header">
-        <h1>Model Card: {data.model_identification.name}</h1>
-        <div style={{ opacity: 0.9 }}>
-          {data.model_identification.model_type} • {data.model_identification.status} •{' '}
+        <h1>MODEL CARD: &nbsp; {data.model_identification.name}</h1>
+        <div style={{ opacity: 0.9, letterSpacing: '0.5px' }}>
+          {getModelTypeDisplay(data.model_identification.model_type, data.model_identification.target_column_type)}
+          {'  •  '}
+          {data.model_identification.status}
+          {'  •  '}
           {data.model_identification.training_date}
         </div>
       </div>
@@ -640,7 +674,7 @@ export const ModelCard: React.FC<ModelCardProps> = ({ data, className = '' }) =>
               </tr>
               <tr>
                 <th>Framework</th>
-                <td>{data.model_identification.framework}</td>
+                <td>{formatFramework(data.model_identification.framework)}</td>
               </tr>
             </tbody>
           </table>
@@ -1000,6 +1034,40 @@ export const ModelCard: React.FC<ModelCardProps> = ({ data, className = '' }) =>
           </table>
         </div>
       )}
+
+      {data.embedding_space &&
+        renderSection(
+          'embedding-space',
+          'Embedding Space',
+          <div>
+            <div className="metrics-grid">
+              <div className="metric-card">
+                <div className="metric-label">Columns</div>
+                <div className="metric-value">
+                  {data.embedding_space.num_columns.toLocaleString()}
+                </div>
+              </div>
+              <div className="metric-card">
+                <div className="metric-label">Layers</div>
+                <div className="metric-value">
+                  {data.embedding_space.num_layers.toLocaleString()}
+                </div>
+              </div>
+              <div className="metric-card">
+                <div className="metric-label">Parameters</div>
+                <div className="metric-value">
+                  {formatLargeNumber(data.embedding_space.num_parameters)}
+                </div>
+              </div>
+              <div className="metric-card">
+                <div className="metric-label">Dimensions (d_model)</div>
+                <div className="metric-value">
+                  {data.embedding_space.d_model}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
       {renderSection(
         'technical-details',

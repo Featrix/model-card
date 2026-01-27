@@ -142,6 +142,15 @@ export interface ModelCardData {
       marginal_loss: number | null;
     };
   };
+  embedding_space?: {
+    num_columns: number;
+    num_layers: number;
+    num_parameters: number;
+    d_model: number;
+    num_rows: number;
+    train_rows: number;
+    val_rows: number;
+  };
 }
 
 interface ModelCardProps {
@@ -150,13 +159,13 @@ interface ModelCardProps {
 }
 
 const COLORS = {
-  primary: '#667eea',
-  secondary: '#f093fb',
+  primary: '#333',
+  secondary: '#666',
   success: '#28a745',
   warning: '#ffc107',
   danger: '#dc3545',
   info: '#17a2b8',
-  dark: '#343a40',
+  dark: '#000',
 };
 
 const getStatusColor = (status: string): string => {
@@ -199,6 +208,44 @@ const formatPercentage = (value: number | null): string => {
   return `${(value * 100).toFixed(2)}%`;
 };
 
+const formatLargeNumber = (value: number | null | undefined): string => {
+  if (value === null || value === undefined) return 'N/A';
+  if (value >= 1_000_000_000) {
+    return `${(value / 1_000_000_000).toFixed(1)}B`;
+  }
+  if (value >= 1_000_000) {
+    return `${(value / 1_000_000).toFixed(1)}M`;
+  }
+  if (value >= 1_000) {
+    return `${(value / 1_000).toFixed(1)}K`;
+  }
+  return value.toLocaleString();
+};
+
+const formatFramework = (framework: string): string => {
+  if (!framework) return 'N/A';
+  return framework.replace(/\s+unknown$/i, '').trim() || 'N/A';
+};
+
+const getModelTypeDisplay = (modelType: string, targetType: string | null): string => {
+  if (!modelType) return 'N/A';
+  const modelTypeLower = modelType.toLowerCase();
+  const targetTypeLower = (targetType || '').toLowerCase();
+  
+  if (modelTypeLower === 'embedding space' || modelTypeLower === 'es') {
+    return 'Foundational Embedding Space';
+  } else if (modelTypeLower === 'single predictor' || modelTypeLower === 'sp') {
+    if (targetTypeLower === 'set') {
+      return 'Classifier';
+    } else if (targetTypeLower === 'scalar') {
+      return 'Regression';
+    } else {
+      return 'Single Predictor';
+    }
+  }
+  return modelType;
+};
+
 export const ModelCard: React.FC<ModelCardProps> = ({ data, className = '' }) => {
   const [expandedSections, setExpandedSections] = useState<Set<string>>(
     new Set(['model-identification', 'training-metrics', 'model-quality'])
@@ -225,6 +272,7 @@ export const ModelCard: React.FC<ModelCardProps> = ({ data, className = '' }) =>
         'training-configuration',
         'training-metrics',
         'model-architecture',
+        'embedding-space',
         'model-quality',
         'technical-details',
         'provenance',
@@ -304,10 +352,15 @@ export const ModelCard: React.FC<ModelCardProps> = ({ data, className = '' }) =>
           margin: 0 auto;
           padding: 20px;
           background: #f5f5f5;
+          color: #000;
+        }
+        
+        .model-card * {
+          color: #000;
         }
         
         .model-card-header {
-          background: linear-gradient(135deg, ${COLORS.primary} 0%, #764ba2 100%);
+          background: #000;
           color: white;
           padding: 30px;
           border-radius: 8px;
@@ -317,12 +370,20 @@ export const ModelCard: React.FC<ModelCardProps> = ({ data, className = '' }) =>
         .model-card-header h1 {
           margin: 0 0 10px 0;
           font-size: 32px;
+          color: white;
+          letter-spacing: 3px;
+          word-spacing: 8px;
+        }
+        
+        .model-card-header div {
+          color: white;
         }
         
         .model-card-controls {
           display: flex;
           gap: 10px;
           margin-bottom: 20px;
+          color: #000;
         }
         
         .model-card-controls button {
@@ -337,6 +398,7 @@ export const ModelCard: React.FC<ModelCardProps> = ({ data, className = '' }) =>
         
         .model-card-controls button:hover {
           background: #5568d3;
+          color: white;
         }
         
         .model-card-section {
@@ -344,6 +406,8 @@ export const ModelCard: React.FC<ModelCardProps> = ({ data, className = '' }) =>
           border-radius: 8px;
           margin-bottom: 20px;
           box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+          border: 3px double ${COLORS.primary};
+          color: #000;
         }
         
         .section-header {
@@ -351,22 +415,24 @@ export const ModelCard: React.FC<ModelCardProps> = ({ data, className = '' }) =>
           display: flex;
           justify-content: space-between;
           align-items: center;
-          border-bottom: 1px solid #e0e0e0;
+          border-bottom: 2px solid ${COLORS.primary};
+          color: #000;
         }
         
         .section-header h2 {
           margin: 0;
           font-size: 20px;
-          color: #333;
+          color: #000;
         }
         
         .toggle-icon {
           font-size: 12px;
-          color: #666;
+          color: #000;
         }
         
         .section-content {
           padding: 20px;
+          color: #000;
         }
         
         .metrics-grid {
@@ -374,6 +440,7 @@ export const ModelCard: React.FC<ModelCardProps> = ({ data, className = '' }) =>
           grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
           gap: 15px;
           margin: 20px 0;
+          color: #000;
         }
         
         .metric-card {
@@ -381,11 +448,12 @@ export const ModelCard: React.FC<ModelCardProps> = ({ data, className = '' }) =>
           padding: 15px;
           border-radius: 5px;
           border-left: 4px solid ${COLORS.primary};
+          color: #000;
         }
         
         .metric-label {
           font-size: 12px;
-          color: #666;
+          color: #000;
           text-transform: uppercase;
           letter-spacing: 0.5px;
           margin-bottom: 5px;
@@ -394,13 +462,14 @@ export const ModelCard: React.FC<ModelCardProps> = ({ data, className = '' }) =>
         .metric-value {
           font-size: 24px;
           font-weight: bold;
-          color: #333;
+          color: #000;
         }
         
         .info-table {
           width: 100%;
           border-collapse: collapse;
           margin: 15px 0;
+          color: #000;
         }
         
         .info-table th {
@@ -410,11 +479,13 @@ export const ModelCard: React.FC<ModelCardProps> = ({ data, className = '' }) =>
           font-weight: 600;
           width: 200px;
           border-bottom: 1px solid #ddd;
+          color: #000;
         }
         
         .info-table td {
           padding: 10px;
           border-bottom: 1px solid #ddd;
+          color: #000;
         }
         
         .data-table {
@@ -422,10 +493,11 @@ export const ModelCard: React.FC<ModelCardProps> = ({ data, className = '' }) =>
           border-collapse: collapse;
           margin: 15px 0;
           font-size: 14px;
+          color: #000;
         }
         
         .data-table th {
-          background: ${COLORS.primary};
+          background: #333;
           color: white;
           padding: 12px;
           text-align: left;
@@ -435,10 +507,12 @@ export const ModelCard: React.FC<ModelCardProps> = ({ data, className = '' }) =>
         .data-table td {
           padding: 10px 12px;
           border-bottom: 1px solid #ddd;
+          color: #000;
         }
         
         .data-table tr:hover {
           background: #f8f9fa;
+          color: #000;
         }
         
         .tag-list {
@@ -446,13 +520,15 @@ export const ModelCard: React.FC<ModelCardProps> = ({ data, className = '' }) =>
           flex-wrap: wrap;
           gap: 8px;
           margin-top: 10px;
+          color: #000;
         }
         
         .tag {
           display: inline-block;
           padding: 4px 12px;
-          background: #e3f2fd;
-          color: #1976d2;
+          background: #f0f0f0;
+          color: #000;
+          border: 1px solid #ccc;
           border-radius: 12px;
           font-size: 12px;
         }
@@ -472,6 +548,7 @@ export const ModelCard: React.FC<ModelCardProps> = ({ data, className = '' }) =>
           background: #fff3cd;
           border-left: 4px solid ${COLORS.warning};
           border-radius: 4px;
+          color: #000;
         }
         
         .warning-header {
@@ -479,6 +556,11 @@ export const ModelCard: React.FC<ModelCardProps> = ({ data, className = '' }) =>
           align-items: center;
           gap: 10px;
           margin-bottom: 10px;
+          color: #000;
+        }
+        
+        .warning-message {
+          color: #000;
         }
         
         .chart-container {
@@ -486,13 +568,41 @@ export const ModelCard: React.FC<ModelCardProps> = ({ data, className = '' }) =>
           padding: 20px;
           background: #f8f9fa;
           border-radius: 5px;
+          color: #000;
+        }
+        
+        h3 {
+          color: #000;
+        }
+        
+        strong {
+          color: #000;
+        }
+        
+        em {
+          color: #000;
+        }
+        
+        code {
+          color: #000;
+        }
+        
+        li {
+          color: #000;
+        }
+        
+        ul {
+          color: #000;
         }
       `}</style>
 
       <div className="model-card-header">
-        <h1>Model Card: {data.model_identification.name}</h1>
-        <div style={{ opacity: 0.9 }}>
-          {data.model_identification.model_type} • {data.model_identification.status} •{' '}
+        <h1>MODEL CARD: &nbsp; {data.model_identification.name}</h1>
+        <div style={{ opacity: 0.9, letterSpacing: '0.5px' }}>
+          {getModelTypeDisplay(data.model_identification.model_type, data.model_identification.target_column_type)}
+          {'  •  '}
+          {data.model_identification.status}
+          {'  •  '}
           {data.model_identification.training_date}
         </div>
       </div>
@@ -506,13 +616,51 @@ export const ModelCard: React.FC<ModelCardProps> = ({ data, className = '' }) =>
         'model-identification',
         'Model Identification',
         <div>
+          <div className="metrics-grid">
+            <div className="metric-card">
+              <div className="metric-label">Target Column</div>
+              <div className="metric-value" style={{ fontSize: '20px', fontWeight: 'bold' }}>
+                {data.model_identification.target_column || 'N/A'}
+              </div>
+            </div>
+            <div className="metric-card">
+              <div className="metric-label">Model Type</div>
+              <div className="metric-value" style={{ fontSize: '20px', fontWeight: 'bold' }}>
+                {getModelTypeDisplay(
+                  data.model_identification.model_type,
+                  data.model_identification.target_column_type
+                )}
+              </div>
+            </div>
+            <div className="metric-card">
+              <div className="metric-label">Status</div>
+              <div className="metric-value">
+                <span
+                  className="badge"
+                  style={{ backgroundColor: getStatusColor(data.model_identification.status) }}
+                >
+                  {data.model_identification.status}
+                </span>
+              </div>
+            </div>
+            <div className="metric-card">
+              <div className="metric-label">Training Date</div>
+              <div className="metric-value" style={{ fontSize: '18px' }}>
+                {data.model_identification.training_date}
+              </div>
+            </div>
+          </div>
           <table className="info-table">
             <tbody>
               <tr>
-                <th>Session ID</th>
+                <th style={{ width: '250px' }}>Session ID</th>
                 <td>
-                  <code>{data.model_identification.session_id}</code>
+                  <code>{data.model_identification.session_id.substring(0, 20)}</code>
                 </td>
+              </tr>
+              <tr>
+                <th>Compute Cluster</th>
+                <td>{data.model_identification.compute_cluster}</td>
               </tr>
               <tr>
                 <th>Job ID</th>
@@ -521,38 +669,179 @@ export const ModelCard: React.FC<ModelCardProps> = ({ data, className = '' }) =>
                 </td>
               </tr>
               <tr>
-                <th>Model Type</th>
-                <td>{data.model_identification.model_type}</td>
-              </tr>
-              <tr>
-                <th>Status</th>
-                <td>
-                  <span
-                    className="badge"
-                    style={{ backgroundColor: getStatusColor(data.model_identification.status) }}
-                  >
-                    {data.model_identification.status}
-                  </span>
-                </td>
-              </tr>
-              <tr>
-                <th>Target Column</th>
-                <td>{data.model_identification.target_column || 'N/A'}</td>
-              </tr>
-              <tr>
                 <th>Target Type</th>
-                <td>{data.model_identification.target_column_type || 'N/A'}</td>
-              </tr>
-              <tr>
-                <th>Compute Cluster</th>
-                <td>{data.model_identification.compute_cluster}</td>
+                <td>{(data.model_identification.target_column_type || 'N/A').toUpperCase()}</td>
               </tr>
               <tr>
                 <th>Framework</th>
-                <td>{data.model_identification.framework}</td>
+                <td>{formatFramework(data.model_identification.framework)}</td>
               </tr>
             </tbody>
           </table>
+        </div>,
+        true
+      )}
+
+      {renderSection(
+        'training-metrics',
+        'Model Performance Metrics',
+        <div>
+          <div>
+            <h3>Best Epoch</h3>
+            <table className="info-table">
+              <tbody>
+                <tr>
+                  <th>Epoch</th>
+                  <td>{data.training_metrics.best_epoch.epoch}</td>
+                </tr>
+                <tr>
+                  <th>Validation Loss</th>
+                  <td>{formatValue(data.training_metrics.best_epoch.validation_loss)}</td>
+                </tr>
+                <tr>
+                  <th>Train Loss</th>
+                  <td>{formatValue(data.training_metrics.best_epoch.train_loss)}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          {data.training_metrics.classification_metrics && (
+            <div>
+              <h3>Classification Metrics</h3>
+              <div className="metrics-grid">
+                <div className="metric-card">
+                  <div className="metric-label" title="How often we are correct when we raise an alert">Precision</div>
+                  <div className="metric-value">
+                    {formatValue(data.training_metrics.classification_metrics.precision, 3)}
+                  </div>
+                </div>
+                <div className="metric-card">
+                  <div className="metric-label" title="How many true rare events we catch">Recall</div>
+                  <div className="metric-value">
+                    {formatValue(data.training_metrics.classification_metrics.recall, 3)}
+                  </div>
+                </div>
+                <div className="metric-card">
+                  <div className="metric-label">F1 Score</div>
+                  <div className="metric-value">
+                    {formatValue(data.training_metrics.classification_metrics.f1, 3)}
+                  </div>
+                </div>
+                <div className="metric-card">
+                  <div className="metric-label">AUC</div>
+                  <div className="metric-value">
+                    {formatValue(data.training_metrics.classification_metrics.auc, 3)}
+                  </div>
+                </div>
+              </div>
+              {metricsChartData && metricsChartData.length > 0 && (
+                <div className="chart-container">
+                  <h3>Metrics Visualization</h3>
+                  <ResponsiveContainer width="100%" height={300}>
+                    <BarChart data={metricsChartData}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="name" />
+                      <YAxis domain={[0, 1]} />
+                      <Tooltip formatter={(value: number) => formatPercentage(value)} />
+                      <Bar dataKey="value" fill="#333" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              )}
+            </div>
+          )}
+
+          {data.training_metrics.optimal_threshold && (
+            <div>
+              <h3>Optimal Threshold</h3>
+              <table className="info-table">
+                <tbody>
+                  <tr>
+                    <th>Optimal Threshold</th>
+                    <td>{formatValue(data.training_metrics.optimal_threshold.optimal_threshold)}</td>
+                  </tr>
+                  <tr>
+                    <th>Positive Label</th>
+                    <td>{data.training_metrics.optimal_threshold.pos_label || 'N/A'}</td>
+                  </tr>
+                  <tr>
+                    <th>F1 at Optimal Threshold</th>
+                    <td>
+                      {formatPercentage(data.training_metrics.optimal_threshold.optimal_threshold_f1)}
+                    </td>
+                  </tr>
+                  <tr>
+                    <th>Accuracy at Optimal Threshold</th>
+                    <td>
+                      {formatPercentage(
+                        data.training_metrics.optimal_threshold.accuracy_at_optimal_threshold
+                      )}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>,
+        true
+      )}
+
+      {renderSection(
+        'model-quality',
+        'Model Quality',
+        <div>
+          {data.model_quality.assessment && (
+            <div>
+              <h3>Assessment</h3>
+              <span
+                className="badge"
+                style={{ backgroundColor: getQualityColor(data.model_quality.assessment) }}
+              >
+                {data.model_quality.assessment}
+              </span>
+            </div>
+          )}
+
+          {data.model_quality.recommendations && data.model_quality.recommendations.length > 0 && (
+            <div>
+              <h3>Recommendations</h3>
+              <ul>
+                {data.model_quality.recommendations.map((rec, idx) => (
+                  <li key={idx} style={{ marginBottom: '10px' }}>
+                    <strong>Issue:</strong> {rec.issue}
+                    <br />
+                    <strong>Suggestion:</strong> {rec.suggestion}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {data.model_quality.warnings.length > 0 && (
+            <div>
+              <h3>Warnings</h3>
+              {data.model_quality.warnings.map((warning, idx) => (
+                <div key={idx} className="warning-item">
+                  <div className="warning-header">
+                    <span
+                      className="badge"
+                      style={{ backgroundColor: getSeverityColor(warning.severity) }}
+                    >
+                      {warning.severity}
+                    </span>
+                    <strong>{warning.type}</strong>
+                  </div>
+                  <div>{warning.message}</div>
+                  {warning.recommendation && (
+                    <div style={{ marginTop: '10px' }}>
+                      <strong>Recommendation:</strong> {warning.recommendation}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
         </div>,
         true
       )}
@@ -605,7 +894,7 @@ export const ModelCard: React.FC<ModelCardProps> = ({ data, className = '' }) =>
                     dataKey="value"
                   >
                     {featureTypeDistribution.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={[COLORS.primary, COLORS.secondary, COLORS.info, COLORS.warning][index % 4]} />
+                      <Cell key={`cell-${index}`} fill={['#333', '#666', '#999', COLORS.warning][index % 4]} />
                     ))}
                   </Pie>
                   <Tooltip />
@@ -718,117 +1007,6 @@ export const ModelCard: React.FC<ModelCardProps> = ({ data, className = '' }) =>
       )}
 
       {renderSection(
-        'training-metrics',
-        'Training Metrics',
-        <div>
-          <div>
-            <h3>Best Epoch</h3>
-            <table className="info-table">
-              <tbody>
-                <tr>
-                  <th>Epoch</th>
-                  <td>{data.training_metrics.best_epoch.epoch}</td>
-                </tr>
-                <tr>
-                  <th>Validation Loss</th>
-                  <td>{formatValue(data.training_metrics.best_epoch.validation_loss)}</td>
-                </tr>
-                <tr>
-                  <th>Train Loss</th>
-                  <td>{formatValue(data.training_metrics.best_epoch.train_loss)}</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-
-          {data.training_metrics.classification_metrics && (
-            <div>
-              <h3>Classification Metrics</h3>
-              <div className="metrics-grid">
-                <div className="metric-card">
-                  <div className="metric-label">Accuracy</div>
-                  <div className="metric-value">
-                    {formatPercentage(data.training_metrics.classification_metrics.accuracy)}
-                  </div>
-                </div>
-                <div className="metric-card">
-                  <div className="metric-label">Precision</div>
-                  <div className="metric-value">
-                    {formatPercentage(data.training_metrics.classification_metrics.precision)}
-                  </div>
-                </div>
-                <div className="metric-card">
-                  <div className="metric-label">Recall</div>
-                  <div className="metric-value">
-                    {formatPercentage(data.training_metrics.classification_metrics.recall)}
-                  </div>
-                </div>
-                <div className="metric-card">
-                  <div className="metric-label">F1 Score</div>
-                  <div className="metric-value">
-                    {formatPercentage(data.training_metrics.classification_metrics.f1)}
-                  </div>
-                </div>
-                <div className="metric-card">
-                  <div className="metric-label">AUC</div>
-                  <div className="metric-value">
-                    {formatPercentage(data.training_metrics.classification_metrics.auc)}
-                  </div>
-                </div>
-              </div>
-              {metricsChartData && metricsChartData.length > 0 && (
-                <div className="chart-container">
-                  <h3>Metrics Visualization</h3>
-                  <ResponsiveContainer width="100%" height={300}>
-                    <BarChart data={metricsChartData}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="name" />
-                      <YAxis domain={[0, 1]} />
-                      <Tooltip formatter={(value: number) => formatPercentage(value)} />
-                      <Bar dataKey="value" fill={COLORS.primary} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-              )}
-            </div>
-          )}
-
-          {data.training_metrics.optimal_threshold && (
-            <div>
-              <h3>Optimal Threshold</h3>
-              <table className="info-table">
-                <tbody>
-                  <tr>
-                    <th>Optimal Threshold</th>
-                    <td>{formatValue(data.training_metrics.optimal_threshold.optimal_threshold)}</td>
-                  </tr>
-                  <tr>
-                    <th>Positive Label</th>
-                    <td>{data.training_metrics.optimal_threshold.pos_label || 'N/A'}</td>
-                  </tr>
-                  <tr>
-                    <th>F1 at Optimal Threshold</th>
-                    <td>
-                      {formatPercentage(data.training_metrics.optimal_threshold.optimal_threshold_f1)}
-                    </td>
-                  </tr>
-                  <tr>
-                    <th>Accuracy at Optimal Threshold</th>
-                    <td>
-                      {formatPercentage(
-                        data.training_metrics.optimal_threshold.accuracy_at_optimal_threshold
-                      )}
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>,
-        true
-      )}
-
-      {renderSection(
         'model-architecture',
         'Model Architecture',
         <div>
@@ -857,64 +1035,39 @@ export const ModelCard: React.FC<ModelCardProps> = ({ data, className = '' }) =>
         </div>
       )}
 
-      {renderSection(
-        'model-quality',
-        'Model Quality',
-        <div>
-          {data.model_quality.assessment && (
-            <div>
-              <h3>Assessment</h3>
-              <span
-                className="badge"
-                style={{ backgroundColor: getQualityColor(data.model_quality.assessment) }}
-              >
-                {data.model_quality.assessment}
-              </span>
-            </div>
-          )}
-
-          {data.model_quality.recommendations && data.model_quality.recommendations.length > 0 && (
-            <div>
-              <h3>Recommendations</h3>
-              <ul>
-                {data.model_quality.recommendations.map((rec, idx) => (
-                  <li key={idx} style={{ marginBottom: '10px' }}>
-                    <strong>Issue:</strong> {rec.issue}
-                    <br />
-                    <strong>Suggestion:</strong> {rec.suggestion}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          {data.model_quality.warnings.length > 0 && (
-            <div>
-              <h3>Warnings</h3>
-              {data.model_quality.warnings.map((warning, idx) => (
-                <div key={idx} className="warning-item">
-                  <div className="warning-header">
-                    <span
-                      className="badge"
-                      style={{ backgroundColor: getSeverityColor(warning.severity) }}
-                    >
-                      {warning.severity}
-                    </span>
-                    <strong>{warning.type}</strong>
-                  </div>
-                  <div>{warning.message}</div>
-                  {warning.recommendation && (
-                    <div style={{ marginTop: '10px' }}>
-                      <strong>Recommendation:</strong> {warning.recommendation}
-                    </div>
-                  )}
+      {data.embedding_space &&
+        renderSection(
+          'embedding-space',
+          'Embedding Space',
+          <div>
+            <div className="metrics-grid">
+              <div className="metric-card">
+                <div className="metric-label">Columns</div>
+                <div className="metric-value">
+                  {data.embedding_space.num_columns.toLocaleString()}
                 </div>
-              ))}
+              </div>
+              <div className="metric-card">
+                <div className="metric-label">Layers</div>
+                <div className="metric-value">
+                  {data.embedding_space.num_layers.toLocaleString()}
+                </div>
+              </div>
+              <div className="metric-card">
+                <div className="metric-label">Parameters</div>
+                <div className="metric-value">
+                  {formatLargeNumber(data.embedding_space.num_parameters)}
+                </div>
+              </div>
+              <div className="metric-card">
+                <div className="metric-label">Dimensions (d_model)</div>
+                <div className="metric-value">
+                  {data.embedding_space.d_model}
+                </div>
+              </div>
             </div>
-          )}
-        </div>,
-        true
-      )}
+          </div>
+        )}
 
       {renderSection(
         'technical-details',
@@ -990,7 +1143,7 @@ export const ModelCard: React.FC<ModelCardProps> = ({ data, className = '' }) =>
                     <YAxis />
                     <Tooltip />
                     <Legend />
-                    <Bar dataKey="mutualInfo" fill={COLORS.primary} name="Mutual Information (bits)" />
+                    <Bar dataKey="mutualInfo" fill="#333" name="Mutual Information (bits)" />
                   </BarChart>
                 </ResponsiveContainer>
               )}

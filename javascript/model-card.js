@@ -230,12 +230,14 @@
     renderEmbeddingSpace: function(data) {
       var es = data.embedding_space;
       var sp = data.single_predictor || data.predictor || {};
+      var ma = data.model_architecture || {};
+      var ms = (data.model_stack && data.model_stack[0]) || {};
       var ci = data.class_imbalance || {};
       if (!es) return '';
 
-      var spRows = ci.total_samples || sp.num_rows || 0;
-      var spLayers = sp.num_layers || 0;
-      var spParams = sp.num_parameters || 0;
+      var spRows = ci.total_samples || ms.rows || sp.num_rows || 0;
+      var spLayers = ms.layers || ma.predictor_layers || sp.num_layers || 0;
+      var spParams = ms.parameters || ma.predictor_parameters || sp.num_parameters || 0;
 
       var html = `
     <details class="section" open>
@@ -250,15 +252,15 @@
                     <th>Parameters</th>
                 </tr>
                 <tr>
-                    <td style="font-weight: bold;">Predictor</td>
-                    <td style="color: #388e3c; font-weight: bold;">Yes</td>
+                    <td style="font-weight: bold; white-space: nowrap;">Predictor</td>
+                    <td style="color: #388e3c; font-weight: bold; white-space: nowrap;">Yes</td>
                     <td style="font-size: 18px; font-weight: bold;">${spRows.toLocaleString()}</td>
                     <td style="font-size: 18px; font-weight: bold;">${spLayers ? this.formatLargeNumber(spLayers) : 'N/A'}</td>
                     <td style="font-size: 18px; font-weight: bold;">${spParams ? this.formatLargeNumber(spParams) : 'N/A'}</td>
                 </tr>
                 <tr>
-                    <td style="font-weight: bold;">Foundation</td>
-                    <td style="color: #666;">No</td>
+                    <td style="font-weight: bold; white-space: nowrap;">Foundation</td>
+                    <td style="color: #666; white-space: nowrap;">No</td>
                     <td style="font-size: 18px; font-weight: bold;">${(es.num_rows || 0).toLocaleString()}</td>
                     <td style="font-size: 18px; font-weight: bold;">${this.formatLargeNumber(es.num_layers)}</td>
                     <td style="font-size: 18px; font-weight: bold;">${this.formatLargeNumber(es.num_parameters)}</td>

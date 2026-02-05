@@ -615,7 +615,9 @@
 
       html += '<div class="metric">';
       html += '<div class="metric-label">Checkpoint Metric</div>';
-      html += '<div class="metric-value" style="font-size: 18px;">' + (to.checkpoint_metric || 'N/A').toUpperCase().replace('_', '-') + '</div>';
+      var checkpointMetric = to.checkpoint_metric;
+      var checkpointDisplay = (!checkpointMetric || checkpointMetric.toLowerCase() === 'none') ? 'Default' : checkpointMetric.toUpperCase().replace('_', '-');
+      html += '<div class="metric-value" style="font-size: 18px;">' + checkpointDisplay + '</div>';
       html += '</div>';
 
       html += '</div>';

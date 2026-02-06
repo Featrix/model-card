@@ -1,25 +1,86 @@
-import React, { useState, useMemo } from 'react';
-import {
-  LineChart,
-  Line,
-  BarChart,
-  Bar,
-  PieChart,
-  Pie,
-  Cell,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  Legend,
-  ResponsiveContainer,
-} from 'recharts';
+import React, { useState } from 'react';
 
 // Type definitions for the model card JSON structure
+export interface ClassificationMetric {
+  value: number;
+  quality: string;
+  trend: string;
+  delta_1: number | null;
+  delta_5: number | null;
+  delta_10: number | null;
+}
+
+export interface ConfusionMatrix {
+  tp: number;
+  tn: number;
+  fp: number;
+  fn: number;
+  threshold: number;
+  precision: number;
+  recall: number;
+  specificity: number;
+}
+
+export interface PerRowTracking {
+  this_epoch?: {
+    correct: number;
+    wrong: number;
+    accuracy_pct: number;
+  };
+  cumulative_categories?: {
+    never_wrong: number;
+    rarely_wrong: number;
+    sometimes_wrong: number;
+    frequently_wrong: number;
+    always_wrong: number;
+  };
+}
+
+export interface ClassificationDisplayMetadata {
+  epoch: number;
+  classification_metrics?: {
+    accuracy?: ClassificationMetric;
+    auc?: ClassificationMetric;
+    pr_auc?: ClassificationMetric;
+    f1?: ClassificationMetric;
+    precision?: ClassificationMetric;
+    recall?: ClassificationMetric;
+    specificity?: ClassificationMetric;
+  };
+  confusion_matrix?: ConfusionMatrix;
+  per_row_tracking?: PerRowTracking;
+}
+
+export interface BestEpochData {
+  epoch: number;
+  roc_auc?: number;
+  pr_auc?: number;
+  classification_display_metadata?: ClassificationDisplayMetadata;
+}
+
+export interface TrainingOptimization {
+  loss_function?: string;
+  optimization_priority?: string;
+  checkpoint_metric?: string;
+  optimization_description?: string;
+  focal_gamma?: number;
+  focal_alpha?: number;
+  class_weights?: number[];
+  cost_sensitive?: {
+    cost_false_positive: number;
+    cost_false_negative: number;
+  };
+  adaptive_loss?: boolean;
+  gamma_adjustments?: number;
+  checkpoint_value?: number;
+  checkpoint_epoch?: number;
+  positive_class?: string;
+}
+
 export interface ModelCardData {
   model_identification: {
     session_id: string;
-    job_id: string;
+    job_id?: string;
     name: string;
     target_column: string | null;
     target_column_type: string | null;
@@ -29,127 +90,44 @@ export interface ModelCardData {
     model_type: string;
     framework: string;
   };
-  training_dataset: {
-    train_rows: number;
-    val_rows: number;
-    total_rows: number;
-    total_features: number;
-    feature_names: string[];
-    target_column: string | null;
-  };
-  feature_inventory: Array<{
-    name: string;
-    type: string;
-    encoder_type: string;
-    unique_values: number | null;
-    sample_values: string[] | null;
-    statistics: {
-      min: number;
-      max: number;
-      mean: number;
-      std: number;
-      median: number;
-    } | null;
-  }>;
-  training_configuration: {
-    epochs_total: number;
-    best_epoch: number;
-    d_model: number;
-    batch_size: number | null;
-    learning_rate: number | null;
-    optimizer: string;
-    dropout_schedule?: {
-      enabled: boolean;
-      initial: number;
-      final: number;
-    } | null;
-  };
-  training_metrics: {
-    best_epoch: {
-      epoch: number;
-      validation_loss: number;
-      train_loss: number;
-      spread_loss?: number | null;
-      joint_loss?: number | null;
-      marginal_loss?: number | null;
-    };
-    classification_metrics?: {
-      accuracy: number | null;
-      precision: number | null;
-      recall: number | null;
-      f1: number | null;
-      auc: number | null;
-      is_binary: boolean;
-    } | null;
-    optimal_threshold?: {
-      optimal_threshold: number;
-      pos_label: string | null;
-      optimal_threshold_f1: number;
-      accuracy_at_optimal_threshold: number;
-    } | null;
-    argmax_metrics?: {
-      accuracy: number;
-      precision: number;
-      recall: number;
-      f1: number;
-    } | null;
-    final_epoch?: {
-      epoch: number;
-      train_loss: number;
-      val_loss: number;
-    } | null;
-    loss_progression?: {
-      initial_train: number;
-      initial_val: number;
-      improvement_pct: number | null;
-    } | null;
-  };
-  model_architecture: {
-    predictor_layers: number | null;
-    predictor_parameters: number | null;
-    embedding_space_d_model: number | null;
-  };
-  model_quality: {
-    assessment: string | null;
-    recommendations: Array<{
-      issue: string;
-      suggestion: string;
-    }> | null;
-    warnings: Array<{
-      type: string;
-      severity: string;
-      message: string;
-      details: any | null;
-      recommendation: string | null;
-    }>;
-    training_quality_warning: string | null;
-  };
-  technical_details: {
-    pytorch_version: string;
-    device: string;
-    precision: string;
-    normalization: string | null;
-    loss_function: string;
-  };
-  provenance: {
-    created_at: string;
-    training_duration_minutes: number | null;
-    version_info: any | null;
-  };
-  column_statistics?: {
-    [key: string]: {
-      mutual_information_bits: number | null;
-      marginal_loss: number | null;
-    };
-  };
   embedding_space?: {
     num_columns: number;
     num_layers: number;
     num_parameters: number;
     d_model: number;
     num_rows: number;
-    train_rows: number;
-    val_rows: number;
+  };
+  class_imbalance?: {
+    total_samples: number;
+    minority_class: string;
+    majority_class: string;
+    minority_class_count: number;
+    majority_class_count: number;
+    imbalance_ratio: number;
+    train_distribution?: { [key: string]: number };
+    val_distribution?: { [key: string]: number };
+  };
+  best_epochs?: {
+    best_roc_auc?: BestEpochData;
+    best_pr_auc?: BestEpochData;
+  };
+  training_optimization?: TrainingOptimization;
+  model_architecture?: {
+    predictor_layers: number | null;
+    predictor_parameters: number | null;
+  };
+  model_stack?: Array<{
+    rows?: number;
+    layers?: number;
+    parameters?: number;
+  }>;
+  single_predictor?: {
+    num_rows?: number;
+    num_layers?: number;
+    num_parameters?: number;
+  };
+  disk_usage?: {
+    best_model_path?: string;
   };
 }
 
@@ -160,1019 +138,570 @@ interface ModelCardProps {
 
 const COLORS = {
   primary: '#333',
-  secondary: '#666',
   success: '#28a745',
   warning: '#ffc107',
   danger: '#dc3545',
-  info: '#17a2b8',
-  dark: '#000',
+  info: '#007bff',
 };
 
 const getStatusColor = (status: string): string => {
-  const statusLower = status.toLowerCase();
-  if (statusLower === 'done') return COLORS.success;
+  const statusLower = (status || '').toLowerCase();
+  if (statusLower === 'done' || statusLower === 'ready') return COLORS.success;
   if (statusLower === 'training') return COLORS.warning;
   if (statusLower === 'failed') return COLORS.danger;
-  return COLORS.dark;
+  return '#6c757d';
 };
 
-const getQualityColor = (assessment: string | null): string => {
-  if (!assessment) return COLORS.dark;
-  const assessmentLower = assessment.toLowerCase();
-  if (assessmentLower === 'excellent') return COLORS.success;
-  if (assessmentLower === 'good') return COLORS.info;
-  if (assessmentLower === 'fair') return COLORS.warning;
-  if (assessmentLower === 'poor') return '#fd7e14';
-  return COLORS.dark;
+const getStatusDisplay = (status: string): string => {
+  const statusLower = (status || '').toLowerCase();
+  if (statusLower === 'done') return 'READY';
+  return (status || 'N/A').toUpperCase();
 };
 
-const getSeverityColor = (severity: string): string => {
-  const severityLower = severity.toLowerCase();
-  if (severityLower === 'high') return COLORS.danger;
-  if (severityLower === 'moderate') return COLORS.warning;
-  if (severityLower === 'low') return COLORS.info;
-  return COLORS.dark;
+const getQualityColor = (quality: string | null): string => {
+  if (!quality) return '#6c757d';
+  const q = quality.toLowerCase();
+  if (q === 'excellent') return COLORS.success;
+  if (q === 'good') return COLORS.info;
+  if (q === 'fair') return '#fff';
+  if (q === 'poor') return '#fd7e14';
+  return '#6c757d';
 };
 
-const formatValue = (value: any, precision: number = 4): string => {
-  if (value === null || value === undefined) return 'N/A';
-  if (typeof value === 'number') {
-    const formatted = value.toFixed(precision).replace(/\.?0+$/, '');
-    return formatted;
+const getQualityStyle = (quality: string | null): React.CSSProperties => {
+  if (!quality) return { backgroundColor: '#6c757d', color: 'white' };
+  if (quality.toLowerCase() === 'fair') {
+    return { backgroundColor: '#fff', color: '#000', border: '1px solid #000' };
   }
-  return String(value);
-};
-
-const formatPercentage = (value: number | null): string => {
-  if (value === null) return 'N/A';
-  return `${(value * 100).toFixed(2)}%`;
+  return { backgroundColor: getQualityColor(quality), color: 'white' };
 };
 
 const formatLargeNumber = (value: number | null | undefined): string => {
   if (value === null || value === undefined) return 'N/A';
-  if (value >= 1_000_000_000) {
-    return `${(value / 1_000_000_000).toFixed(1)}B`;
-  }
-  if (value >= 1_000_000) {
-    return `${(value / 1_000_000).toFixed(1)}M`;
-  }
-  if (value >= 1_000) {
-    return `${(value / 1_000).toFixed(1)}K`;
-  }
+  if (value >= 1_000_000_000) return `${(value / 1_000_000_000).toFixed(1)}B`;
+  if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
+  if (value >= 1_000) return `${(value / 1_000).toFixed(1)}K`;
   return value.toLocaleString();
-};
-
-const formatFramework = (framework: string): string => {
-  if (!framework) return 'N/A';
-  return framework.replace(/\s+unknown$/i, '').trim() || 'N/A';
 };
 
 const getModelTypeDisplay = (modelType: string, targetType: string | null): string => {
   if (!modelType) return 'N/A';
   const modelTypeLower = modelType.toLowerCase();
   const targetTypeLower = (targetType || '').toLowerCase();
-  
+
   if (modelTypeLower === 'embedding space' || modelTypeLower === 'es') {
     return 'Foundational Embedding Space';
   } else if (modelTypeLower === 'single predictor' || modelTypeLower === 'sp') {
-    if (targetTypeLower === 'set') {
-      return 'Classifier';
-    } else if (targetTypeLower === 'scalar') {
-      return 'Regression';
-    } else {
-      return 'Single Predictor';
-    }
+    if (targetTypeLower === 'set') return 'Binary Classifier';
+    if (targetTypeLower === 'scalar') return 'Regression';
+    return 'Single Predictor';
   }
   return modelType;
 };
 
-export const ModelCard: React.FC<ModelCardProps> = ({ data, className = '' }) => {
-  const [expandedSections, setExpandedSections] = useState<Set<string>>(
-    new Set(['model-identification', 'training-metrics', 'model-quality'])
-  );
+const parseModelPath = (path?: string): { sessionId: string | null } => {
+  if (!path) return { sessionId: null };
+  const parts = path.split('/');
+  for (const part of parts) {
+    if (part.startsWith('predictor-') && part.length > 37) {
+      return { sessionId: part.substring(0, part.length - 37) };
+    }
+  }
+  return { sessionId: null };
+};
 
-  const toggleSection = (sectionId: string) => {
-    setExpandedSections((prev) => {
-      const newSet = new Set(prev);
-      if (newSet.has(sectionId)) {
-        newSet.delete(sectionId);
-      } else {
-        newSet.add(sectionId);
-      }
-      return newSet;
-    });
-  };
+export const ModelCard: React.FC<ModelCardProps> = ({ data, className = '' }) => {
+  const [activeTab, setActiveTab] = useState<'roc-auc' | 'pr-auc'>('roc-auc');
+  const [showPerRowTracking, setShowPerRowTracking] = useState<{ [key: string]: boolean }>({});
 
   const expandAll = () => {
-    setExpandedSections(
-      new Set([
-        'model-identification',
-        'training-dataset',
-        'feature-inventory',
-        'training-configuration',
-        'training-metrics',
-        'model-architecture',
-        'embedding-space',
-        'model-quality',
-        'technical-details',
-        'provenance',
-        'column-statistics',
-      ])
-    );
+    document.querySelectorAll('details').forEach(d => d.open = true);
   };
 
   const collapseAll = () => {
-    setExpandedSections(new Set());
+    document.querySelectorAll('details').forEach(d => d.open = false);
   };
 
-  // Prepare data for charts
-  const metricsChartData = useMemo(() => {
-    if (data.model_identification.model_type !== 'Single Predictor') return null;
-    
-    const cm = data.training_metrics.classification_metrics;
-    if (!cm) return null;
+  // Calculate derived values
+  const mi = data.model_identification;
+  const es = data.embedding_space;
+  const ci = data.class_imbalance;
+  const be = data.best_epochs;
+  const to = data.training_optimization;
+  const ma = data.model_architecture || {};
+  const ms = data.model_stack?.[0] || {};
+  const sp = data.single_predictor || {};
 
-    return [
-      { name: 'Accuracy', value: cm.accuracy || 0 },
-      { name: 'Precision', value: cm.precision || 0 },
-      { name: 'Recall', value: cm.recall || 0 },
-      { name: 'F1', value: cm.f1 || 0 },
-      { name: 'AUC', value: cm.auc || 0 },
-    ].filter((item) => item.value > 0);
-  }, [data]);
+  const parsed = parseModelPath(data.disk_usage?.best_model_path);
+  const modelIdDisplay = parsed.sessionId || mi.session_id?.substring(0, 20) || 'N/A';
 
-  const featureTypeDistribution = useMemo(() => {
-    const typeCounts: { [key: string]: number } = {};
-    data.feature_inventory.forEach((feat) => {
-      typeCounts[feat.type] = (typeCounts[feat.type] || 0) + 1;
-    });
-    return Object.entries(typeCounts).map(([name, value]) => ({ name, value }));
-  }, [data]);
+  // Best metrics
+  let bestRocAuc: number | null = null;
+  let bestPrAuc: number | null = null;
+  if (be?.best_roc_auc?.classification_display_metadata?.classification_metrics?.auc) {
+    bestRocAuc = be.best_roc_auc.classification_display_metadata.classification_metrics.auc.value;
+  }
+  if (be?.best_pr_auc?.classification_display_metadata?.classification_metrics?.pr_auc) {
+    bestPrAuc = be.best_pr_auc.classification_display_metadata.classification_metrics.pr_auc.value;
+  }
 
-  const columnStatisticsData = useMemo(() => {
-    if (!data.column_statistics) return null;
-    return Object.entries(data.column_statistics)
-      .map(([name, stats]) => ({
-        name,
-        mutualInfo: stats.mutual_information_bits || 0,
-        marginalLoss: stats.marginal_loss || 0,
-      }))
-      .sort((a, b) => b.mutualInfo - a.mutualInfo)
-      .slice(0, 10);
-  }, [data]);
+  // PR-AUC lift
+  let prAucLift: number | null = null;
+  if (bestPrAuc && ci?.minority_class_count && ci?.total_samples) {
+    const prevalence = ci.minority_class_count / ci.total_samples;
+    prAucLift = bestPrAuc / prevalence;
+  }
 
-  const renderSection = (
-    id: string,
-    title: string,
-    content: React.ReactNode,
-    defaultOpen: boolean = false
-  ) => {
-    const isOpen = expandedSections.has(id);
+  // Model stack values
+  const spRows = ci?.total_samples || ms.rows || sp.num_rows || 0;
+  const spLayers = ms.layers || ma.predictor_layers || sp.num_layers || 0;
+  const spParams = ms.parameters || ma.predictor_parameters || sp.num_parameters || 0;
+
+  const renderMetricsTable = (metrics: ClassificationDisplayMetadata['classification_metrics']) => {
+    if (!metrics) return null;
+    const metricOrder: (keyof typeof metrics)[] = ['accuracy', 'auc', 'pr_auc', 'f1', 'precision', 'recall', 'specificity'];
+
     return (
-      <div className="model-card-section" key={id}>
-        <div
-          className="section-header"
-          onClick={() => toggleSection(id)}
-          style={{ cursor: 'pointer' }}
-        >
-          <h2>{title}</h2>
-          <span className="toggle-icon">{isOpen ? '▼' : '▶'}</span>
+      <table className="metrics-table">
+        <thead>
+          <tr>
+            <th>Metric</th>
+            <th>Value</th>
+            <th>Quality</th>
+            <th>Trend</th>
+            <th>Δ1</th>
+            <th>Δ5</th>
+          </tr>
+        </thead>
+        <tbody>
+          {metricOrder.map(key => {
+            const m = metrics[key];
+            if (!m) return null;
+            return (
+              <tr key={key}>
+                <td style={{ textTransform: 'uppercase', fontWeight: 'bold' }}>{key.replace('_', ' ')}</td>
+                <td>{typeof m.value === 'number' ? `${(m.value * 100).toFixed(2)}%` : 'N/A'}</td>
+                <td><span className="quality-badge" style={getQualityStyle(m.quality)}>{m.quality || 'N/A'}</span></td>
+                <td style={{ fontSize: '18px' }}>{m.trend || ''}</td>
+                <td>{m.delta_1 !== null ? `${m.delta_1 > 0 ? '+' : ''}${(m.delta_1 * 100).toFixed(2)}%` : '-'}</td>
+                <td>{m.delta_5 !== null ? `${m.delta_5 > 0 ? '+' : ''}${(m.delta_5 * 100).toFixed(2)}%` : '-'}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    );
+  };
+
+  const renderConfusionMatrix = (cm: ConfusionMatrix | undefined) => {
+    if (!cm) return null;
+    const { tn, fp, fn, tp } = cm;
+    const totalPos = tp + fn;
+    const totalNeg = tn + fp;
+    const hitRate = totalPos > 0 ? tp / totalPos : 0;
+    const missRate = totalPos > 0 ? fn / totalPos : 0;
+    const specificity = totalNeg > 0 ? tn / totalNeg : 0;
+    const falseAlarmRate = totalNeg > 0 ? fp / totalNeg : 0;
+    const precision = (tp + fp) > 0 ? tp / (tp + fp) : 0;
+
+    return (
+      <div className="confusion-wrapper">
+        <h4 className="confusion-title">Confusion Matrix</h4>
+        <div className="confusion-layout">
+          <table className="confusion-matrix">
+            <tbody>
+              <tr><th></th><th></th><th colSpan={2} className="cm-header">Predicted</th></tr>
+              <tr><th></th><th></th><th className="cm-label">Pos</th><th className="cm-label">Neg</th></tr>
+              <tr>
+                <th rowSpan={2} className="cm-header" style={{ verticalAlign: 'middle' }}>Actual</th>
+                <th className="cm-label">Pos</th>
+                <td className="cm-cell cm-correct">{tp}</td>
+                <td className="cm-cell cm-error">{fn}</td>
+              </tr>
+              <tr>
+                <th className="cm-label">Neg</th>
+                <td className="cm-cell cm-error">{fp}</td>
+                <td className="cm-cell cm-correct">{tn}</td>
+              </tr>
+            </tbody>
+          </table>
+          <table className="derived-metrics">
+            <tbody>
+              <tr><td><strong>Hit Rate</strong> (Recall)</td><td className="dm-value">{(hitRate * 100).toFixed(1)}%</td><td className="dm-formula">TP / (TP+FN)</td></tr>
+              <tr><td><strong>Miss Rate</strong></td><td className="dm-value">{(missRate * 100).toFixed(1)}%</td><td className="dm-formula">FN / (TP+FN)</td></tr>
+              <tr><td><strong>Specificity</strong> (TNR)</td><td className="dm-value">{(specificity * 100).toFixed(1)}%</td><td className="dm-formula">TN / (TN+FP)</td></tr>
+              <tr><td><strong>False Alarm</strong> (FPR)</td><td className="dm-value">{(falseAlarmRate * 100).toFixed(1)}%</td><td className="dm-formula">FP / (TN+FP)</td></tr>
+              <tr><td><strong>Precision</strong> (PPV)</td><td className="dm-value">{(precision * 100).toFixed(1)}%</td><td className="dm-formula">TP / (TP+FP)</td></tr>
+            </tbody>
+          </table>
         </div>
-        {isOpen && <div className="section-content">{content}</div>}
       </div>
     );
   };
 
-  return (
-    <div className={`model-card ${className}`}>
-      <style>{`
-        .model-card {
-          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-          max-width: 1400px;
-          margin: 0 auto;
-          padding: 20px;
-          background: #f5f5f5;
-          color: #000;
-        }
-        
-        .model-card * {
-          color: #000;
-        }
-        
-        .model-card-header {
-          background: #000;
-          color: white;
-          padding: 30px;
-          border-radius: 8px;
-          margin-bottom: 20px;
-        }
-        
-        .model-card-header h1 {
-          margin: 0 0 10px 0;
-          font-size: 32px;
-          color: white;
-          letter-spacing: 3px;
-          word-spacing: 8px;
-        }
-        
-        .model-card-header div {
-          color: white;
-        }
-        
-        .model-card-controls {
-          display: flex;
-          gap: 10px;
-          margin-bottom: 20px;
-          color: #000;
-        }
-        
-        .model-card-controls button {
-          padding: 8px 16px;
-          background: ${COLORS.primary};
-          color: white;
-          border: none;
-          border-radius: 4px;
-          cursor: pointer;
-          font-size: 14px;
-        }
-        
-        .model-card-controls button:hover {
-          background: #5568d3;
-          color: white;
-        }
-        
-        .model-card-section {
-          background: white;
-          border-radius: 8px;
-          margin-bottom: 20px;
-          box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-          border: 3px double ${COLORS.primary};
-          color: #000;
-        }
-        
-        .section-header {
-          padding: 20px;
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          border-bottom: 2px solid ${COLORS.primary};
-          color: #000;
-        }
-        
-        .section-header h2 {
-          margin: 0;
-          font-size: 20px;
-          color: #000;
-        }
-        
-        .toggle-icon {
-          font-size: 12px;
-          color: #000;
-        }
-        
-        .section-content {
-          padding: 20px;
-          color: #000;
-        }
-        
-        .metrics-grid {
-          display: grid;
-          grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-          gap: 15px;
-          margin: 20px 0;
-          color: #000;
-        }
-        
-        .metric-card {
-          background: #f8f9fa;
-          padding: 15px;
-          border-radius: 5px;
-          border-left: 4px solid ${COLORS.primary};
-          color: #000;
-        }
-        
-        .metric-label {
-          font-size: 12px;
-          color: #000;
-          text-transform: uppercase;
-          letter-spacing: 0.5px;
-          margin-bottom: 5px;
-        }
-        
-        .metric-value {
-          font-size: 24px;
-          font-weight: bold;
-          color: #000;
-        }
-        
-        .info-table {
-          width: 100%;
-          border-collapse: collapse;
-          margin: 15px 0;
-          color: #000;
-        }
-        
-        .info-table th {
-          text-align: left;
-          padding: 10px;
-          background: #f8f9fa;
-          font-weight: 600;
-          width: 200px;
-          border-bottom: 1px solid #ddd;
-          color: #000;
-        }
-        
-        .info-table td {
-          padding: 10px;
-          border-bottom: 1px solid #ddd;
-          color: #000;
-        }
-        
-        .data-table {
-          width: 100%;
-          border-collapse: collapse;
-          margin: 15px 0;
-          font-size: 14px;
-          color: #000;
-        }
-        
-        .data-table th {
-          background: #333;
-          color: white;
-          padding: 12px;
-          text-align: left;
-          font-weight: 600;
-        }
-        
-        .data-table td {
-          padding: 10px 12px;
-          border-bottom: 1px solid #ddd;
-          color: #000;
-        }
-        
-        .data-table tr:hover {
-          background: #f8f9fa;
-          color: #000;
-        }
-        
-        .tag-list {
-          display: flex;
-          flex-wrap: wrap;
-          gap: 8px;
-          margin-top: 10px;
-          color: #000;
-        }
-        
-        .tag {
-          display: inline-block;
-          padding: 4px 12px;
-          background: #f0f0f0;
-          color: #000;
-          border: 1px solid #ccc;
-          border-radius: 12px;
-          font-size: 12px;
-        }
-        
-        .badge {
-          display: inline-block;
-          padding: 4px 12px;
-          color: white;
-          border-radius: 12px;
-          font-size: 12px;
-          font-weight: 600;
-        }
-        
-        .warning-item {
-          padding: 15px;
-          margin-bottom: 15px;
-          background: #fff3cd;
-          border-left: 4px solid ${COLORS.warning};
-          border-radius: 4px;
-          color: #000;
-        }
-        
-        .warning-header {
-          display: flex;
-          align-items: center;
-          gap: 10px;
-          margin-bottom: 10px;
-          color: #000;
-        }
-        
-        .warning-message {
-          color: #000;
-        }
-        
-        .chart-container {
-          margin: 20px 0;
-          padding: 20px;
-          background: #f8f9fa;
-          border-radius: 5px;
-          color: #000;
-        }
-        
-        h3 {
-          color: #000;
-        }
-        
-        strong {
-          color: #000;
-        }
-        
-        em {
-          color: #000;
-        }
-        
-        code {
-          color: #000;
-        }
-        
-        li {
-          color: #000;
-        }
-        
-        ul {
-          color: #000;
-        }
-      `}</style>
+  const renderPerRowTracking = (prt: PerRowTracking | undefined, tabKey: string) => {
+    if (!prt || (!prt.this_epoch && !prt.cumulative_categories)) return null;
+    const isOpen = showPerRowTracking[tabKey];
 
-      <div className="model-card-header">
-        <h1>MODEL CARD: &nbsp; {data.model_identification.name}</h1>
-        <div style={{ opacity: 0.9, letterSpacing: '0.5px' }}>
-          {getModelTypeDisplay(data.model_identification.model_type, data.model_identification.target_column_type)}
-          {'  •  '}
-          {data.model_identification.status}
-          {'  •  '}
-          {data.model_identification.training_date}
-        </div>
-      </div>
-
-      <div className="model-card-controls">
-        <button onClick={expandAll}>Expand All</button>
-        <button onClick={collapseAll}>Collapse All</button>
-      </div>
-
-      {renderSection(
-        'model-identification',
-        'Model Identification',
-        <div>
-          <div className="metrics-grid">
-            <div className="metric-card">
-              <div className="metric-label">Target Column</div>
-              <div className="metric-value" style={{ fontSize: '20px', fontWeight: 'bold' }}>
-                {data.model_identification.target_column || 'N/A'}
-              </div>
-            </div>
-            <div className="metric-card">
-              <div className="metric-label">Model Type</div>
-              <div className="metric-value" style={{ fontSize: '20px', fontWeight: 'bold' }}>
-                {getModelTypeDisplay(
-                  data.model_identification.model_type,
-                  data.model_identification.target_column_type
-                )}
-              </div>
-            </div>
-            <div className="metric-card">
-              <div className="metric-label">Status</div>
-              <div className="metric-value">
-                <span
-                  className="badge"
-                  style={{ backgroundColor: getStatusColor(data.model_identification.status) }}
-                >
-                  {data.model_identification.status}
-                </span>
-              </div>
-            </div>
-            <div className="metric-card">
-              <div className="metric-label">Training Date</div>
-              <div className="metric-value" style={{ fontSize: '18px' }}>
-                {data.model_identification.training_date}
-              </div>
-            </div>
-          </div>
-          <table className="info-table">
-            <tbody>
-              <tr>
-                <th style={{ width: '250px' }}>Session ID</th>
-                <td>
-                  <code>{data.model_identification.session_id.substring(0, 20)}</code>
-                </td>
-              </tr>
-              <tr>
-                <th>Compute Cluster</th>
-                <td>{data.model_identification.compute_cluster}</td>
-              </tr>
-              <tr>
-                <th>Job ID</th>
-                <td>
-                  <code>{data.model_identification.job_id}</code>
-                </td>
-              </tr>
-              <tr>
-                <th>Target Type</th>
-                <td>{(data.model_identification.target_column_type || 'N/A').toUpperCase()}</td>
-              </tr>
-              <tr>
-                <th>Framework</th>
-                <td>{formatFramework(data.model_identification.framework)}</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>,
-        true
-      )}
-
-      {renderSection(
-        'training-metrics',
-        'Model Performance Metrics',
-        <div>
-          <div>
-            <h3>Best Epoch</h3>
-            <table className="info-table">
+    return (
+      <details className="show-more" open={isOpen} onToggle={(e) => setShowPerRowTracking(prev => ({ ...prev, [tabKey]: (e.target as HTMLDetailsElement).open }))}>
+        <summary>Show per-row tracking</summary>
+        {prt.this_epoch && (
+          <>
+            <h4 style={{ margin: '15px 0 10px 0', fontSize: '13px', fontWeight: 'bold', color: '#333' }}>This Epoch</h4>
+            <table style={{ width: 'auto' }}>
+              <thead><tr><th>Correct</th><th>Wrong</th><th>Accuracy</th></tr></thead>
               <tbody>
                 <tr>
-                  <th>Epoch</th>
-                  <td>{data.training_metrics.best_epoch.epoch}</td>
-                </tr>
-                <tr>
-                  <th>Validation Loss</th>
-                  <td>{formatValue(data.training_metrics.best_epoch.validation_loss)}</td>
-                </tr>
-                <tr>
-                  <th>Train Loss</th>
-                  <td>{formatValue(data.training_metrics.best_epoch.train_loss)}</td>
+                  <td style={{ fontSize: '18px', fontWeight: 'bold', color: '#388e3c' }}>{prt.this_epoch.correct}</td>
+                  <td style={{ fontSize: '18px', fontWeight: 'bold', color: '#d32f2f' }}>{prt.this_epoch.wrong}</td>
+                  <td style={{ fontSize: '18px', fontWeight: 'bold' }}>{prt.this_epoch.accuracy_pct.toFixed(1)}%</td>
                 </tr>
               </tbody>
             </table>
-          </div>
+          </>
+        )}
+        {prt.cumulative_categories && (
+          <>
+            <h4 style={{ margin: '15px 0 10px 0', fontSize: '13px', fontWeight: 'bold', color: '#333' }}>Cumulative</h4>
+            <table style={{ width: 'auto' }}>
+              <thead><tr><th>Never Wrong</th><th>Rarely</th><th>Sometimes</th><th>Frequently</th><th>Always Wrong</th></tr></thead>
+              <tbody>
+                <tr>
+                  <td style={{ fontWeight: 'bold', color: '#388e3c' }}>{prt.cumulative_categories.never_wrong}</td>
+                  <td style={{ fontWeight: 'bold', color: '#689f38' }}>{prt.cumulative_categories.rarely_wrong}</td>
+                  <td style={{ fontWeight: 'bold', color: '#ffa000' }}>{prt.cumulative_categories.sometimes_wrong}</td>
+                  <td style={{ fontWeight: 'bold', color: '#f57c00' }}>{prt.cumulative_categories.frequently_wrong}</td>
+                  <td style={{ fontWeight: 'bold', color: '#d32f2f' }}>{prt.cumulative_categories.always_wrong}</td>
+                </tr>
+              </tbody>
+            </table>
+          </>
+        )}
+      </details>
+    );
+  };
 
-          {data.training_metrics.classification_metrics && (
-            <div>
-              <h3>Classification Metrics</h3>
-              <div className="metrics-grid">
-                <div className="metric-card">
-                  <div className="metric-label" title="How often we are correct when we raise an alert">Precision</div>
-                  <div className="metric-value">
-                    {formatValue(data.training_metrics.classification_metrics.precision, 3)}
-                  </div>
-                </div>
-                <div className="metric-card">
-                  <div className="metric-label" title="How many true rare events we catch">Recall</div>
-                  <div className="metric-value">
-                    {formatValue(data.training_metrics.classification_metrics.recall, 3)}
-                  </div>
-                </div>
-                <div className="metric-card">
-                  <div className="metric-label">F1 Score</div>
-                  <div className="metric-value">
-                    {formatValue(data.training_metrics.classification_metrics.f1, 3)}
-                  </div>
-                </div>
-                <div className="metric-card">
-                  <div className="metric-label">AUC</div>
-                  <div className="metric-value">
-                    {formatValue(data.training_metrics.classification_metrics.auc, 3)}
-                  </div>
+  const renderEpochSection = (title: string, epochData: BestEpochData | undefined, tabKey: string) => {
+    if (!epochData) return null;
+    const cdm = epochData.classification_display_metadata;
+
+    return (
+      <div className="epoch-section">
+        <h3 className="epoch-title">{title} — Epoch {epochData.epoch || cdm?.epoch || 'N/A'}</h3>
+        {renderMetricsTable(cdm?.classification_metrics)}
+        {renderConfusionMatrix(cdm?.confusion_matrix)}
+        {renderPerRowTracking(cdm?.per_row_tracking, tabKey)}
+      </div>
+    );
+  };
+
+  const now = new Date();
+  const dateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
+
+  return (
+    <div className={`featrix-model-card ${className}`}>
+      <style>{`
+        .featrix-model-card * { margin: 0; padding: 0; box-sizing: border-box; color: #000; }
+        .featrix-model-card { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #fff; color: #000; line-height: 1.5; }
+        .featrix-model-card .page { max-width: 1400px; margin: 0 auto; padding: 20px 40px; }
+
+        .featrix-model-card .header { border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 15px; }
+        .featrix-model-card .header h1 { font-size: 24px; font-weight: bold; margin-bottom: 4px; }
+        .featrix-model-card .header .meta { font-size: 12px; color: #666; }
+
+        .featrix-model-card details { margin: 20px 0; border: 1px solid #ccc; background: white; }
+        .featrix-model-card details summary { padding: 12px 20px; cursor: pointer; font-weight: bold; background: #f5f5f5; border-bottom: 1px solid #ccc; user-select: none; text-transform: uppercase; font-size: 13px; color: #333; }
+        .featrix-model-card details summary:hover { background: #eee; }
+        .featrix-model-card details[open] summary { border-bottom: 1px solid #ccc; }
+        .featrix-model-card .section-content { padding: 20px; }
+
+        .featrix-model-card .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; }
+        .featrix-model-card .metric { padding: 15px; background: #fff; border: 1px solid #ddd; }
+        .featrix-model-card .metric-label { font-size: 11px; text-transform: uppercase; margin-bottom: 6px; color: #666; }
+        .featrix-model-card .metric-value { font-size: 24px; font-weight: bold; }
+
+        .featrix-model-card table { width: 100%; border-collapse: collapse; font-size: 14px; }
+        .featrix-model-card th { color: #666; padding: 10px 12px; text-align: left; font-weight: normal; font-size: 12px; text-transform: uppercase; border-bottom: 1px solid #ddd; }
+        .featrix-model-card td { padding: 10px 12px; border-bottom: 1px solid #eee; }
+        .featrix-model-card tr:last-child td { border-bottom: none; }
+
+        .featrix-model-card .epoch-tabs { display: flex; gap: 0; margin-bottom: 0; border-bottom: 1px solid #ddd; }
+        .featrix-model-card .epoch-tab { padding: 10px 20px; background: #f5f5f5; border: 1px solid #ddd; border-bottom: none; cursor: pointer; font-size: 13px; font-weight: bold; font-family: inherit; margin-right: -1px; color: #666; }
+        .featrix-model-card .epoch-tab:hover { background: #eee; }
+        .featrix-model-card .epoch-tab.active { background: #fafafa; color: #333; border-bottom: 1px solid #fafafa; position: relative; top: 1px; }
+        .featrix-model-card .epoch-tab-content { display: none; }
+        .featrix-model-card .epoch-tab-content.active { display: block; }
+        .featrix-model-card .epoch-section { padding: 20px; background: #fafafa; border: 1px solid #ddd; border-top: none; }
+        .featrix-model-card .epoch-title { margin: 0 0 15px 0; font-size: 14px; font-weight: bold; color: #333; }
+
+        .featrix-model-card .confusion-wrapper { margin-top: 20px; }
+        .featrix-model-card .confusion-title { margin: 0 0 15px 0; font-size: 13px; font-weight: bold; color: #333; }
+        .featrix-model-card .confusion-layout { display: flex; gap: 30px; align-items: flex-start; }
+        .featrix-model-card .confusion-matrix { width: auto; text-align: center; }
+        .featrix-model-card .confusion-matrix th, .featrix-model-card .confusion-matrix td { border: none; }
+        .featrix-model-card .cm-header { padding: 5px; font-size: 11px; color: #666; font-weight: normal; }
+        .featrix-model-card .cm-label { padding: 5px; width: 50px; font-size: 11px; color: #666; font-weight: normal; }
+        .featrix-model-card .cm-cell { padding: 12px 15px; border: 1px solid #ccc; font-size: 18px; font-weight: bold; }
+        .featrix-model-card .cm-correct { background: #e8f5e9; }
+        .featrix-model-card .cm-error { background: #ffebee; }
+        .featrix-model-card .derived-metrics { width: auto; font-size: 13px; }
+        .featrix-model-card .derived-metrics td { padding: 6px 12px; border: none; }
+        .featrix-model-card .dm-value { text-align: right; }
+        .featrix-model-card .dm-formula { color: #666; }
+
+        .featrix-model-card .show-more { margin-top: 15px; border: none; background: none; }
+        .featrix-model-card .show-more summary { padding: 5px 0; cursor: pointer; font-size: 12px; color: #1976d2; background: none; border: none; font-weight: normal; text-transform: none; }
+        .featrix-model-card .show-more summary:hover { color: #1565c0; text-decoration: underline; }
+
+        .featrix-model-card .controls { margin-bottom: 15px; display: flex; gap: 8px; flex-wrap: wrap; }
+        .featrix-model-card .btn { padding: 6px 12px; background: #fff; color: #000; border: 1px solid #999; cursor: pointer; font-size: 12px; font-family: inherit; }
+        .featrix-model-card .btn:hover { background: #f0f0f0; }
+
+        .featrix-model-card .status-badge, .featrix-model-card .quality-badge { display: inline-block; padding: 4px 12px; color: white; font-size: 12px; font-weight: 600; }
+
+        .featrix-model-card code { background: #fff; padding: 2px 6px; border: 1px solid #000; font-family: 'Courier New', monospace; font-size: 13px; }
+
+        @media print {
+          .featrix-model-card .page { padding: 0; max-width: 100%; }
+          .featrix-model-card .controls { display: none; }
+          .featrix-model-card .grid { grid-template-columns: repeat(2, 1fr) !important; }
+        }
+      `}</style>
+
+      <div className="page">
+        <div className="header">
+          <h1>MODEL CARD: {mi.name?.toUpperCase() || 'UNNAMED'}</h1>
+          <div className="meta"><strong>Generated:</strong> {dateStr} UTC</div>
+        </div>
+
+        <div className="controls">
+          <button className="btn" onClick={expandAll}>Expand All</button>
+          <button className="btn" onClick={collapseAll}>Collapse All</button>
+        </div>
+
+        {/* MODEL IDENTIFICATION */}
+        <details className="section" open>
+          <summary>MODEL IDENTIFICATION</summary>
+          <div className="section-content">
+            <div className="grid">
+              <div className="metric">
+                <div className="metric-label">Target Column</div>
+                <div className="metric-value" style={{ fontSize: '20px' }}>{mi.target_column || 'N/A'}</div>
+              </div>
+              <div className="metric">
+                <div className="metric-label">Model Type</div>
+                <div className="metric-value" style={{ fontSize: '20px' }}>{getModelTypeDisplay(mi.model_type, mi.target_column_type)}</div>
+              </div>
+              <div className="metric" style={{ background: '#e3f2fd', borderColor: '#90caf9' }}>
+                <div className="metric-label" style={{ color: '#1976d2' }}>Best ROC-AUC</div>
+                <div className="metric-value" style={{ fontSize: '28px', color: '#1565c0' }}>
+                  {bestRocAuc !== null ? `${(bestRocAuc * 100).toFixed(1)}%` : 'N/A'}
                 </div>
               </div>
-              {metricsChartData && metricsChartData.length > 0 && (
-                <div className="chart-container">
-                  <h3>Metrics Visualization</h3>
-                  <ResponsiveContainer width="100%" height={300}>
-                    <BarChart data={metricsChartData}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="name" />
-                      <YAxis domain={[0, 1]} />
-                      <Tooltip formatter={(value: number) => formatPercentage(value)} />
-                      <Bar dataKey="value" fill="#333" />
-                    </BarChart>
-                  </ResponsiveContainer>
+              <div className="metric" style={{ background: '#e8f5e9', borderColor: '#a5d6a7' }}>
+                <div className="metric-label" style={{ color: '#388e3c' }}>Best PR-AUC</div>
+                <div className="metric-value" style={{ fontSize: '28px', color: '#2e7d32' }}>
+                  {bestPrAuc !== null ? `${(bestPrAuc * 100).toFixed(1)}%` : 'N/A'}
+                  {prAucLift !== null && <span style={{ fontSize: '14px', fontWeight: 'normal' }}> [{prAucLift.toFixed(1)}x]</span>}
                 </div>
-              )}
+              </div>
             </div>
-          )}
+            <div style={{ marginTop: '20px', paddingTop: '15px', borderTop: '1px solid #ddd', fontSize: '12px', color: '#666', lineHeight: 2 }}>
+              <span className="status-badge" style={{ backgroundColor: getStatusColor(mi.status), fontSize: '11px', padding: '2px 8px' }}>
+                {getStatusDisplay(mi.status)}
+              </span>
+              &nbsp;&nbsp;{mi.training_date || 'N/A'}
+              &nbsp;&nbsp;•&nbsp;&nbsp;<strong>Model:</strong> <code style={{ fontSize: '11px' }}>{modelIdDisplay}</code>
+              &nbsp;&nbsp;•&nbsp;&nbsp;<strong>Cluster:</strong> {(mi.compute_cluster || 'N/A').toUpperCase()}
+              &nbsp;&nbsp;•&nbsp;&nbsp;<strong>Dims:</strong> {es?.d_model || 'N/A'}
+            </div>
+          </div>
+        </details>
 
-          {data.training_metrics.optimal_threshold && (
-            <div>
-              <h3>Optimal Threshold</h3>
-              <table className="info-table">
+        {/* MODEL STACK */}
+        {es && (
+          <details className="section" open>
+            <summary>MODEL STACK</summary>
+            <div className="section-content">
+              <table>
+                <thead>
+                  <tr>
+                    <th style={{ width: '150px' }}></th>
+                    <th>Labeled?</th>
+                    <th>Rows</th>
+                    <th>Layers</th>
+                    <th>Parameters</th>
+                  </tr>
+                </thead>
                 <tbody>
                   <tr>
-                    <th>Optimal Threshold</th>
-                    <td>{formatValue(data.training_metrics.optimal_threshold.optimal_threshold)}</td>
+                    <td style={{ fontWeight: 'bold', whiteSpace: 'nowrap' }}>Predictor</td>
+                    <td style={{ color: '#388e3c', fontWeight: 'bold', whiteSpace: 'nowrap' }}>Yes</td>
+                    <td style={{ fontSize: '18px', fontWeight: 'bold' }}>{spRows.toLocaleString()}</td>
+                    <td style={{ fontSize: '18px', fontWeight: 'bold' }}>{spLayers ? formatLargeNumber(spLayers) : 'N/A'}</td>
+                    <td style={{ fontSize: '18px', fontWeight: 'bold' }}>{spParams ? formatLargeNumber(spParams) : 'N/A'}</td>
                   </tr>
                   <tr>
-                    <th>Positive Label</th>
-                    <td>{data.training_metrics.optimal_threshold.pos_label || 'N/A'}</td>
-                  </tr>
-                  <tr>
-                    <th>F1 at Optimal Threshold</th>
-                    <td>
-                      {formatPercentage(data.training_metrics.optimal_threshold.optimal_threshold_f1)}
-                    </td>
-                  </tr>
-                  <tr>
-                    <th>Accuracy at Optimal Threshold</th>
-                    <td>
-                      {formatPercentage(
-                        data.training_metrics.optimal_threshold.accuracy_at_optimal_threshold
-                      )}
-                    </td>
+                    <td style={{ fontWeight: 'bold', whiteSpace: 'nowrap' }}>Foundation</td>
+                    <td style={{ color: '#666', whiteSpace: 'nowrap' }}>No</td>
+                    <td style={{ fontSize: '18px', fontWeight: 'bold' }}>{(es.num_rows || 0).toLocaleString()}</td>
+                    <td style={{ fontSize: '18px', fontWeight: 'bold' }}>{formatLargeNumber(es.num_layers)}</td>
+                    <td style={{ fontSize: '18px', fontWeight: 'bold' }}>{formatLargeNumber(es.num_parameters)}</td>
                   </tr>
                 </tbody>
               </table>
             </div>
-          )}
-        </div>,
-        true
-      )}
+          </details>
+        )}
 
-      {renderSection(
-        'model-quality',
-        'Model Quality',
-        <div>
-          {data.model_quality.assessment && (
-            <div>
-              <h3>Assessment</h3>
-              <span
-                className="badge"
-                style={{ backgroundColor: getQualityColor(data.model_quality.assessment) }}
-              >
-                {data.model_quality.assessment}
-              </span>
+        {/* MODEL DETAILS - Best Epochs with Tabs */}
+        {be && (
+          <details className="section" open>
+            <summary>MODEL DETAILS</summary>
+            <div className="section-content">
+              <div className="epoch-tabs">
+                <button
+                  className={`epoch-tab ${activeTab === 'pr-auc' ? 'active' : ''}`}
+                  onClick={() => setActiveTab('pr-auc')}
+                >
+                  Best PR-AUC
+                </button>
+                <button
+                  className={`epoch-tab ${activeTab === 'roc-auc' ? 'active' : ''}`}
+                  onClick={() => setActiveTab('roc-auc')}
+                >
+                  Best ROC-AUC
+                </button>
+              </div>
+              <div className={`epoch-tab-content ${activeTab === 'pr-auc' ? 'active' : ''}`}>
+                {renderEpochSection('Best PR-AUC', be.best_pr_auc, 'pr-auc')}
+              </div>
+              <div className={`epoch-tab-content ${activeTab === 'roc-auc' ? 'active' : ''}`}>
+                {renderEpochSection('Best ROC-AUC', be.best_roc_auc, 'roc-auc')}
+              </div>
             </div>
-          )}
+          </details>
+        )}
 
-          {data.model_quality.recommendations && data.model_quality.recommendations.length > 0 && (
-            <div>
-              <h3>Recommendations</h3>
-              <ul>
-                {data.model_quality.recommendations.map((rec, idx) => (
-                  <li key={idx} style={{ marginBottom: '10px' }}>
-                    <strong>Issue:</strong> {rec.issue}
-                    <br />
-                    <strong>Suggestion:</strong> {rec.suggestion}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          {data.model_quality.warnings.length > 0 && (
-            <div>
-              <h3>Warnings</h3>
-              {data.model_quality.warnings.map((warning, idx) => (
-                <div key={idx} className="warning-item">
-                  <div className="warning-header">
-                    <span
-                      className="badge"
-                      style={{ backgroundColor: getSeverityColor(warning.severity) }}
-                    >
-                      {warning.severity}
-                    </span>
-                    <strong>{warning.type}</strong>
+        {/* TRAINING OPTIMIZATION */}
+        {to && (
+          <details className="section" open>
+            <summary>TRAINING OPTIMIZATION</summary>
+            <div className="section-content">
+              {to.optimization_description && (
+                <div style={{ marginBottom: '20px', padding: '12px 15px', background: '#e3f2fd', borderLeft: '3px solid #1976d2', fontSize: '14px' }}>
+                  <strong>Strategy:</strong> {to.optimization_description}
+                </div>
+              )}
+              <div className="grid" style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}>
+                <div className="metric">
+                  <div className="metric-label">Loss Function</div>
+                  <div className="metric-value" style={{ fontSize: '18px' }}>{to.loss_function || 'N/A'}</div>
+                </div>
+                <div className="metric">
+                  <div className="metric-label">Optimization Priority</div>
+                  <div className="metric-value" style={{ fontSize: '18px', textTransform: 'capitalize' }}>{to.optimization_priority || 'N/A'}</div>
+                </div>
+                <div className="metric">
+                  <div className="metric-label">Checkpoint Metric</div>
+                  <div className="metric-value" style={{ fontSize: '18px' }}>
+                    {(!to.checkpoint_metric || to.checkpoint_metric.toLowerCase() === 'none') ? 'Default' : to.checkpoint_metric.toUpperCase().replace('_', '-')}
                   </div>
-                  <div>{warning.message}</div>
-                  {warning.recommendation && (
-                    <div style={{ marginTop: '10px' }}>
-                      <strong>Recommendation:</strong> {warning.recommendation}
-                    </div>
+                </div>
+              </div>
+              <table style={{ marginTop: '20px' }}>
+                <tbody>
+                  {(to.focal_gamma !== undefined || to.focal_alpha !== undefined) && (
+                    <tr>
+                      <td style={{ width: '200px' }}><strong>Focal Loss Parameters</strong></td>
+                      <td>γ={to.focal_gamma ?? 'N/A'}, α={to.focal_alpha ?? 'N/A'}</td>
+                    </tr>
                   )}
-                </div>
-              ))}
+                  {to.class_weights && to.class_weights.length > 0 && (
+                    <tr>
+                      <td><strong>Class Weights</strong></td>
+                      <td>[{to.class_weights.join(', ')}]</td>
+                    </tr>
+                  )}
+                  {to.cost_sensitive && (
+                    <tr>
+                      <td><strong>Cost-Sensitive</strong></td>
+                      <td>FP cost: {to.cost_sensitive.cost_false_positive ?? 1.0}, FN cost: {to.cost_sensitive.cost_false_negative ?? 1.0}</td>
+                    </tr>
+                  )}
+                  {to.adaptive_loss !== undefined && (
+                    <tr>
+                      <td><strong>Adaptive Loss</strong></td>
+                      <td>{to.adaptive_loss ? 'Yes' : 'No'}{to.gamma_adjustments ? ` (${to.gamma_adjustments} adjustments)` : ''}</td>
+                    </tr>
+                  )}
+                  {to.checkpoint_value !== undefined && (
+                    <tr>
+                      <td><strong>Best Checkpoint</strong></td>
+                      <td>{(to.checkpoint_value * 100).toFixed(2)}% at epoch {to.checkpoint_epoch ?? 'N/A'}</td>
+                    </tr>
+                  )}
+                  {to.positive_class !== undefined && (
+                    <tr>
+                      <td><strong>Positive Class</strong></td>
+                      <td>"{to.positive_class}"</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
             </div>
-          )}
-        </div>,
-        true
-      )}
-
-      {renderSection(
-        'training-dataset',
-        'Training Dataset',
-        <div>
-          <div className="metrics-grid">
-            <div className="metric-card">
-              <div className="metric-label">Training Rows</div>
-              <div className="metric-value">{data.training_dataset.train_rows.toLocaleString()}</div>
-            </div>
-            <div className="metric-card">
-              <div className="metric-label">Validation Rows</div>
-              <div className="metric-value">{data.training_dataset.val_rows.toLocaleString()}</div>
-            </div>
-            <div className="metric-card">
-              <div className="metric-label">Total Rows</div>
-              <div className="metric-value">{data.training_dataset.total_rows.toLocaleString()}</div>
-            </div>
-            <div className="metric-card">
-              <div className="metric-label">Total Features</div>
-              <div className="metric-value">{data.training_dataset.total_features}</div>
-            </div>
-          </div>
-          <div>
-            <h3>Feature Names</h3>
-            <div className="tag-list">
-              {data.training_dataset.feature_names.map((name) => (
-                <span key={name} className="tag">
-                  {name}
-                </span>
-              ))}
-            </div>
-          </div>
-          {featureTypeDistribution.length > 0 && (
-            <div className="chart-container">
-              <h3>Feature Type Distribution</h3>
-              <ResponsiveContainer width="100%" height={300}>
-                <PieChart>
-                  <Pie
-                    data={featureTypeDistribution}
-                    cx="50%"
-                    cy="50%"
-                    labelLine={false}
-                    label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
-                    outerRadius={80}
-                    fill="#8884d8"
-                    dataKey="value"
-                  >
-                    {featureTypeDistribution.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={['#333', '#666', '#999', COLORS.warning][index % 4]} />
-                    ))}
-                  </Pie>
-                  <Tooltip />
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
-          )}
-        </div>
-      )}
-
-      {renderSection(
-        'feature-inventory',
-        'Feature Inventory',
-        <div>
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>Type</th>
-                <th>Encoder</th>
-                <th>Unique Values</th>
-                <th>Sample Values</th>
-                <th>Statistics</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.feature_inventory.map((feat) => (
-                <tr key={feat.name}>
-                  <td>
-                    <strong>{feat.name}</strong>
-                  </td>
-                  <td>{feat.type}</td>
-                  <td>{feat.encoder_type}</td>
-                  <td>{feat.unique_values ?? 'N/A'}</td>
-                  <td>
-                    {feat.sample_values
-                      ? feat.sample_values.slice(0, 3).join(', ') +
-                        (feat.sample_values.length > 3 ? ` (+${feat.sample_values.length - 3} more)` : '')
-                      : 'N/A'}
-                  </td>
-                  <td>
-                    {feat.statistics ? (
-                      <div>
-                        Min: {formatValue(feat.statistics.min)}, Max: {formatValue(feat.statistics.max)}
-                        <br />
-                        Mean: {formatValue(feat.statistics.mean)}, Std: {formatValue(feat.statistics.std)}
-                        <br />
-                        Median: {formatValue(feat.statistics.median)}
-                      </div>
-                    ) : (
-                      'N/A'
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      {renderSection(
-        'training-configuration',
-        'Training Configuration',
-        <div>
-          <table className="info-table">
-            <tbody>
-              <tr>
-                <th>Total Epochs</th>
-                <td>{data.training_configuration.epochs_total}</td>
-              </tr>
-              <tr>
-                <th>Best Epoch</th>
-                <td>{data.training_configuration.best_epoch}</td>
-              </tr>
-              <tr>
-                <th>d_model</th>
-                <td>{data.training_configuration.d_model}</td>
-              </tr>
-              <tr>
-                <th>Batch Size</th>
-                <td>{data.training_configuration.batch_size ?? 'N/A'}</td>
-              </tr>
-              <tr>
-                <th>Learning Rate</th>
-                <td>{formatValue(data.training_configuration.learning_rate)}</td>
-              </tr>
-              <tr>
-                <th>Optimizer</th>
-                <td>{data.training_configuration.optimizer}</td>
-              </tr>
-              {data.training_configuration.dropout_schedule && (
-                <>
-                  <tr>
-                    <th>Dropout Enabled</th>
-                    <td>{String(data.training_configuration.dropout_schedule.enabled)}</td>
-                  </tr>
-                  <tr>
-                    <th>Dropout Initial</th>
-                    <td>{formatValue(data.training_configuration.dropout_schedule.initial)}</td>
-                  </tr>
-                  <tr>
-                    <th>Dropout Final</th>
-                    <td>{formatValue(data.training_configuration.dropout_schedule.final)}</td>
-                  </tr>
-                </>
-              )}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      {renderSection(
-        'model-architecture',
-        'Model Architecture',
-        <div>
-          <table className="info-table">
-            <tbody>
-              {data.model_architecture.predictor_layers !== null && (
-                <tr>
-                  <th>Predictor Layers</th>
-                  <td>{data.model_architecture.predictor_layers}</td>
-                </tr>
-              )}
-              {data.model_architecture.predictor_parameters !== null && (
-                <tr>
-                  <th>Predictor Parameters</th>
-                  <td>{data.model_architecture.predictor_parameters.toLocaleString()}</td>
-                </tr>
-              )}
-              {data.model_architecture.embedding_space_d_model !== null && (
-                <tr>
-                  <th>Embedding Space d_model</th>
-                  <td>{data.model_architecture.embedding_space_d_model}</td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      {data.embedding_space &&
-        renderSection(
-          'embedding-space',
-          'Embedding Space',
-          <div>
-            <div className="metrics-grid">
-              <div className="metric-card">
-                <div className="metric-label">Columns</div>
-                <div className="metric-value">
-                  {data.embedding_space.num_columns.toLocaleString()}
-                </div>
-              </div>
-              <div className="metric-card">
-                <div className="metric-label">Layers</div>
-                <div className="metric-value">
-                  {data.embedding_space.num_layers.toLocaleString()}
-                </div>
-              </div>
-              <div className="metric-card">
-                <div className="metric-label">Parameters</div>
-                <div className="metric-value">
-                  {formatLargeNumber(data.embedding_space.num_parameters)}
-                </div>
-              </div>
-              <div className="metric-card">
-                <div className="metric-label">Dimensions (d_model)</div>
-                <div className="metric-value">
-                  {data.embedding_space.d_model}
-                </div>
-              </div>
-            </div>
-          </div>
+          </details>
         )}
 
-      {renderSection(
-        'technical-details',
-        'Technical Details',
-        <div>
-          <table className="info-table">
-            <tbody>
-              <tr>
-                <th>PyTorch Version</th>
-                <td>{data.technical_details.pytorch_version}</td>
-              </tr>
-              <tr>
-                <th>Device</th>
-                <td>{data.technical_details.device}</td>
-              </tr>
-              <tr>
-                <th>Precision</th>
-                <td>{data.technical_details.precision}</td>
-              </tr>
-              <tr>
-                <th>Loss Function</th>
-                <td>{data.technical_details.loss_function}</td>
-              </tr>
-              {data.technical_details.normalization && (
-                <tr>
-                  <th>Normalization</th>
-                  <td>{data.technical_details.normalization}</td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      {renderSection(
-        'provenance',
-        'Provenance',
-        <div>
-          <table className="info-table">
-            <tbody>
-              <tr>
-                <th>Created At</th>
-                <td>{data.provenance.created_at}</td>
-              </tr>
-              {data.provenance.training_duration_minutes !== null && (
-                <tr>
-                  <th>Training Duration</th>
-                  <td>
-                    {Math.floor(data.provenance.training_duration_minutes / 60)}h{' '}
-                    {Math.floor(data.provenance.training_duration_minutes % 60)}m (
-                    {data.provenance.training_duration_minutes.toFixed(2)} minutes)
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      {data.column_statistics &&
-        Object.keys(data.column_statistics).length > 0 &&
-        renderSection(
-          'column-statistics',
-          'Column Statistics',
-          <div>
-            <div className="chart-container">
-              <h3>Mutual Information by Column</h3>
-              {columnStatisticsData && (
-                <ResponsiveContainer width="100%" height={400}>
-                  <BarChart data={columnStatisticsData}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="name" angle={-45} textAnchor="end" height={100} />
-                    <YAxis />
-                    <Tooltip />
-                    <Legend />
-                    <Bar dataKey="mutualInfo" fill="#333" name="Mutual Information (bits)" />
-                  </BarChart>
-                </ResponsiveContainer>
-              )}
-            </div>
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>Column</th>
-                  <th>Mutual Information (bits)</th>
-                  <th>Marginal Loss</th>
-                </tr>
-              </thead>
-              <tbody>
-                {Object.entries(data.column_statistics).map(([name, stats]) => (
-                  <tr key={name}>
-                    <td>
-                      <strong>{name}</strong>
-                    </td>
-                    <td>{formatValue(stats.mutual_information_bits)}</td>
-                    <td>{formatValue(stats.marginal_loss)}</td>
+        {/* TRAINING DATASET */}
+        {ci && (
+          <details className="section" open>
+            <summary>TRAINING DATASET</summary>
+            <div className="section-content">
+              <table>
+                <thead>
+                  <tr>
+                    <th style={{ width: '150px' }}></th>
+                    <th style={{ textAlign: 'right' }}>Class "{ci.minority_class || '1'}"</th>
+                    <th style={{ textAlign: 'right' }}>Class "{ci.majority_class || '0'}"</th>
+                    <th style={{ textAlign: 'right' }}>Total</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {ci.train_distribution && (
+                    <tr>
+                      <td><strong>Train</strong></td>
+                      <td style={{ textAlign: 'right' }}>{(ci.train_distribution['1'] || 0).toLocaleString()}</td>
+                      <td style={{ textAlign: 'right' }}>{(ci.train_distribution['0'] || 0).toLocaleString()}</td>
+                      <td style={{ textAlign: 'right', fontWeight: 'bold' }}>{((ci.train_distribution['0'] || 0) + (ci.train_distribution['1'] || 0)).toLocaleString()}</td>
+                    </tr>
+                  )}
+                  {ci.val_distribution && (
+                    <tr>
+                      <td><strong>Validation</strong></td>
+                      <td style={{ textAlign: 'right' }}>{(ci.val_distribution['1'] || 0).toLocaleString()}</td>
+                      <td style={{ textAlign: 'right' }}>{(ci.val_distribution['0'] || 0).toLocaleString()}</td>
+                      <td style={{ textAlign: 'right', fontWeight: 'bold' }}>{((ci.val_distribution['0'] || 0) + (ci.val_distribution['1'] || 0)).toLocaleString()}</td>
+                    </tr>
+                  )}
+                  <tr>
+                    <td style={{ borderTop: '2px solid #333' }}><strong>Total</strong></td>
+                    <td style={{ textAlign: 'right', fontWeight: 'bold', borderTop: '2px solid #333' }}>{ci.minority_class_count.toLocaleString()}</td>
+                    <td style={{ textAlign: 'right', fontWeight: 'bold', borderTop: '2px solid #333' }}>{ci.majority_class_count.toLocaleString()}</td>
+                    <td style={{ textAlign: 'right', fontWeight: 'bold', borderTop: '2px solid #333' }}>{ci.total_samples.toLocaleString()}</td>
+                  </tr>
+                </tbody>
+              </table>
+              <div style={{ marginTop: '15px', color: '#666', fontSize: '13px' }}>
+                Imbalance ratio: <strong>{ci.imbalance_ratio}:1</strong> (minority class is {((ci.minority_class_count / ci.total_samples) * 100).toFixed(1)}% of data)
+              </div>
+            </div>
+          </details>
         )}
+      </div>
     </div>
   );
 };
 
 export default ModelCard;
-

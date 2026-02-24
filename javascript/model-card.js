@@ -13,7 +13,7 @@
   'use strict';
 
   const FeatrixModelCard = {
-    VERSION: '0.2.1',
+    VERSION: '0.3.0',
 
     /**
      * Format a value for display
@@ -453,21 +453,16 @@
       function renderMetricsTable(metrics) {
         if (!metrics) return '';
         var html = '<table>';
-        html += '<tr><th>Metric</th><th>Value</th><th>Quality</th><th>Trend</th><th>Δ1</th><th>Δ5</th></tr>';
+        html += '<tr><th>Metric</th><th>Value</th></tr>';
 
         var metricOrder = ['accuracy', 'auc', 'pr_auc', 'f1', 'precision', 'recall', 'specificity'];
         for (var i = 0; i < metricOrder.length; i++) {
           var key = metricOrder[i];
           var m = metrics[key];
           if (!m) continue;
-          var qualityStyle = self.getQualityStyle(m.quality);
           html += '<tr>';
           html += '<td style="text-transform: uppercase; font-weight: bold;">' + key.replace('_', ' ') + '</td>';
-          html += '<td>' + (typeof m.value === 'number' ? (m.value * 100).toFixed(2) + '%' : 'N/A') + '</td>';
-          html += '<td><span class="quality-badge" style="' + qualityStyle + '">' + (m.quality || 'N/A') + '</span></td>';
-          html += '<td style="font-size: 18px;">' + (m.trend || '') + '</td>';
-          html += '<td>' + (m.delta_1 !== null ? (m.delta_1 > 0 ? '+' : '') + (m.delta_1 * 100).toFixed(2) + '%' : '-') + '</td>';
-          html += '<td>' + (m.delta_5 !== null ? (m.delta_5 > 0 ? '+' : '') + (m.delta_5 * 100).toFixed(2) + '%' : '-') + '</td>';
+          html += '<td style="font-size: 18px; font-weight: bold;">' + (typeof m.value === 'number' ? (m.value * 100).toFixed(2) + '%' : 'N/A') + '</td>';
           html += '</tr>';
         }
         html += '</table>';
@@ -489,18 +484,17 @@
         html += '<h4 class="confusion-title">Confusion Matrix</h4>';
         html += '<div class="confusion-layout">';
 
-        // Matrix - POS first (standard convention)
-        html += '<table class="confusion-matrix">';
-        html += '<tr><th></th><th></th><th colspan="2" class="cm-header">Predicted</th></tr>';
-        html += '<tr><th></th><th></th><th class="cm-label">Pos</th><th class="cm-label">Neg</th></tr>';
-        html += '<tr><th rowspan="2" class="cm-header" style="vertical-align: middle;">Actual</th>';
-        html += '<th class="cm-label">Pos</th>';
-        html += '<td class="cm-cell cm-correct">' + tp + '</td>';
-        html += '<td class="cm-cell cm-error">' + fn + '</td></tr>';
-        html += '<tr><th class="cm-label">Neg</th>';
-        html += '<td class="cm-cell cm-error">' + fp + '</td>';
-        html += '<td class="cm-cell cm-correct">' + tn + '</td></tr>';
-        html += '</table>';
+        // Matrix - POS first (standard convention) - using div grid to avoid host table CSS interference
+        html += '<div class="cm-grid">';
+        html += '<div class="cm-corner"></div><div class="cm-corner"></div><div class="cm-col-header" style="grid-column: 3 / 5; text-align: center;">Predicted</div>';
+        html += '<div class="cm-corner"></div><div class="cm-corner"></div><div class="cm-col-label">Pos</div><div class="cm-col-label">Neg</div>';
+        html += '<div class="cm-row-header">Actual</div><div class="cm-row-label">Pos</div>';
+        html += '<div class="cm-cell cm-correct">' + tp + '</div>';
+        html += '<div class="cm-cell cm-error">' + fn + '</div>';
+        html += '<div class="cm-spacer"></div><div class="cm-row-label">Neg</div>';
+        html += '<div class="cm-cell cm-error">' + fp + '</div>';
+        html += '<div class="cm-cell cm-correct">' + tn + '</div>';
+        html += '</div>';
 
         // Derived metrics
         html += '<table class="derived-metrics">';
@@ -816,11 +810,14 @@
         .featrix-model-card .confusion-wrapper { margin-top: 20px; }
         .featrix-model-card .confusion-title { margin: 0 0 15px 0; font-size: 13px; font-weight: bold; color: #333; }
         .featrix-model-card .confusion-layout { display: flex; gap: 30px; align-items: flex-start; flex-wrap: wrap; }
-        .featrix-model-card .confusion-matrix { width: auto !important; display: inline-table; text-align: center; table-layout: fixed; min-width: 200px; border-collapse: collapse; }
-        .featrix-model-card .confusion-matrix th, .featrix-model-card .confusion-matrix td { border: none; white-space: nowrap; }
-        .featrix-model-card .cm-header { padding: 5px; font-size: 11px; color: #666; font-weight: normal; }
-        .featrix-model-card .cm-label { padding: 5px; width: 50px; font-size: 11px; color: #666; font-weight: normal; white-space: nowrap; }
-        .featrix-model-card .cm-cell { padding: 12px 15px; border: 1px solid #ccc; font-size: 18px; font-weight: bold; min-width: 60px; }
+        .featrix-model-card .cm-grid { display: grid; grid-template-columns: auto auto 70px 70px; gap: 0; align-items: center; justify-items: center; }
+        .featrix-model-card .cm-corner { }
+        .featrix-model-card .cm-col-header { font-size: 11px; color: #666; padding: 5px; }
+        .featrix-model-card .cm-col-label { font-size: 11px; color: #666; padding: 5px; }
+        .featrix-model-card .cm-row-header { font-size: 11px; color: #666; padding: 5px; writing-mode: vertical-lr; transform: rotate(180deg); grid-row: span 2; }
+        .featrix-model-card .cm-row-label { font-size: 11px; color: #666; padding: 5px; }
+        .featrix-model-card .cm-spacer { }
+        .featrix-model-card .cm-cell { padding: 12px 15px; border: 1px solid #ccc; font-size: 18px; font-weight: bold; width: 100%; text-align: center; }
         .featrix-model-card .cm-correct { background: #e8f5e9; }
         .featrix-model-card .cm-error { background: #ffebee; }
         .featrix-model-card .derived-metrics { width: auto !important; display: inline-table; font-size: 13px; }

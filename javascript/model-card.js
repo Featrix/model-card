@@ -940,6 +940,7 @@
         </div>
 
         ${sections}
+        <div style="text-align: right; padding: 10px 0 5px 0; font-size: 11px; color: #ccc;">FeatrixModelCard v${FeatrixModelCard.VERSION}</div>
     </div>
 </div>`;
     }

@@ -13,7 +13,7 @@
   'use strict';
 
   const FeatrixModelCard = {
-    VERSION: '0.2.0',
+    VERSION: '0.2.1',
 
     /**
      * Format a value for display
@@ -815,12 +815,12 @@
 
         .featrix-model-card .confusion-wrapper { margin-top: 20px; }
         .featrix-model-card .confusion-title { margin: 0 0 15px 0; font-size: 13px; font-weight: bold; color: #333; }
-        .featrix-model-card .confusion-layout { display: flex; gap: 30px; align-items: flex-start; }
-        .featrix-model-card .confusion-matrix { width: auto !important; display: inline-table; text-align: center; }
-        .featrix-model-card .confusion-matrix th, .featrix-model-card .confusion-matrix td { border: none; }
+        .featrix-model-card .confusion-layout { display: flex; gap: 30px; align-items: flex-start; flex-wrap: wrap; }
+        .featrix-model-card .confusion-matrix { width: auto !important; display: inline-table; text-align: center; table-layout: fixed; min-width: 200px; border-collapse: collapse; }
+        .featrix-model-card .confusion-matrix th, .featrix-model-card .confusion-matrix td { border: none; white-space: nowrap; }
         .featrix-model-card .cm-header { padding: 5px; font-size: 11px; color: #666; font-weight: normal; }
-        .featrix-model-card .cm-label { padding: 5px; width: 50px; font-size: 11px; color: #666; font-weight: normal; }
-        .featrix-model-card .cm-cell { padding: 12px 15px; border: 1px solid #ccc; font-size: 18px; font-weight: bold; }
+        .featrix-model-card .cm-label { padding: 5px; width: 50px; font-size: 11px; color: #666; font-weight: normal; white-space: nowrap; }
+        .featrix-model-card .cm-cell { padding: 12px 15px; border: 1px solid #ccc; font-size: 18px; font-weight: bold; min-width: 60px; }
         .featrix-model-card .cm-correct { background: #e8f5e9; }
         .featrix-model-card .cm-error { background: #ffebee; }
         .featrix-model-card .derived-metrics { width: auto !important; display: inline-table; font-size: 13px; }

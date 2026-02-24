@@ -1,0 +1,171 @@
+{
+  "_comment": "Expected JSON structure for FeatrixModelCard.renderHTML(). All top-level sections are optional — the renderer gracefully skips missing sections.",
+
+  "model_identification": {
+    "_required": true,
+    "_comment": "Core model identity. Always present.",
+    "session_id": "predictor-my-model-b2ed3644-aaec-4d9b-a5e5-9e2cc4519893",
+    "name": "my-model-name",
+    "target_column": "target_label",
+    "target_column_type": "set | scalar",
+    "compute_cluster": "DEFAULT",
+    "training_date": "2026-01-15",
+    "status": "done | training | failed",
+    "model_type": "Single Predictor | Embedding Space",
+    "framework": "FeatrixSphere v0.3"
+  },
+
+  "embedding_space": {
+    "_comment": "Foundation model stats. Renders the MODEL STACK section.",
+    "num_columns": 15,
+    "num_layers": 8400,
+    "num_parameters": 264925317,
+    "d_model": 256,
+    "num_rows": 5000
+  },
+
+  "model_architecture": {
+    "_comment": "Predictor-level architecture info. Used in MODEL STACK table for predictor row.",
+    "predictor_layers": 2100,
+    "predictor_parameters": 66231329
+  },
+
+  "model_stack": [
+    {
+      "_comment": "Alternative source for predictor stats (array, uses first element). Takes priority over model_architecture.",
+      "rows": 539,
+      "layers": 2100,
+      "parameters": 66231329
+    }
+  ],
+
+  "single_predictor": {
+    "_comment": "Another fallback source for predictor stats if model_stack and model_architecture are missing.",
+    "num_rows": 539,
+    "num_layers": 2100,
+    "num_parameters": 66231329
+  },
+
+  "best_epochs": {
+    "_comment": "CRITICAL SECTION. The renderer shows two tabs: Best ROC-AUC and Best PR-AUC. Each should contain the epoch that achieved the BEST value for that specific metric (NOT best val_loss). These can be different epochs.",
+
+    "best_roc_auc": {
+      "_comment": "The epoch with the highest ROC-AUC value across all training epochs.",
+      "epoch": 28,
+      "roc_auc": 0.967,
+      "classification_display_metadata": {
+        "epoch": 28,
+        "classification_metrics": {
+          "_comment": "Each metric has the same structure. All 7 metrics shown in order below.",
+          "accuracy":    { "value": 0.925, "quality": "EXCELLENT | GOOD | FAIR | POOR", "trend": "↗↗ | ↗ | → | ↘ | ↘↘", "delta_1": 0.005, "delta_5": 0.02,  "delta_10": null },
+          "auc":         { "value": 0.967, "quality": "EXCELLENT", "trend": "↗",  "delta_1": 0.003, "delta_5": 0.015, "delta_10": null },
+          "pr_auc":      { "value": 0.891, "quality": "GOOD",      "trend": "↗",  "delta_1": 0.008, "delta_5": 0.025, "delta_10": null },
+          "f1":          { "value": 0.899, "quality": "GOOD",      "trend": "↗",  "delta_1": 0.004, "delta_5": 0.018, "delta_10": null },
+          "precision":   { "value": 0.912, "quality": "EXCELLENT", "trend": "↗↗", "delta_1": 0.01,  "delta_5": 0.03,  "delta_10": null },
+          "recall":      { "value": 0.887, "quality": "GOOD",      "trend": "→",  "delta_1": 0.0,   "delta_5": 0.01,  "delta_10": null },
+          "specificity": { "value": 0.945, "quality": "EXCELLENT", "trend": "↗",  "delta_1": 0.002, "delta_5": 0.012, "delta_10": null }
+        },
+        "confusion_matrix": {
+          "tp": 34,
+          "fn": 4,
+          "fp": 3,
+          "tn": 67
+        },
+        "per_row_tracking": {
+          "this_epoch": {
+            "correct": 101,
+            "wrong": 7,
+            "accuracy_pct": 93.5
+          },
+          "cumulative_categories": {
+            "never_wrong": 75,
+            "rarely_wrong": 15,
+            "sometimes_wrong": 10,
+            "frequently_wrong": 5,
+            "always_wrong": 3
+          }
+        }
+      }
+    },
+
+    "best_pr_auc": {
+      "_comment": "The epoch with the highest PR-AUC value across all training epochs. Often a DIFFERENT epoch than best_roc_auc.",
+      "epoch": 26,
+      "pr_auc": 0.891,
+      "classification_display_metadata": {
+        "epoch": 26,
+        "classification_metrics": {
+          "accuracy":    { "value": 0.918, "quality": "EXCELLENT", "trend": "↗",  "delta_1": 0.003, "delta_5": 0.015, "delta_10": null },
+          "auc":         { "value": 0.958, "quality": "EXCELLENT", "trend": "↗",  "delta_1": 0.005, "delta_5": 0.02,  "delta_10": null },
+          "pr_auc":      { "value": 0.895, "quality": "GOOD",      "trend": "↗↗", "delta_1": 0.012, "delta_5": 0.035, "delta_10": null },
+          "f1":          { "value": 0.89,  "quality": "GOOD",      "trend": "↗",  "delta_1": 0.006, "delta_5": 0.022, "delta_10": null },
+          "precision":   { "value": 0.88,  "quality": "GOOD",      "trend": "↗",  "delta_1": 0.008, "delta_5": 0.025, "delta_10": null },
+          "recall":      { "value": 0.9,   "quality": "EXCELLENT", "trend": "↗↗", "delta_1": 0.015, "delta_5": 0.04,  "delta_10": null },
+          "specificity": { "value": 0.928, "quality": "EXCELLENT", "trend": "→",  "delta_1": 0.0,   "delta_5": 0.008, "delta_10": null }
+        },
+        "confusion_matrix": {
+          "tp": 36,
+          "fn": 2,
+          "fp": 5,
+          "tn": 65
+        },
+        "per_row_tracking": {
+          "this_epoch": {
+            "correct": 99,
+            "wrong": 9,
+            "accuracy_pct": 91.7
+          },
+          "cumulative_categories": {
+            "never_wrong": 72,
+            "rarely_wrong": 17,
+            "sometimes_wrong": 11,
+            "frequently_wrong": 6,
+            "always_wrong": 2
+          }
+        }
+      }
+    }
+  },
+
+  "class_imbalance": {
+    "_comment": "Class distribution stats. Used in MODEL IDENTIFICATION (for PR-AUC lift calculation) and TRAINING DATASET section.",
+    "total_samples": 539,
+    "minority_class": "1",
+    "majority_class": "0",
+    "minority_class_count": 189,
+    "majority_class_count": 350,
+    "imbalance_ratio": 1.85,
+    "train_distribution": { "0": 280, "1": 151 },
+    "val_distribution": { "0": 70, "1": 38 }
+  },
+
+  "training_optimization": {
+    "_comment": "Optional. Loss function and optimization config. Renders TRAINING OPTIMIZATION section.",
+    "loss_function": "FocalLoss",
+    "optimization_priority": "recall",
+    "checkpoint_metric": "roc_auc",
+    "optimization_description": "Using focal loss with class-weighted sampling to address 1.85:1 class imbalance",
+    "focal_gamma": 2.0,
+    "focal_alpha": 0.65,
+    "class_weights": [1.0, 1.85],
+    "cost_sensitive": {
+      "cost_false_positive": 1.0,
+      "cost_false_negative": 3.0
+    },
+    "adaptive_loss": true,
+    "gamma_adjustments": 3,
+    "checkpoint_value": 0.967,
+    "checkpoint_epoch": 28,
+    "positive_class": "1"
+  },
+
+  "disk_usage": {
+    "_comment": "Optional. Used to parse model/session IDs from the file path.",
+    "best_model_path": "/sphere/app/featrix_output/predictor-my-model-b2ed3644-aaec-4d9b-a5e5-9e2cc4519893/train_single_predictor_abc123/best_model.pickle"
+  },
+
+  "training_dataset": {
+    "_comment": "Optional fallback. class_imbalance is preferred for the TRAINING DATASET section.",
+    "train_rows": 431
+  }
+}

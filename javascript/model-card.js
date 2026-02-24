@@ -13,7 +13,7 @@
   'use strict';
 
   const FeatrixModelCard = {
-    VERSION: '0.3.1',
+    VERSION: '0.3.2',
 
     /**
      * Format a value for display
@@ -455,7 +455,7 @@
         var html = '<table>';
         html += '<tr><th>Metric</th><th>Value</th></tr>';
 
-        var metricOrder = ['accuracy', 'auc', 'pr_auc', 'f1', 'precision', 'recall', 'specificity'];
+        var metricOrder = ['accuracy', 'auc', 'pr_auc', 'f1'];
         for (var i = 0; i < metricOrder.length; i++) {
           var key = metricOrder[i];
           var m = metrics[key];
@@ -501,15 +501,6 @@
         html += '<div class="cm-cell cm-correct" style="width: 70px; height: 55px; display: flex; align-items: center; justify-content: center;">' + tn + '</div>';
         html += '</div>';
         html += '</div>';
-
-        // Derived metrics
-        html += '<table class="derived-metrics">';
-        html += '<tr><td><strong>Hit Rate</strong> (Recall)</td><td class="dm-value">' + (hitRate * 100).toFixed(1) + '%</td><td class="dm-formula">TP / (TP+FN)</td></tr>';
-        html += '<tr><td><strong>Miss Rate</strong></td><td class="dm-value">' + (missRate * 100).toFixed(1) + '%</td><td class="dm-formula">FN / (TP+FN)</td></tr>';
-        html += '<tr><td><strong>Specificity</strong> (TNR)</td><td class="dm-value">' + (specificity * 100).toFixed(1) + '%</td><td class="dm-formula">TN / (TN+FP)</td></tr>';
-        html += '<tr><td><strong>False Alarm</strong> (FPR)</td><td class="dm-value">' + (falseAlarmRate * 100).toFixed(1) + '%</td><td class="dm-formula">FP / (TN+FP)</td></tr>';
-        html += '<tr><td><strong>Precision</strong> (PPV)</td><td class="dm-value">' + (precision * 100).toFixed(1) + '%</td><td class="dm-formula">TP / (TP+FP)</td></tr>';
-        html += '</table>';
 
         html += '</div></div>';
         return html;

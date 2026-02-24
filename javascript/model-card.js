@@ -13,7 +13,7 @@
   'use strict';
 
   const FeatrixModelCard = {
-    VERSION: '0.3.0',
+    VERSION: '0.3.1',
 
     /**
      * Format a value for display
@@ -484,16 +484,22 @@
         html += '<h4 class="confusion-title">Confusion Matrix</h4>';
         html += '<div class="confusion-layout">';
 
-        // Matrix - POS first (standard convention) - using div grid to avoid host table CSS interference
-        html += '<div class="cm-grid">';
-        html += '<div class="cm-corner"></div><div class="cm-corner"></div><div class="cm-col-header" style="grid-column: 3 / 5; text-align: center;">Predicted</div>';
-        html += '<div class="cm-corner"></div><div class="cm-corner"></div><div class="cm-col-label">Pos</div><div class="cm-col-label">Neg</div>';
-        html += '<div class="cm-row-header">Actual</div><div class="cm-row-label">Pos</div>';
-        html += '<div class="cm-cell cm-correct">' + tp + '</div>';
-        html += '<div class="cm-cell cm-error">' + fn + '</div>';
-        html += '<div class="cm-spacer"></div><div class="cm-row-label">Neg</div>';
-        html += '<div class="cm-cell cm-error">' + fp + '</div>';
-        html += '<div class="cm-cell cm-correct">' + tn + '</div>';
+        // Matrix - POS first (standard convention) - pure inline styles, no table
+        html += '<div style="display: inline-block;">';
+        html += '<div style="text-align: center; font-size: 11px; color: #666; margin-left: 80px; margin-bottom: 2px;">Predicted</div>';
+        html += '<div style="display: flex; margin-left: 80px; margin-bottom: 2px;"><div style="width: 70px; text-align: center; font-size: 11px; color: #666;">Pos</div><div style="width: 70px; text-align: center; font-size: 11px; color: #666;">Neg</div></div>';
+        html += '<div style="display: flex; align-items: center; margin-bottom: 2px;">';
+        html += '<div style="width: 40px; font-size: 11px; color: #666; text-align: center; writing-mode: vertical-lr; transform: rotate(180deg);">Actual</div>';
+        html += '<div style="width: 38px; font-size: 11px; color: #666; text-align: right; padding-right: 4px;">Pos</div>';
+        html += '<div class="cm-cell cm-correct" style="width: 70px; height: 55px; display: flex; align-items: center; justify-content: center;">' + tp + '</div>';
+        html += '<div class="cm-cell cm-error" style="width: 70px; height: 55px; display: flex; align-items: center; justify-content: center;">' + fn + '</div>';
+        html += '</div>';
+        html += '<div style="display: flex; align-items: center;">';
+        html += '<div style="width: 40px;"></div>';
+        html += '<div style="width: 38px; font-size: 11px; color: #666; text-align: right; padding-right: 4px;">Neg</div>';
+        html += '<div class="cm-cell cm-error" style="width: 70px; height: 55px; display: flex; align-items: center; justify-content: center;">' + fp + '</div>';
+        html += '<div class="cm-cell cm-correct" style="width: 70px; height: 55px; display: flex; align-items: center; justify-content: center;">' + tn + '</div>';
+        html += '</div>';
         html += '</div>';
 
         // Derived metrics
@@ -810,14 +816,7 @@
         .featrix-model-card .confusion-wrapper { margin-top: 20px; }
         .featrix-model-card .confusion-title { margin: 0 0 15px 0; font-size: 13px; font-weight: bold; color: #333; }
         .featrix-model-card .confusion-layout { display: flex; gap: 30px; align-items: flex-start; flex-wrap: wrap; }
-        .featrix-model-card .cm-grid { display: grid; grid-template-columns: auto auto 70px 70px; gap: 0; align-items: center; justify-items: center; }
-        .featrix-model-card .cm-corner { }
-        .featrix-model-card .cm-col-header { font-size: 11px; color: #666; padding: 5px; }
-        .featrix-model-card .cm-col-label { font-size: 11px; color: #666; padding: 5px; }
-        .featrix-model-card .cm-row-header { font-size: 11px; color: #666; padding: 5px; writing-mode: vertical-lr; transform: rotate(180deg); grid-row: span 2; }
-        .featrix-model-card .cm-row-label { font-size: 11px; color: #666; padding: 5px; }
-        .featrix-model-card .cm-spacer { }
-        .featrix-model-card .cm-cell { padding: 12px 15px; border: 1px solid #ccc; font-size: 18px; font-weight: bold; width: 100%; text-align: center; }
+        .featrix-model-card .cm-cell { border: 1px solid #ccc; font-size: 18px; font-weight: bold; }
         .featrix-model-card .cm-correct { background: #e8f5e9; }
         .featrix-model-card .cm-error { background: #ffebee; }
         .featrix-model-card .derived-metrics { width: auto !important; display: inline-table; font-size: 13px; }

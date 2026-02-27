@@ -13,7 +13,7 @@
   'use strict';
 
   const FeatrixModelCard = {
-    VERSION: '0.3.3',
+    VERSION: '0.4.0',
 
     /**
      * Format a value for display
@@ -122,7 +122,7 @@
     /**
      * Render model identification section
      */
-    renderModelIdentification: function(data) {
+    renderModelIdentification: function(data, sphereSessionId) {
       var mi = data.model_identification || {};
       var statusColor = this.getStatusColor(mi.status);
 
@@ -209,7 +209,13 @@
                 &nbsp;&nbsp;•&nbsp;&nbsp;<strong>Model:</strong> <code style="font-size: 11px;">${modelIdDisplay}</code>
                 &nbsp;&nbsp;•&nbsp;&nbsp;<strong>Cluster:</strong> ${(mi.compute_cluster || 'N/A').toUpperCase()}
                 &nbsp;&nbsp;•&nbsp;&nbsp;<strong>Dims:</strong> ${(data.embedding_space && data.embedding_space.d_model) || 'N/A'}
-            </div>
+            </div>${sphereSessionId ? `
+            <div style="margin-top: 20px; padding-top: 15px; border-top: 1px solid #ddd;">
+                <div class="sphere-thumbnail" data-session-id="${sphereSessionId}" title="Click to expand">
+                    <div class="sphere-thumbnail-inner" id="featrix-sphere-thumb"></div>
+                    <div class="sphere-thumbnail-label">Embedding Space</div>
+                </div>
+            </div>` : ''}
         </div>
     </details>
       `;
@@ -669,6 +675,90 @@
      * Attach event listeners to expand/collapse buttons
      * Call this after inserting HTML into the DOM
      */
+    /**
+     * Load an external script if not already present
+     */
+    _loadScript: function(src, checkGlobal) {
+      return new Promise(function(resolve, reject) {
+        if (checkGlobal && window[checkGlobal]) { resolve(); return; }
+        var script = document.createElement('script');
+        script.src = src;
+        if (src.indexOf('unpkg.com') !== -1) script.crossOrigin = 'anonymous';
+        script.onload = resolve;
+        script.onerror = function() { reject(new Error('Failed to load: ' + src)); };
+        document.head.appendChild(script);
+      });
+    },
+
+    /**
+     * Initialize sphere viewer (thumbnail + click-to-expand)
+     */
+    _initSphere: function(modelCard) {
+      var thumb = modelCard.querySelector('.sphere-thumbnail');
+      if (!thumb) return;
+
+      var sessionId = thumb.getAttribute('data-session-id');
+      if (!sessionId) return;
+
+      var self = this;
+      var backdrop = modelCard.querySelector('.sphere-modal-backdrop');
+      var modalClose = modelCard.querySelector('.sphere-modal-close');
+      var fullViewer = null;
+
+      // Load required scripts then init thumbnail
+      Promise.resolve()
+        .then(function() { return self._loadScript('https://unpkg.com/react@18/umd/react.production.min.js', 'React'); })
+        .then(function() { return self._loadScript('https://unpkg.com/react-dom@18/umd/react-dom.production.min.js', 'ReactDOM'); })
+        .then(function() { return self._loadScript('https://bits.featrix.com/sv/sphere-viewer.js', 'FeatrixSphereViewer'); })
+        .then(function() {
+          // Init thumbnail
+          new FeatrixSphereViewer().init({
+            sessionId: sessionId,
+            containerId: 'featrix-sphere-thumb',
+            isRotating: true,
+            pointSize: 0.03,
+            pointOpacity: 0.6,
+            mode: 'thumbnail'
+          });
+        })
+        .catch(function(err) {
+          console.warn('FeatrixModelCard: Could not load sphere viewer:', err.message);
+          thumb.style.display = 'none';
+        });
+
+      // Click thumbnail to open modal
+      thumb.addEventListener('click', function() {
+        backdrop.classList.add('active');
+        document.body.style.overflow = 'hidden';
+        if (!fullViewer) {
+          fullViewer = true;
+          new FeatrixSphereViewer().init({
+            sessionId: sessionId,
+            containerId: 'featrix-sphere-full',
+            isRotating: true,
+            pointSize: 0.02,
+            pointOpacity: 0.6,
+            width: '100%',
+            height: '100%',
+            mode: 'full'
+          });
+        }
+      });
+
+      // Close modal
+      function closeModal() {
+        backdrop.classList.remove('active');
+        document.body.style.overflow = '';
+      }
+      if (modalClose) modalClose.addEventListener('click', closeModal);
+      backdrop.addEventListener('click', function(e) {
+        if (e.target === backdrop) closeModal();
+      });
+      document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape' && backdrop.classList.contains('active')) closeModal();
+      });
+    },
+
     attachEventListeners: function(containerElement) {
       containerElement = containerElement || document;
       
@@ -750,23 +840,45 @@
           });
         });
       }
+
+      // Initialize sphere viewer if thumbnail is present
+      this._initSphere(modelCard);
     },
 
     /**
      * Render complete HTML model card
      */
-    renderHTML: function(modelCardJson) {
+    renderHTML: function(modelCardJson, options) {
+      options = options || {};
       var modelName = (modelCardJson.model_identification || {}).name || 'Model Card';
       var now = new Date();
-      var dateStr = now.getFullYear() + '-' + 
-                    String(now.getMonth() + 1).padStart(2, '0') + '-' + 
+      var dateStr = now.getFullYear() + '-' +
+                    String(now.getMonth() + 1).padStart(2, '0') + '-' +
                     String(now.getDate()).padStart(2, '0') + ' ' +
                     String(now.getHours()).padStart(2, '0') + ':' +
                     String(now.getMinutes()).padStart(2, '0') + ':' +
                     String(now.getSeconds()).padStart(2, '0');
-      
+
+      // Resolve session ID for sphere viewer
+      var sphereSessionId = null;
+      if (options.showSphere) {
+        var mi = modelCardJson.model_identification || {};
+        var du = modelCardJson.disk_usage || {};
+        sphereSessionId = options.sessionId || mi.session_id || null;
+        // If we have a best_model_path, try to extract the full predictor folder name
+        if (!sphereSessionId && du.best_model_path) {
+          var parts = du.best_model_path.split('/');
+          for (var i = 0; i < parts.length; i++) {
+            if (parts[i].indexOf('predictor-') === 0) {
+              sphereSessionId = parts[i];
+              break;
+            }
+          }
+        }
+      }
+
       var sections = [
-        this.renderModelIdentification(modelCardJson),
+        this.renderModelIdentification(modelCardJson, sphereSessionId),
         this.renderEmbeddingSpace(modelCardJson),
         this.renderBestEpochs(modelCardJson),
         this.renderTrainingOptimization(modelCardJson),
@@ -907,11 +1019,82 @@
             color: #000;
         }
         
-        @media print { 
+        .featrix-model-card .sphere-thumbnail {
+            display: inline-block;
+            width: 220px;
+            height: 165px;
+            background: #0a0515;
+            border-radius: 6px;
+            overflow: hidden;
+            cursor: pointer;
+            position: relative;
+            transition: box-shadow 0.2s;
+        }
+        .featrix-model-card .sphere-thumbnail:hover {
+            box-shadow: 0 0 12px rgba(100, 100, 255, 0.4);
+        }
+        .featrix-model-card .sphere-thumbnail-inner {
+            width: 100%;
+            height: 100%;
+        }
+        .featrix-model-card .sphere-thumbnail-label {
+            position: absolute;
+            bottom: 6px;
+            left: 0;
+            right: 0;
+            text-align: center;
+            font-size: 10px;
+            color: rgba(255, 255, 255, 0.5);
+            pointer-events: none;
+        }
+
+        .featrix-model-card .sphere-modal-backdrop {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0, 0, 0, 0.85);
+            z-index: 99999;
+            justify-content: center;
+            align-items: center;
+        }
+        .featrix-model-card .sphere-modal-backdrop.active {
+            display: flex;
+        }
+        .featrix-model-card .sphere-modal {
+            width: 90vw;
+            height: 80vh;
+            background: #0a0515;
+            border-radius: 8px;
+            position: relative;
+            overflow: hidden;
+        }
+        .featrix-model-card .sphere-modal-close {
+            position: absolute;
+            top: 10px;
+            right: 15px;
+            z-index: 100000;
+            background: none;
+            border: none;
+            color: rgba(255, 255, 255, 0.7);
+            font-size: 28px;
+            cursor: pointer;
+            padding: 5px 10px;
+            line-height: 1;
+        }
+        .featrix-model-card .sphere-modal-close:hover {
+            color: #fff;
+        }
+        .featrix-model-card .sphere-modal-inner {
+            width: 100%;
+            height: 100%;
+        }
+
+        @media print {
             .featrix-model-card .page { padding: 0; max-width: 100%; }
             .featrix-model-card .section { page-break-inside: avoid; }
             .featrix-model-card .header { page-break-after: always; }
             .featrix-model-card .controls { display: none; }
+            .featrix-model-card .sphere-thumbnail { display: none; }
             .featrix-model-card table { font-size: 10pt; }
             .featrix-model-card .grid { grid-template-columns: repeat(2, 1fr) !important; }
         }
@@ -936,6 +1119,12 @@
         </div>
 
         ${sections}
+        <div class="sphere-modal-backdrop">
+            <div class="sphere-modal">
+                <button class="sphere-modal-close">&times;</button>
+                <div class="sphere-modal-inner" id="featrix-sphere-full"></div>
+            </div>
+        </div>
         <div style="text-align: right; padding: 10px 0 5px 0; font-size: 11px; color: #ccc;">FeatrixModelCard v${FeatrixModelCard.VERSION}</div>
     </div>
 </div>`;

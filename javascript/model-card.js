@@ -13,7 +13,8 @@
   'use strict';
 
   const FeatrixModelCard = {
-    VERSION: '0.4.0',
+    VERSION: '1.10',
+    BUILD: 'dev',
 
     /**
      * Format a value for display
@@ -1125,7 +1126,7 @@
                 <div class="sphere-modal-inner" id="featrix-sphere-full"></div>
             </div>
         </div>
-        <div style="text-align: right; padding: 10px 0 5px 0; font-size: 11px; color: #ccc;">FeatrixModelCard v${FeatrixModelCard.VERSION}</div>
+        <div style="text-align: right; padding: 10px 0 5px 0; font-size: 11px; color: #ccc;">FeatrixModelCard v${FeatrixModelCard.VERSION} (${FeatrixModelCard.BUILD})</div>
     </div>
 </div>`;
     }

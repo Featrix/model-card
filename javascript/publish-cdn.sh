@@ -31,9 +31,13 @@ echo "📁 Target: bits:/var/www/html/js/featrix-modelcard/"
 TEMP_DIR=$(mktemp -d)
 trap "rm -rf $TEMP_DIR" EXIT
 
-# Copy files to temp directory
+# Stamp build hash into the JS file
+BUILD_HASH=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+echo "🔖 Build: $BUILD_HASH"
+
+# Copy files to temp directory and inject build hash
 echo "📋 Preparing files..."
-cp model-card.js "$TEMP_DIR/"
+sed "s/BUILD: 'dev'/BUILD: '$BUILD_HASH'/" model-card.js > "$TEMP_DIR/model-card.js"
 if [ -f "README.md" ]; then
     cp README.md "$TEMP_DIR/"
 fi

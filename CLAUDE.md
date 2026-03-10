@@ -14,8 +14,8 @@ Never edit files outside of this repository (`model-card/`). If a bug or issue i
 
 ## Version Files
 
-- DO NOT modify version numbers in `setup.py`, `package.json`, or any version files
-- Git commit hooks handle version bumping automatically
+- Version bumps in this repo are OK when making meaningful changes
+- Current version: **1.10**
 
 ## Code Style
 

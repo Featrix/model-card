@@ -1,8 +1,12 @@
 """
 Featrix Model Card - Python Package
 
-Render Featrix Sphere Model Card JSON to HTML or plain text.
-All render functions return strings that can be printed or saved to files.
+Render Featrix Model Card JSON to HTML or plain text.
+
+HTML rendering delegates to the canonical JavaScript renderer (loaded from CDN),
+ensuring the Python output always matches the JS version.
+
+Text rendering is a standalone Python implementation for terminal/log output.
 """
 
 from .html_renderer import render_html, render_to_file as render_html_to_file
@@ -15,18 +19,19 @@ from .text_renderer import (
 __version__ = "1.0.0"
 
 
-def print_html(model_card_json, file=None):
+def print_html(model_card_json, file=None, **kwargs):
     """
     Render model card to HTML and print it.
-    
+
     Args:
-        model_card_json: Model card JSON dictionary
-        file: File-like object to print to (default: sys.stdout)
-    
+        model_card_json: Model card JSON dictionary.
+        file: File-like object to print to (default: sys.stdout).
+        **kwargs: Passed to render_html (show_sphere, session_id, cdn_url).
+
     Returns:
-        str: The rendered HTML string
+        str: The rendered HTML string.
     """
-    html = render_html(model_card_json)
+    html = render_html(model_card_json, **kwargs)
     print(html, file=file)
     return html
 
@@ -34,14 +39,14 @@ def print_html(model_card_json, file=None):
 def print_text(model_card_json, detailed=True, file=None):
     """
     Render model card to text and print it.
-    
+
     Args:
-        model_card_json: Model card JSON dictionary
-        detailed: If True, render detailed version; if False, render brief version
-        file: File-like object to print to (default: sys.stdout)
-    
+        model_card_json: Model card JSON dictionary.
+        detailed: If True, render detailed version; if False, render brief version.
+        file: File-like object to print to (default: sys.stdout).
+
     Returns:
-        str: The rendered text string
+        str: The rendered text string.
     """
     if detailed:
         text = render_detailed_text(model_card_json)
@@ -60,4 +65,3 @@ __all__ = [
     "print_html",
     "print_text",
 ]
-

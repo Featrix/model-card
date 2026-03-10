@@ -11,62 +11,81 @@ from featrix_modelcard import (
     render_brief_text,
     render_detailed_text,
     render_text_to_file,
-    print_html,
     print_text,
 )
 
-# Example model card JSON
+# Example model card JSON (current schema)
 example_model_card = {
     "model_identification": {
-        "session_id": "public-alphafreight-mini-8c482fa5-1304-442d-8875-4263d5bf79d6",
-        "job_id": "cadab2-20251118-010809",
+        "session_id": "predictor-alphafreight-mini-8c482fa5-1304-442d-8875-4263d5bf79d6",
         "name": "alphafreight-mini",
         "target_column": "has_fuel_card_Comdata",
         "target_column_type": "set",
         "compute_cluster": "BURRITO",
-        "training_date": "2025-11-18",
-        "status": "DONE",
+        "training_date": "2026-01-15",
+        "status": "done",
         "model_type": "Single Predictor",
-        "framework": "FeatrixSphere v0.2.968"
+        "framework": "FeatrixSphere v0.3",
     },
-    "training_dataset": {
-        "train_rows": 431,
-        "val_rows": 108,
-        "total_rows": 539,
-        "total_features": 15,
-        "feature_names": [
-            "fleet_size",
-            "annual_revenue",
-            "primary_operation",
-            "vehicle_types",
-            "operating_regions"
-        ],
-        "target_column": "has_fuel_card_Comdata"
+    "embedding_space": {
+        "num_columns": 15,
+        "num_layers": 8400,
+        "num_parameters": 264925317,
+        "d_model": 256,
+        "num_rows": 5000,
     },
-    "training_metrics": {
-        "best_epoch": {
+    "model_architecture": {
+        "predictor_layers": 2100,
+        "predictor_parameters": 66231329,
+    },
+    "best_epochs": {
+        "best_roc_auc": {
             "epoch": 28,
-            "validation_loss": 0.1334,
-            "train_loss": 0.1256
+            "roc_auc": 0.967,
+            "classification_display_metadata": {
+                "epoch": 28,
+                "classification_metrics": {
+                    "accuracy": {"value": 0.925},
+                    "auc": {"value": 0.967},
+                    "pr_auc": {"value": 0.891},
+                    "f1": {"value": 0.899},
+                },
+                "confusion_matrix": {"tp": 34, "fn": 4, "fp": 3, "tn": 67},
+            },
         },
-        "classification_metrics": {
-            "accuracy": 0.925,
-            "precision": 0.912,
-            "recall": 0.887,
-            "f1": 0.899,
-            "auc": 0.967,
-            "is_binary": True
-        }
+        "best_pr_auc": {
+            "epoch": 26,
+            "pr_auc": 0.895,
+            "classification_display_metadata": {
+                "epoch": 26,
+                "classification_metrics": {
+                    "accuracy": {"value": 0.918},
+                    "auc": {"value": 0.958},
+                    "pr_auc": {"value": 0.895},
+                    "f1": {"value": 0.890},
+                },
+                "confusion_matrix": {"tp": 36, "fn": 2, "fp": 5, "tn": 65},
+            },
+        },
     },
-    "model_quality": {
-        "warnings": [
-            {
-                "type": "CLASS_IMBALANCE",
-                "severity": "MODERATE",
-                "message": "Class imbalance detected: positive class represents 35% of training data"
-            }
-        ]
-    }
+    "class_imbalance": {
+        "total_samples": 539,
+        "minority_class": "1",
+        "majority_class": "0",
+        "minority_class_count": 189,
+        "majority_class_count": 350,
+        "imbalance_ratio": 1.85,
+        "train_distribution": {"0": 280, "1": 151},
+        "val_distribution": {"0": 70, "1": 38},
+    },
+    "training_optimization": {
+        "loss_function": "FocalLoss",
+        "optimization_priority": "recall",
+        "checkpoint_metric": "roc_auc",
+        "focal_gamma": 2.0,
+        "focal_alpha": 0.65,
+        "class_weights": [1.0, 1.85],
+    },
 }
 
 
@@ -77,66 +96,29 @@ def main():
     print("=" * 60)
     print()
 
-    # Example 1: Print brief summary to console
-    print("Example 1: Print brief summary to console")
+    # Brief text summary
+    print("Brief summary:")
     print("-" * 60)
-    print_text(example_model_card, detailed=False)
-    print()
+    print(render_brief_text(example_model_card))
 
-    # Example 2: Get HTML as string
-    print("Example 2: Get HTML as string")
+    # Detailed text
+    print("Detailed text:")
     print("-" * 60)
-    html_string = render_html(example_model_card)
-    print(f"HTML string length: {len(html_string)} characters")
-    print(f"First 100 chars: {html_string[:100]}...")
-    print()
+    print(render_detailed_text(example_model_card))
 
-    # Example 3: Get detailed text as string
-    print("Example 3: Get detailed text as string")
-    print("-" * 60)
-    detailed_text = render_detailed_text(example_model_card)
-    print(f"Detailed text length: {len(detailed_text)} characters")
-    print(f"First 200 chars:\n{detailed_text[:200]}...")
-    print()
+    # HTML (loads model-card.js from CDN)
+    html = render_html(example_model_card)
+    print(f"HTML: {len(html)} chars (loads JS renderer from CDN)")
 
-    # Example 4: Save to files
-    print("Example 4: Save to files")
-    print("-" * 60)
-    html_path = render_html_to_file(example_model_card, "example_model_card.html")
-    print(f"✅ HTML saved to: {html_path}")
+    # HTML with sphere
+    html_sphere = render_html(example_model_card, show_sphere=True)
+    print(f"HTML with sphere: {len(html_sphere)} chars")
 
-    text_path = render_text_to_file(example_model_card, "example_model_card.txt", detailed=True)
-    print(f"✅ Text saved to: {text_path}")
-    print()
-
-    # Example 5: Print HTML to console (for piping)
-    print("Example 5: Print HTML to console")
-    print("-" * 60)
-    print("(Uncomment the line below to see full HTML output)")
-    # print_html(example_model_card)
-    print("Use: python example.py | tee output.html")
-    print()
-
-    # Example 6: Use in web application
-    print("Example 6: Use in web application (Flask example)")
-    print("-" * 60)
-    print("""
-from flask import Flask
-from featrix_modelcard import render_html
-
-app = Flask(__name__)
-
-@app.route('/model-card')
-def model_card():
-    model_card_json = load_model_card()  # Your function
-    html = render_html(model_card_json)
-    return html
-    """)
-    print()
-
-    print("Done! Check the generated files.")
+    # Save to files
+    render_html_to_file(example_model_card, "example_output.html")
+    render_text_to_file(example_model_card, "example_output.txt")
+    print("Saved: example_output.html, example_output.txt")
 
 
 if __name__ == "__main__":
     main()
-

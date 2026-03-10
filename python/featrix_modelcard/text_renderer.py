@@ -1,20 +1,23 @@
 #!/usr/bin/env python3
 """
-Plain text renderer for Featrix Sphere Model Card JSON.
-Provides both brief and detailed versions.
+Plain text renderer for Featrix Model Card JSON.
+
+Provides both brief and detailed versions matching the current JSON schema
+(model_identification, embedding_space, best_epochs, class_imbalance,
+training_optimization, training_dataset, disk_usage).
 """
 
 import json
-from typing import Dict, Any, Optional
+import re
+from typing import Any, Dict, Optional
 
 
 def format_value(value: Any, precision: int = 4) -> str:
     """Format a value for display."""
     if value is None:
-        return 'N/A'
+        return "N/A"
     if isinstance(value, float):
-        formatted = f"{value:.{precision}f}".rstrip('0').rstrip('.')
-        return formatted
+        return f"{value:.{precision}f}".rstrip("0").rstrip(".")
     if isinstance(value, bool):
         return str(value)
     if isinstance(value, (list, dict)):
@@ -22,437 +25,382 @@ def format_value(value: Any, precision: int = 4) -> str:
     return str(value)
 
 
-def format_percentage(value: Optional[float]) -> str:
-    """Format a percentage value."""
+def format_pct(value: Optional[float]) -> str:
+    """Format a 0-1 float as a percentage."""
     if value is None:
-        return 'N/A'
-    return f"{value * 100:.2f}%"
+        return "N/A"
+    return f"{value * 100:.1f}%"
 
 
-def render_brief_model_identification(data: Dict[str, Any]) -> str:
-    """Render brief model identification."""
-    mi = data.get('model_identification', {})
-    lines = [
-        f"Model: {mi.get('name', 'N/A')}",
-        f"Type: {mi.get('model_type', 'N/A')}",
-        f"Status: {mi.get('status', 'N/A')}",
-        f"Session: {mi.get('session_id', 'N/A')[:30]}...",
-    ]
-    return '\n'.join(lines)
+def format_large_number(value) -> str:
+    """Format large numbers (e.g. 264925317 -> 265.0M)."""
+    if value is None:
+        return "N/A"
+    if value >= 1_000_000_000:
+        return f"{value / 1_000_000_000:.1f}B"
+    if value >= 1_000_000:
+        return f"{value / 1_000_000:.1f}M"
+    if value >= 1_000:
+        return f"{value / 1_000:.1f}K"
+    return f"{value:,}"
 
 
-def render_detailed_model_identification(data: Dict[str, Any]) -> str:
-    """Render detailed model identification."""
-    mi = data.get('model_identification', {})
-    lines = [
-        "=" * 60,
-        "MODEL IDENTIFICATION",
-        "=" * 60,
-        f"Session ID:     {mi.get('session_id', 'N/A')}",
-        f"Job ID:          {mi.get('job_id', 'N/A')}",
-        f"Name:            {mi.get('name', 'N/A')}",
-        f"Model Type:      {mi.get('model_type', 'N/A')}",
-        f"Status:          {mi.get('status', 'N/A')}",
-        f"Target Column:   {mi.get('target_column', 'N/A')}",
-        f"Target Type:     {mi.get('target_column_type', 'N/A')}",
-        f"Compute Cluster: {mi.get('compute_cluster', 'N/A')}",
-        f"Training Date:   {mi.get('training_date', 'N/A')}",
-        f"Framework:       {mi.get('framework', 'N/A')}",
-        "",
-    ]
-    return '\n'.join(lines)
+def _map_model_type(mi: dict) -> str:
+    """Map model_type + target_column_type to display string."""
+    model_type = mi.get("model_type", "")
+    target_type = (mi.get("target_column_type") or "").lower()
+    mt = model_type.lower()
+
+    if mt in ("embedding space", "es"):
+        return "Foundational Embedding Space"
+    if mt in ("single predictor", "sp"):
+        if target_type == "set":
+            return "Binary Classifier"
+        if target_type == "scalar":
+            return "Regression"
+        return "Single Predictor"
+    return model_type or "N/A"
 
 
-def render_brief_training_dataset(data: Dict[str, Any]) -> str:
-    """Render brief training dataset."""
-    td = data.get('training_dataset', {})
-    return f"Training: {td.get('train_rows', 0):,} rows, {td.get('total_features', 0)} features"
+def _parse_model_path(path: Optional[str]) -> tuple:
+    """Extract session ID and job ID from best_model_path."""
+    if not path:
+        return None, None
+    parts = path.split("/")
+    session_id = None
+    job_id = None
+    for part in parts:
+        if part.startswith("predictor-"):
+            session_id = part[: len(part) - 37] if len(part) > 37 else part
+        if part.startswith("train_single_predictor_") or part.startswith("train_"):
+            job_id = part
+    return session_id, job_id
 
 
-def render_detailed_training_dataset(data: Dict[str, Any]) -> str:
-    """Render detailed training dataset."""
-    td = data.get('training_dataset', {})
-    lines = [
-        "=" * 60,
-        "TRAINING DATASET",
-        "=" * 60,
-        f"Training Rows:    {td.get('train_rows', 0):,}",
-        f"Validation Rows:  {td.get('val_rows', 0):,}",
-        f"Total Rows:       {td.get('total_rows', 0):,}",
-        f"Total Features:   {td.get('total_features', 0)}",
-        f"Target Column:    {td.get('target_column', 'N/A')}",
-        "",
-        "Feature Names:",
-    ]
-    
-    feature_names = td.get('feature_names', [])
-    for i, name in enumerate(feature_names, 1):
-        lines.append(f"  {i:2d}. {name}")
-    
-    lines.append("")
-    return '\n'.join(lines)
+# ---------------------------------------------------------------------------
+# Brief renderer
+# ---------------------------------------------------------------------------
 
 
-def render_brief_training_metrics(data: Dict[str, Any]) -> str:
-    """Render brief training metrics."""
-    tm = data.get('training_metrics', {})
-    model_type = data.get('model_identification', {}).get('model_type', '')
-    
-    lines = []
-    
-    if model_type == 'Single Predictor':
-        cm = tm.get('classification_metrics')
-        if cm:
-            lines.append(f"Accuracy: {format_percentage(cm.get('accuracy'))}, "
-                        f"F1: {format_percentage(cm.get('f1'))}, "
-                        f"AUC: {format_percentage(cm.get('auc'))}")
-    else:
-        best_epoch = tm.get('best_epoch', {})
-        if best_epoch.get('val_loss') is not None:
-            lines.append(f"Best Val Loss: {format_value(best_epoch.get('val_loss'))}")
-    
-    return '\n'.join(lines) if lines else "N/A"
+def render_brief_text(data: Dict[str, Any]) -> str:
+    """Render a compact one-screen summary of the model card."""
+    mi = data.get("model_identification", {})
+    be = data.get("best_epochs", {})
+    ci = data.get("class_imbalance", {})
+    es = data.get("embedding_space", {})
 
+    model_name = mi.get("name", "Model Card")
+    model_type = _map_model_type(mi)
+    status = (mi.get("status") or "N/A").upper()
+    if status == "DONE":
+        status = "READY"
 
-def render_detailed_training_metrics(data: Dict[str, Any]) -> str:
-    """Render detailed training metrics."""
-    tm = data.get('training_metrics', {})
-    model_type = data.get('model_identification', {}).get('model_type', '')
-    
-    lines = [
-        "=" * 60,
-        "TRAINING METRICS",
-        "=" * 60,
-    ]
-    
-    # Best epoch
-    best_epoch = tm.get('best_epoch', {})
-    lines.extend([
-        "Best Epoch:",
-        f"  Epoch:          {best_epoch.get('epoch', 'N/A')}",
-        f"  Validation Loss: {format_value(best_epoch.get('validation_loss'))}",
-        f"  Train Loss:      {format_value(best_epoch.get('train_loss'))}",
-    ])
-    
-    if best_epoch.get('spread_loss') is not None:
-        lines.extend([
-            f"  Spread Loss:    {format_value(best_epoch.get('spread_loss'))}",
-            f"  Joint Loss:     {format_value(best_epoch.get('joint_loss'))}",
-            f"  Marginal Loss:  {format_value(best_epoch.get('marginal_loss'))}",
-        ])
-    
-    lines.append("")
-    
-    # Classification metrics (Single Predictor)
-    if model_type == 'Single Predictor':
-        cm = tm.get('classification_metrics')
-        if cm:
-            lines.extend([
-                "Classification Metrics:",
-                f"  Accuracy:  {format_percentage(cm.get('accuracy'))}",
-                f"  Precision: {format_percentage(cm.get('precision'))}",
-                f"  Recall:    {format_percentage(cm.get('recall'))}",
-                f"  F1 Score:  {format_percentage(cm.get('f1'))}",
-                f"  AUC:       {format_percentage(cm.get('auc'))}",
-                f"  Binary:    {cm.get('is_binary', False)}",
-                "",
-            ])
-        
-        # Optimal threshold
-        opt_thresh = tm.get('optimal_threshold')
-        if opt_thresh:
-            lines.extend([
-                "Optimal Threshold:",
-                f"  Threshold: {format_value(opt_thresh.get('optimal_threshold'))}",
-                f"  Pos Label: {opt_thresh.get('pos_label', 'N/A')}",
-                f"  F1:        {format_percentage(opt_thresh.get('optimal_threshold_f1'))}",
-                f"  Accuracy:  {format_percentage(opt_thresh.get('accuracy_at_optimal_threshold'))}",
-                "",
-            ])
-        
-        # Argmax metrics
-        argmax = tm.get('argmax_metrics')
-        if argmax:
-            lines.extend([
-                "Argmax Metrics:",
-                f"  Accuracy:  {format_percentage(argmax.get('accuracy'))}",
-                f"  Precision: {format_percentage(argmax.get('precision'))}",
-                f"  Recall:    {format_percentage(argmax.get('recall'))}",
-                f"  F1 Score:  {format_percentage(argmax.get('f1'))}",
-                "",
-            ])
-    
-    # Loss progression (Embedding Space)
-    if model_type == 'Embedding Space':
-        loss_prog = tm.get('loss_progression')
-        if loss_prog:
-            lines.extend([
-                "Loss Progression:",
-                f"  Initial Train Loss: {format_value(loss_prog.get('initial_train'))}",
-                f"  Initial Val Loss:   {format_value(loss_prog.get('initial_val'))}",
-                f"  Improvement %:      {format_value(loss_prog.get('improvement_pct'))}",
-                "",
-            ])
-        
-        final_epoch = tm.get('final_epoch')
-        if final_epoch:
-            lines.extend([
-                "Final Epoch:",
-                f"  Epoch:      {final_epoch.get('epoch', 'N/A')}",
-                f"  Train Loss: {format_value(final_epoch.get('train_loss'))}",
-                f"  Val Loss:   {format_value(final_epoch.get('val_loss'))}",
-                "",
-            ])
-    
-    return '\n'.join(lines)
-
-
-def render_brief_model_quality(data: Dict[str, Any]) -> str:
-    """Render brief model quality."""
-    mq = data.get('model_quality', {})
-    lines = []
-    
-    assessment = mq.get('assessment')
-    if assessment:
-        lines.append(f"Quality: {assessment}")
-    
-    warnings = mq.get('warnings', [])
-    if warnings:
-        lines.append(f"Warnings: {len(warnings)}")
-    
-    return '\n'.join(lines) if lines else "N/A"
-
-
-def render_detailed_model_quality(data: Dict[str, Any]) -> str:
-    """Render detailed model quality."""
-    mq = data.get('model_quality', {})
-    
-    lines = [
-        "=" * 60,
-        "MODEL QUALITY",
-        "=" * 60,
-    ]
-    
-    assessment = mq.get('assessment')
-    if assessment:
-        lines.extend([
-            f"Assessment: {assessment}",
-            "",
-        ])
-    
-    recommendations = mq.get('recommendations', [])
-    if recommendations:
-        lines.append("Recommendations:")
-        for i, rec in enumerate(recommendations, 1):
-            lines.extend([
-                f"  {i}. Issue: {rec.get('issue', 'N/A')}",
-                f"     Suggestion: {rec.get('suggestion', 'N/A')}",
-                "",
-            ])
-    
-    warnings = mq.get('warnings', [])
-    if warnings:
-        lines.append("Warnings:")
-        for i, warning in enumerate(warnings, 1):
-            lines.extend([
-                f"  {i}. [{warning.get('severity', 'UNKNOWN')}] {warning.get('type', 'N/A')}",
-                f"     {warning.get('message', 'N/A')}",
-            ])
-            if warning.get('recommendation'):
-                lines.append(f"     Recommendation: {warning.get('recommendation')}")
-            details = warning.get('details')
-            if details:
-                lines.append(f"     Details: {json.dumps(details, indent=6)}")
-            lines.append("")
-    
-    training_quality_warning = mq.get('training_quality_warning')
-    if training_quality_warning:
-        lines.extend([
-            "Training Quality Warning:",
-            f"  {training_quality_warning}",
-            "",
-        ])
-    
-    return '\n'.join(lines)
-
-
-def render_brief_text(model_card_json: Dict[str, Any]) -> str:
-    """Render brief plain text model card."""
-    model_name = model_card_json.get('model_identification', {}).get('name', 'Model Card')
-    
     lines = [
         f"MODEL CARD: {model_name}",
         "=" * 60,
         "",
-        render_brief_model_identification(model_card_json),
-        "",
-        render_brief_training_dataset(model_card_json),
-        "",
-        render_brief_training_metrics(model_card_json),
-        "",
-        render_brief_model_quality(model_card_json),
-        "",
+        f"Target:     {mi.get('target_column', 'N/A')}",
+        f"Type:       {model_type}",
+        f"Status:     {status}",
+        f"Trained:    {mi.get('training_date', 'N/A')}",
     ]
-    
-    return '\n'.join(lines)
+
+    # Best metrics
+    roc_auc = _get_metric_value(be, "best_roc_auc", "auc")
+    pr_auc = _get_metric_value(be, "best_pr_auc", "pr_auc")
+    f1 = _get_metric_value(be, "best_roc_auc", "f1")
+    acc = _get_metric_value(be, "best_roc_auc", "accuracy")
+
+    lines.append("")
+    lines.append(
+        f"Accuracy: {format_pct(acc)}  "
+        f"AUC: {format_pct(roc_auc)}  "
+        f"PR-AUC: {format_pct(pr_auc)}  "
+        f"F1: {format_pct(f1)}"
+    )
+
+    # Class imbalance summary
+    if ci.get("total_samples"):
+        lines.append(
+            f"Samples: {ci['total_samples']:,}  "
+            f"Imbalance: {ci.get('imbalance_ratio', 'N/A')}:1"
+        )
+
+    # Model stack summary
+    if es:
+        lines.append(
+            f"Foundation: {format_large_number(es.get('num_parameters'))} params, "
+            f"d_model={es.get('d_model', 'N/A')}"
+        )
+
+    lines.append("")
+    return "\n".join(lines)
 
 
-def render_detailed_text(model_card_json: Dict[str, Any]) -> str:
-    """Render detailed plain text model card."""
-    model_name = model_card_json.get('model_identification', {}).get('name', 'Model Card')
-    
+# ---------------------------------------------------------------------------
+# Detailed renderer
+# ---------------------------------------------------------------------------
+
+
+def render_detailed_text(data: Dict[str, Any]) -> str:
+    """Render a full detailed text model card."""
+    sections = [
+        _render_model_identification(data),
+        _render_model_stack(data),
+        _render_best_epochs(data),
+        _render_training_optimization(data),
+        _render_training_dataset(data),
+    ]
+    return "\n".join(s for s in sections if s)
+
+
+def _render_model_identification(data: dict) -> str:
+    mi = data.get("model_identification", {})
+    du = data.get("disk_usage", {})
+    es = data.get("embedding_space", {})
+    be = data.get("best_epochs", {})
+    ci = data.get("class_imbalance", {})
+
+    model_name = mi.get("name", "Model Card")
+    model_type = _map_model_type(mi)
+    status = (mi.get("status") or "N/A").upper()
+    if status == "DONE":
+        status = "READY"
+
+    session_id, job_id = _parse_model_path(du.get("best_model_path"))
+    model_id = session_id or (mi.get("session_id", "N/A")[:20] if mi.get("session_id") else "N/A")
+
+    framework = mi.get("framework", "N/A")
+    framework = re.sub(r"\s+unknown$", "", framework, flags=re.IGNORECASE).strip() or "N/A"
+
+    # Best metrics
+    roc_auc = _get_metric_value(be, "best_roc_auc", "auc")
+    pr_auc = _get_metric_value(be, "best_pr_auc", "pr_auc")
+
+    # PR-AUC lift
+    prevalence = None
+    if ci.get("minority_class_count") and ci.get("total_samples"):
+        prevalence = ci["minority_class_count"] / ci["total_samples"]
+    pr_auc_lift = (pr_auc / prevalence) if (pr_auc and prevalence) else None
+
     lines = [
         f"MODEL CARD: {model_name}",
         "=" * 80,
         "",
-        render_detailed_model_identification(model_card_json),
-        render_detailed_training_dataset(model_card_json),
-        render_detailed_training_metrics(model_card_json),
-        render_detailed_model_quality(model_card_json),
+        "MODEL IDENTIFICATION",
+        "-" * 60,
+        f"  Target Column:  {mi.get('target_column', 'N/A')}",
+        f"  Model Type:     {model_type}",
+        f"  Best ROC-AUC:   {format_pct(roc_auc)}",
+        f"  Best PR-AUC:    {format_pct(pr_auc)}"
+        + (f"  [{pr_auc_lift:.1f}x lift]" if pr_auc_lift else ""),
+        "",
+        f"  Status:         {status}",
+        f"  Training Date:  {mi.get('training_date', 'N/A')}",
+        f"  Model ID:       {model_id}",
+        f"  Cluster:        {(mi.get('compute_cluster') or 'N/A').upper()}",
+        f"  Dims:           {es.get('d_model', 'N/A')}",
+        f"  Framework:      {framework}",
+        "",
     ]
-    
-    # Add training configuration
-    tc = model_card_json.get('training_configuration', {})
-    if tc:
-        lines.extend([
-            "=" * 60,
-            "TRAINING CONFIGURATION",
-            "=" * 60,
-            f"Total Epochs:    {tc.get('epochs_total', 'N/A')}",
-            f"Best Epoch:      {tc.get('best_epoch', 'N/A')}",
-            f"d_model:         {tc.get('d_model', 'N/A')}",
-            f"Batch Size:      {tc.get('batch_size', 'N/A')}",
-            f"Learning Rate:  {format_value(tc.get('learning_rate'))}",
-            f"Optimizer:       {tc.get('optimizer', 'N/A')}",
-        ])
-        dropout = tc.get('dropout_schedule')
-        if dropout:
-            lines.extend([
-                "",
-                "Dropout Schedule:",
-                f"  Enabled: {dropout.get('enabled', False)}",
-                f"  Initial: {format_value(dropout.get('initial'))}",
-                f"  Final:   {format_value(dropout.get('final'))}",
-            ])
-        lines.append("")
-    
-    # Add feature inventory
-    features = model_card_json.get('feature_inventory', [])
-    if features:
-        lines.extend([
-            "=" * 60,
-            "FEATURE INVENTORY",
-            "=" * 60,
-        ])
-        for feat in features:
-            name = feat.get('name', 'N/A')
-            feat_type = feat.get('type', 'N/A')
-            encoder = feat.get('encoder_type', 'N/A')
-            unique_vals = feat.get('unique_values')
-            sample_vals = feat.get('sample_values', [])
-            stats = feat.get('statistics')
-            
-            lines.extend([
-                f"Feature: {name}",
-                f"  Type:          {feat_type}",
-                f"  Encoder:       {encoder}",
-                f"  Unique Values: {unique_vals if unique_vals is not None else 'N/A'}",
-            ])
-            
-            if sample_vals:
-                lines.append(f"  Sample Values: {', '.join([str(v) for v in sample_vals[:5]])}")
-                if len(sample_vals) > 5:
-                    lines.append(f"                 (+{len(sample_vals) - 5} more)")
-            
-            if stats:
-                lines.extend([
-                    "  Statistics:",
-                    f"    Min:    {format_value(stats.get('min'))}",
-                    f"    Max:    {format_value(stats.get('max'))}",
-                    f"    Mean:   {format_value(stats.get('mean'))}",
-                    f"    Std:    {format_value(stats.get('std'))}",
-                    f"    Median: {format_value(stats.get('median'))}",
-                ])
+    return "\n".join(lines)
+
+
+def _render_model_stack(data: dict) -> str:
+    es = data.get("embedding_space")
+    if not es:
+        return ""
+
+    sp = data.get("single_predictor") or data.get("predictor") or {}
+    ma = data.get("model_architecture") or {}
+    ms = (data.get("model_stack") or [{}])[0] if data.get("model_stack") else {}
+    ci = data.get("class_imbalance") or {}
+
+    sp_rows = ci.get("total_samples") or ms.get("rows") or sp.get("num_rows", 0)
+    sp_layers = ms.get("layers") or ma.get("predictor_layers") or sp.get("num_layers", 0)
+    sp_params = ms.get("parameters") or ma.get("predictor_parameters") or sp.get("num_parameters", 0)
+
+    lines = [
+        "MODEL STACK",
+        "-" * 60,
+        f"  {'':18s} {'Labeled':>8s} {'Rows':>10s} {'Layers':>10s} {'Parameters':>12s}",
+        f"  {'Predictor':18s} {'Yes':>8s} {sp_rows:>10,} {format_large_number(sp_layers):>10s} {format_large_number(sp_params):>12s}",
+        f"  {'Foundation':18s} {'No':>8s} {es.get('num_rows', 0):>10,} {format_large_number(es.get('num_layers')):>10s} {format_large_number(es.get('num_parameters')):>12s}",
+        "",
+    ]
+    return "\n".join(lines)
+
+
+def _render_best_epochs(data: dict) -> str:
+    be = data.get("best_epochs")
+    if not be:
+        return ""
+
+    lines = [
+        "MODEL DETAILS",
+        "-" * 60,
+    ]
+
+    for label, key in [("Best ROC-AUC", "best_roc_auc"), ("Best PR-AUC", "best_pr_auc")]:
+        epoch_data = be.get(key)
+        if not epoch_data:
+            continue
+
+        cdm = epoch_data.get("classification_display_metadata") or {}
+        epoch_num = epoch_data.get("epoch") or cdm.get("epoch", "N/A")
+        metrics = cdm.get("classification_metrics") or {}
+
+        lines.append(f"\n  {label} -- Epoch {epoch_num}")
+        lines.append(f"  {'~' * 40}")
+
+        # Metrics table (top 4)
+        for mkey in ["accuracy", "auc", "pr_auc", "f1"]:
+            m = metrics.get(mkey)
+            if not m:
+                continue
+            val = format_pct(m.get("value"))
+            lines.append(f"    {mkey.upper().replace('_', ' '):12s} {val}")
+
+        # Confusion matrix
+        cm = cdm.get("confusion_matrix")
+        if cm:
+            tp, fn, fp, tn = cm.get("tp", 0), cm.get("fn", 0), cm.get("fp", 0), cm.get("tn", 0)
+            total_pos = tp + fn
+            total_neg = tn + fp
+
             lines.append("")
-    
-    # Add model architecture
-    ma = model_card_json.get('model_architecture', {})
-    if ma:
-        lines.extend([
-            "=" * 60,
-            "MODEL ARCHITECTURE",
-            "=" * 60,
-        ])
-        if ma.get('predictor_layers') is not None:
-            lines.append(f"Predictor Layers: {ma.get('predictor_layers')}")
-        if ma.get('predictor_parameters') is not None:
-            lines.append(f"Predictor Parameters: {ma.get('predictor_parameters'):,}")
-        if ma.get('embedding_space_d_model') is not None:
-            lines.append(f"Embedding Space d_model: {ma.get('embedding_space_d_model')}")
+            lines.append("    Confusion Matrix:")
+            lines.append(f"                  Pred Pos   Pred Neg")
+            lines.append(f"      Actual Pos    {tp:>5d}      {fn:>5d}")
+            lines.append(f"      Actual Neg    {fp:>5d}      {tn:>5d}")
+
+            # Derived metrics
+            hit_rate = tp / total_pos if total_pos > 0 else 0
+            miss_rate = fn / total_pos if total_pos > 0 else 0
+            specificity = tn / total_neg if total_neg > 0 else 0
+            fpr = fp / total_neg if total_neg > 0 else 0
+            precision = tp / (tp + fp) if (tp + fp) > 0 else 0
+
+            lines.append("")
+            lines.append(f"    Hit Rate (Recall):  {hit_rate * 100:.1f}%   TP/(TP+FN)")
+            lines.append(f"    Miss Rate:          {miss_rate * 100:.1f}%   FN/(TP+FN)")
+            lines.append(f"    Specificity (TNR):  {specificity * 100:.1f}%   TN/(TN+FP)")
+            lines.append(f"    False Alarm (FPR):  {fpr * 100:.1f}%   FP/(TN+FP)")
+            lines.append(f"    Precision (PPV):    {precision * 100:.1f}%   TP/(TP+FP)")
+
         lines.append("")
-    
-    # Add technical details
-    td = model_card_json.get('technical_details', {})
-    if td:
-        lines.extend([
-            "=" * 60,
-            "TECHNICAL DETAILS",
-            "=" * 60,
-            f"PyTorch Version: {td.get('pytorch_version', 'N/A')}",
-            f"Device:          {td.get('device', 'N/A')}",
-            f"Precision:       {td.get('precision', 'N/A')}",
-            f"Loss Function:   {td.get('loss_function', 'N/A')}",
-        ])
-        if td.get('normalization'):
-            lines.append(f"Normalization:   {td.get('normalization')}")
-        lines.append("")
-    
-    # Add provenance
-    prov = model_card_json.get('provenance', {})
-    if prov:
-        lines.extend([
-            "=" * 60,
-            "PROVENANCE",
-            "=" * 60,
-            f"Created At: {prov.get('created_at', 'N/A')}",
-        ])
-        if prov.get('training_duration_minutes') is not None:
-            duration = prov.get('training_duration_minutes')
-            hours = int(duration // 60)
-            minutes = int(duration % 60)
-            lines.append(f"Training Duration: {hours}h {minutes}m ({duration:.2f} minutes)")
-        version_info = prov.get('version_info')
-        if version_info:
-            lines.append(f"Version Info: {json.dumps(version_info, indent=2)}")
-        lines.append("")
-    
-    # Add column statistics (Embedding Space only)
-    cs = model_card_json.get('column_statistics', {})
-    if cs:
-        lines.extend([
-            "=" * 60,
-            "COLUMN STATISTICS",
-            "=" * 60,
-        ])
-        for col_name, stats in cs.items():
-            lines.extend([
-                f"Column: {col_name}",
-                f"  Mutual Information (bits): {format_value(stats.get('mutual_information_bits'))}",
-                f"  Marginal Loss:            {format_value(stats.get('marginal_loss'))}",
-                "",
-            ])
-    
-    return '\n'.join(lines)
+
+    return "\n".join(lines)
 
 
-def render_to_file(model_card_json: Dict[str, Any], output_path: str, detailed: bool = True) -> str:
-    """Render model card JSON to text file."""
-    if detailed:
-        text = render_detailed_text(model_card_json)
+def _render_training_optimization(data: dict) -> str:
+    to = data.get("training_optimization")
+    if not to:
+        return ""
+
+    lines = [
+        "TRAINING OPTIMIZATION",
+        "-" * 60,
+    ]
+
+    if to.get("optimization_description"):
+        lines.append(f"  Strategy: {to['optimization_description']}")
+        lines.append("")
+
+    lines.append(f"  Loss Function:         {to.get('loss_function', 'N/A')}")
+    lines.append(f"  Optimization Priority: {(to.get('optimization_priority') or 'N/A').capitalize()}")
+
+    checkpoint = to.get("checkpoint_metric", "")
+    if checkpoint and checkpoint.lower() != "none":
+        lines.append(f"  Checkpoint Metric:     {checkpoint.upper().replace('_', '-')}")
     else:
-        text = render_brief_text(model_card_json)
-    
-    with open(output_path, 'w', encoding='utf-8') as f:
+        lines.append(f"  Checkpoint Metric:     Default")
+
+    if to.get("focal_gamma") is not None or to.get("focal_alpha") is not None:
+        lines.append(f"  Focal Loss:            gamma={to.get('focal_gamma', 'N/A')}, alpha={to.get('focal_alpha', 'N/A')}")
+
+    if to.get("class_weights"):
+        lines.append(f"  Class Weights:         [{', '.join(str(w) for w in to['class_weights'])}]")
+
+    cs = to.get("cost_sensitive")
+    if cs:
+        lines.append(f"  Cost-Sensitive:        FP={cs.get('cost_false_positive', 1.0)}, FN={cs.get('cost_false_negative', 1.0)}")
+
+    if to.get("adaptive_loss") is not None:
+        adj = f" ({to['gamma_adjustments']} adjustments)" if to.get("gamma_adjustments") else ""
+        lines.append(f"  Adaptive Loss:         {'Yes' if to['adaptive_loss'] else 'No'}{adj}")
+
+    if to.get("checkpoint_value") is not None:
+        lines.append(f"  Best Checkpoint:       {to['checkpoint_value'] * 100:.2f}% at epoch {to.get('checkpoint_epoch', 'N/A')}")
+
+    if to.get("positive_class") is not None:
+        lines.append(f"  Positive Class:        \"{to['positive_class']}\"")
+
+    lines.append("")
+    return "\n".join(lines)
+
+
+def _render_training_dataset(data: dict) -> str:
+    ci = data.get("class_imbalance") or {}
+    td = data.get("training_dataset") or {}
+
+    if not ci and not td:
+        return ""
+
+    lines = [
+        "TRAINING DATASET",
+        "-" * 60,
+    ]
+
+    if ci.get("train_distribution") or ci.get("class_distribution"):
+        train0 = (ci.get("train_distribution") or {}).get("0", 0)
+        train1 = (ci.get("train_distribution") or {}).get("1", 0)
+        val0 = (ci.get("val_distribution") or {}).get("0", 0)
+        val1 = (ci.get("val_distribution") or {}).get("1", 0)
+        total_train = train0 + train1
+        total_val = val0 + val1
+        total = ci.get("total_samples") or td.get("train_rows") or (total_train + total_val)
+
+        minority = ci.get("minority_class", "1")
+        majority = ci.get("majority_class", "0")
+
+        lines.append(f"  {'':12s} Class \"{minority}\"  Class \"{majority}\"  Total")
+        lines.append(f"  {'Train':12s} {train1:>10,}  {train0:>12,}  {total_train:>8,}")
+        lines.append(f"  {'Validation':12s} {val1:>10,}  {val0:>12,}  {total_val:>8,}")
+        lines.append(f"  {'Total':12s} {ci.get('minority_class_count', train1 + val1):>10,}  {ci.get('majority_class_count', train0 + val0):>12,}  {total:>8,}")
+        lines.append("")
+
+        if ci.get("imbalance_ratio"):
+            minority_pct = (ci.get("minority_class_count", 0) / total * 100) if total else 0
+            lines.append(f"  Imbalance ratio: {ci['imbalance_ratio']}:1 (minority is {minority_pct:.1f}% of data)")
+    elif td.get("train_rows"):
+        lines.append(f"  Training rows: {td['train_rows']:,}")
+
+    lines.append("")
+    return "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+
+def _get_metric_value(best_epochs: dict, epoch_key: str, metric_key: str):
+    """Extract a metric value from best_epochs nested structure."""
+    epoch = best_epochs.get(epoch_key) or {}
+    cdm = epoch.get("classification_display_metadata") or {}
+    metrics = cdm.get("classification_metrics") or {}
+    m = metrics.get(metric_key) or {}
+    return m.get("value")
+
+
+def render_to_file(
+    model_card_json: Dict[str, Any],
+    output_path: str,
+    detailed: bool = True,
+) -> str:
+    """Render model card JSON to text file."""
+    text = render_detailed_text(model_card_json) if detailed else render_brief_text(model_card_json)
+    with open(output_path, "w", encoding="utf-8") as f:
         f.write(text)
     return output_path
-

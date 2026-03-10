@@ -1,6 +1,11 @@
 # Featrix Model Card - Python Package
 
-Python package for rendering Featrix Sphere Model Card JSON to HTML or plain text.
+Python package for rendering Featrix Model Card JSON to HTML or plain text.
+
+**HTML rendering** delegates to the canonical JavaScript renderer loaded from CDN,
+ensuring the Python output always matches the JS version.
+
+**Text rendering** is a standalone Python implementation for terminal/log output.
 
 ## Installation
 
@@ -12,112 +17,74 @@ pip install featrix-modelcard
 
 ### HTML Renderer
 
-#### Render to File
+The HTML renderer generates a standalone page that loads `model-card.js` from the
+Featrix CDN. The JavaScript renderer handles all layout, styling, and interactivity.
 
 ```python
-from featrix_modelcard import render_html_to_file
-import json
+from featrix_modelcard import render_html, render_html_to_file
 
 # Load model card JSON
+import json
 with open('model_card.json', 'r') as f:
     model_card = json.load(f)
 
-# Generate HTML file
+# Render to file
 render_html_to_file(model_card, 'output.html')
-```
 
-#### Render to String
+# Render to string
+html = render_html(model_card)
 
-```python
-from featrix_modelcard import render_html
+# With 3D sphere visualization
+html = render_html(model_card, show_sphere=True)
 
-# Get HTML as a string
-html_string = render_html(model_card)
+# With explicit session ID for sphere
+html = render_html(model_card, show_sphere=True, session_id='my-session-id')
 
-# Print HTML to stdout
-print(html_string)
-
-# Or use the convenience function
-from featrix_modelcard import print_html
-print_html(model_card)
+# Override CDN URL (e.g. for local development)
+html = render_html(model_card, cdn_url='http://localhost:8080/model-card.js')
 ```
 
 ### Text Renderer
 
-#### Render to File
-
 ```python
-from featrix_modelcard import render_text_to_file
+from featrix_modelcard import render_brief_text, render_detailed_text, print_text
 
-# Detailed text output
-render_text_to_file(model_card, 'output_detailed.txt', detailed=True)
-
-# Brief text output
-render_text_to_file(model_card, 'output_brief.txt', detailed=False)
-```
-
-#### Render to String
-
-```python
-from featrix_modelcard import render_brief_text, render_detailed_text
-
-# Get text as strings
-brief = render_brief_text(model_card)
-detailed = render_detailed_text(model_card)
-
-# Print to stdout
-print(brief)
-print(detailed)
-
-# Or use the convenience function
-from featrix_modelcard import print_text
-print_text(model_card, detailed=True)   # Detailed version
-print_text(model_card, detailed=False)  # Brief version
-```
-
-### Complete Example
-
-```python
-import json
-from featrix_modelcard import render_html, render_detailed_text, print_text
-
-# Load model card JSON
-with open('model_card.json', 'r') as f:
-    model_card = json.load(f)
-
-# Print brief summary to console
+# Brief summary
 print_text(model_card, detailed=False)
 
-# Get HTML string for embedding in web page
-html = render_html(model_card)
+# Detailed output
+print_text(model_card, detailed=True)
 
-# Get detailed text for documentation
-detailed_text = render_detailed_text(model_card)
+# Get as strings
+brief = render_brief_text(model_card)
+detailed = render_detailed_text(model_card)
 ```
 
 ## API Reference
 
 ### HTML Functions
 
-- `render_html(model_card_json)` → `str`: Returns HTML string
-- `render_html_to_file(model_card_json, output_path)` → `str`: Saves HTML to file, returns path
-- `print_html(model_card_json, file=None)` → `str`: Prints HTML to stdout or file, returns HTML string
+- `render_html(model_card_json, *, show_sphere=False, session_id=None, cdn_url=None)` -> `str`
+- `render_html_to_file(model_card_json, output_path, *, show_sphere=False, session_id=None, cdn_url=None)` -> `str`
+- `print_html(model_card_json, file=None, **kwargs)` -> `str`
 
 ### Text Functions
 
-- `render_brief_text(model_card_json)` → `str`: Returns brief text string
-- `render_detailed_text(model_card_json)` → `str`: Returns detailed text string
-- `render_text_to_file(model_card_json, output_path, detailed=True)` → `str`: Saves text to file, returns path
-- `print_text(model_card_json, detailed=True, file=None)` → `str`: Prints text to stdout or file, returns text string
+- `render_brief_text(model_card_json)` -> `str`
+- `render_detailed_text(model_card_json)` -> `str`
+- `render_text_to_file(model_card_json, output_path, detailed=True)` -> `str`
+- `print_text(model_card_json, detailed=True, file=None)` -> `str`
 
-## Features
+## Architecture
 
-- **HTML Renderer**: Static HTML with collapsible sections, expand all functionality, and print-friendly CSS
-- **Text Renderer**: Plain text output in both brief and detailed formats
-- **String Output**: All render functions return strings that can be printed, saved, or embedded
-- No external dependencies (uses Python standard library only)
+The HTML renderer is a thin wrapper that embeds your model card JSON into a page
+that loads the canonical `FeatrixModelCard` JavaScript renderer from the CDN.
+This means:
 
-## Model Card JSON Format
+- Python HTML output is always in sync with the JS version
+- No rendering logic to maintain in Python
+- All styling, interactivity, and features come from the JS renderer
+- Zero external Python dependencies
 
-Expects Featrix Sphere Model Card JSON format. See the specification for details.
-
+The text renderer is a standalone Python implementation for use in terminals,
+logs, and non-browser contexts.

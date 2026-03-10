@@ -1,0 +1,575 @@
+{
+  "model_identification": {
+    "session_id": null,
+    "job_id": null,
+    "name": null,
+    "compute_cluster": "BURRITO",
+    "training_date": "2026-01-19",
+    "status": "DONE",
+    "model_type": "Embedding Space",
+    "framework": "FeatrixSphere unknown"
+  },
+  "training_dataset": {
+    "total_rows": 1000,
+    "train_rows": 800,
+    "val_rows": 200,
+    "total_features": 20,
+    "feature_names": [
+      "checking_status",
+      "duration",
+      "credit_history",
+      "purpose",
+      "credit_amount",
+      "savings_status",
+      "employment",
+      "installment_commitment",
+      "personal_status",
+      "other_parties",
+      "residence_since",
+      "property_magnitude",
+      "age",
+      "other_payment_plans",
+      "housing",
+      "existing_credits",
+      "job",
+      "num_dependents",
+      "own_telephone",
+      "foreign_worker"
+    ]
+  },
+  "feature_inventory": [
+    {
+      "name": "checking_status",
+      "type": "ColumnType.SET",
+      "encoder_type": "SetCodec",
+      "column_importance": {
+        "weight": 1.0,
+        "reason": "included_in_training",
+        "description": "Column is included in model training with normal importance weighting"
+      },
+      "unique_values": 5,
+      "sample_values": [
+        "0<=X<200",
+        "<0",
+        "no checking",
+        ">=200",
+        "<UNKNOWN>"
+      ]
+    },
+    {
+      "name": "duration",
+      "type": "ColumnType.SCALAR",
+      "encoder_type": "ScalarCodec",
+      "column_importance": {
+        "weight": 1.0,
+        "reason": "included_in_training",
+        "description": "Column is included in model training with normal importance weighting"
+      },
+      "statistics": {
+        "mean": 21.095,
+        "std": 11.807211262497447,
+        "median": 18.0,
+        "q10": 9.0,
+        "q90": 36.0,
+        "q25": 12.0,
+        "q75": 24.0,
+        "min": 4.0,
+        "max": 60.0
+      }
+    },
+    {
+      "name": "credit_history",
+      "type": "ColumnType.SET",
+      "encoder_type": "SetCodec",
+      "column_importance": {
+        "weight": 1.0,
+        "reason": "included_in_training",
+        "description": "Column is included in model training with normal importance weighting"
+      },
+      "unique_values": 6,
+      "sample_values": [
+        "delayed previously",
+        "all paid",
+        "critical/other existing credit",
+        "existing paid",
+        "no credits/all paid"
+      ]
+    },
+    {
+      "name": "purpose",
+      "type": "ColumnType.FREE_STRING",
+      "encoder_type": "StringCodec",
+      "column_importance": {
+        "weight": 1.0,
+        "reason": "included_in_training",
+        "description": "Column is included in model training with normal importance weighting"
+      }
+    },
+    {
+      "name": "credit_amount",
+      "type": "ColumnType.SCALAR",
+      "encoder_type": "ScalarCodec",
+      "column_importance": {
+        "weight": 1.0,
+        "reason": "included_in_training",
+        "description": "Column is included in model training with normal importance weighting"
+      },
+      "statistics": {
+        "mean": 3360.61875,
+        "std": 2898.174862791682,
+        "median": 2333.0,
+        "q10": 982.3000000000001,
+        "q90": 7419.400000000001,
+        "q25": 1380.0,
+        "q75": 4154.5,
+        "min": 250.0,
+        "max": 18424.0
+      }
+    },
+    {
+      "name": "savings_status",
+      "type": "ColumnType.SET",
+      "encoder_type": "SetCodec",
+      "column_importance": {
+        "weight": 1.0,
+        "reason": "included_in_training",
+        "description": "Column is included in model training with normal importance weighting"
+      },
+      "unique_values": 6,
+      "sample_values": [
+        "500<=X<1000",
+        "100<=X<500",
+        "<100",
+        "no known savings",
+        ">=1000"
+      ]
+    },
+    {
+      "name": "employment",
+      "type": "ColumnType.SET",
+      "encoder_type": "SetCodec",
+      "column_importance": {
+        "weight": 1.0,
+        "reason": "included_in_training",
+        "description": "Column is included in model training with normal importance weighting"
+      },
+      "unique_values": 6,
+      "sample_values": [
+        "<1",
+        "1<=X<4",
+        "4<=X<7",
+        ">=7",
+        "<UNKNOWN>"
+      ]
+    },
+    {
+      "name": "installment_commitment",
+      "type": "ColumnType.SET",
+      "encoder_type": "SetCodec",
+      "column_importance": {
+        "weight": 1.0,
+        "reason": "included_in_training",
+        "description": "Column is included in model training with normal importance weighting"
+      },
+      "unique_values": 5,
+      "sample_values": [
+        "2",
+        "3",
+        "1",
+        "4",
+        "<UNKNOWN>"
+      ]
+    },
+    {
+      "name": "personal_status",
+      "type": "ColumnType.SET",
+      "encoder_type": "SetCodec",
+      "column_importance": {
+        "weight": 1.0,
+        "reason": "included_in_training",
+        "description": "Column is included in model training with normal importance weighting"
+      },
+      "unique_values": 5,
+      "sample_values": [
+        "male mar/wid",
+        "male single",
+        "male div/sep",
+        "female div/dep/mar",
+        "<UNKNOWN>"
+      ]
+    },
+    {
+      "name": "other_parties",
+      "type": "ColumnType.SET",
+      "encoder_type": "SetCodec",
+      "column_importance": {
+        "weight": 1.0,
+        "reason": "included_in_training",
+        "description": "Column is included in model training with normal importance weighting"
+      },
+      "unique_values": 4,
+      "sample_values": [
+        "none",
+        "<UNKNOWN>",
+        "co applicant",
+        "guarantor"
+      ]
+    },
+    {
+      "name": "residence_since",
+      "type": "ColumnType.SET",
+      "encoder_type": "SetCodec",
+      "column_importance": {
+        "weight": 1.0,
+        "reason": "included_in_training",
+        "description": "Column is included in model training with normal importance weighting"
+      },
+      "unique_values": 5,
+      "sample_values": [
+        "2",
+        "3",
+        "1",
+        "4",
+        "<UNKNOWN>"
+      ]
+    },
+    {
+      "name": "property_magnitude",
+      "type": "ColumnType.SET",
+      "encoder_type": "SetCodec",
+      "column_importance": {
+        "weight": 1.0,
+        "reason": "included_in_training",
+        "description": "Column is included in model training with normal importance weighting"
+      },
+      "unique_values": 5,
+      "sample_values": [
+        "no known property",
+        "life insurance",
+        "real estate",
+        "<UNKNOWN>",
+        "car"
+      ]
+    },
+    {
+      "name": "age",
+      "type": "ColumnType.SCALAR",
+      "encoder_type": "ScalarCodec",
+      "column_importance": {
+        "weight": 1.0,
+        "reason": "included_in_training",
+        "description": "Column is included in model training with normal importance weighting"
+      },
+      "statistics": {
+        "mean": 35.55875,
+        "std": 11.411587481527743,
+        "median": 33.0,
+        "q10": 23.0,
+        "q90": 52.0,
+        "q25": 27.0,
+        "q75": 42.0,
+        "min": 19.0,
+        "max": 75.0
+      }
+    },
+    {
+      "name": "other_payment_plans",
+      "type": "ColumnType.SET",
+      "encoder_type": "SetCodec",
+      "column_importance": {
+        "weight": 1.0,
+        "reason": "included_in_training",
+        "description": "Column is included in model training with normal importance weighting"
+      },
+      "unique_values": 4,
+      "sample_values": [
+        "none",
+        "<UNKNOWN>",
+        "bank",
+        "stores"
+      ]
+    },
+    {
+      "name": "housing",
+      "type": "ColumnType.SET",
+      "encoder_type": "SetCodec",
+      "column_importance": {
+        "weight": 1.0,
+        "reason": "included_in_training",
+        "description": "Column is included in model training with normal importance weighting"
+      },
+      "unique_values": 4,
+      "sample_values": [
+        "<UNKNOWN>",
+        "for free",
+        "rent",
+        "own"
+      ]
+    },
+    {
+      "name": "existing_credits",
+      "type": "ColumnType.SET",
+      "encoder_type": "SetCodec",
+      "column_importance": {
+        "weight": 1.0,
+        "reason": "included_in_training",
+        "description": "Column is included in model training with normal importance weighting"
+      },
+      "unique_values": 5,
+      "sample_values": [
+        "2",
+        "3",
+        "1",
+        "4",
+        "<UNKNOWN>"
+      ]
+    },
+    {
+      "name": "job",
+      "type": "ColumnType.SET",
+      "encoder_type": "SetCodec",
+      "column_importance": {
+        "weight": 1.0,
+        "reason": "included_in_training",
+        "description": "Column is included in model training with normal importance weighting"
+      },
+      "unique_values": 5,
+      "sample_values": [
+        "high qualif/self emp/mgmt",
+        "<UNKNOWN>",
+        "skilled",
+        "unemp/unskilled non res",
+        "unskilled resident"
+      ]
+    },
+    {
+      "name": "num_dependents",
+      "type": "ColumnType.SET",
+      "encoder_type": "SetCodec",
+      "column_importance": {
+        "weight": 1.0,
+        "reason": "included_in_training",
+        "description": "Column is included in model training with normal importance weighting"
+      },
+      "unique_values": 3,
+      "sample_values": [
+        "<UNKNOWN>",
+        "2",
+        "1"
+      ]
+    },
+    {
+      "name": "own_telephone",
+      "type": "ColumnType.SET",
+      "encoder_type": "SetCodec",
+      "column_importance": {
+        "weight": 1.0,
+        "reason": "included_in_training",
+        "description": "Column is included in model training with normal importance weighting"
+      },
+      "unique_values": 3,
+      "sample_values": [
+        "none",
+        "<UNKNOWN>",
+        "yes"
+      ]
+    },
+    {
+      "name": "foreign_worker",
+      "type": "ColumnType.SET",
+      "encoder_type": "SetCodec",
+      "column_importance": {
+        "weight": 1.0,
+        "reason": "included_in_training",
+        "description": "Column is included in model training with normal importance weighting"
+      },
+      "unique_values": 3,
+      "sample_values": [
+        "<UNKNOWN>",
+        "no",
+        "yes"
+      ]
+    }
+  ],
+  "training_configuration": {
+    "epochs_total": 0,
+    "best_epoch": 7,
+    "d_model": 128,
+    "batch_size": null,
+    "learning_rate": null,
+    "optimizer": "Adam",
+    "dropout_schedule": {
+      "enabled": true,
+      "initial": 0.5,
+      "final": 0.25
+    }
+  },
+  "training_metrics": {
+    "best_epoch": {
+      "epoch": 7,
+      "train_loss": null,
+      "val_loss": null,
+      "spread_loss": 20.711544036865234,
+      "joint_loss": 18.87942886352539,
+      "marginal_loss": 428.0167541503906
+    },
+    "final_epoch": {
+      "epoch": 24,
+      "train_loss": null,
+      "val_loss": null
+    },
+    "loss_progression": {
+      "initial_train": null,
+      "initial_val": null,
+      "improvement_pct": null
+    }
+  },
+  "column_statistics": {
+    "checking_status": {
+      "predictability_pct": 0.1860703839482789,
+      "mutual_information_bits": 0.1860703839482789,
+      "marginal_loss": null
+    },
+    "duration": {
+      "predictability_pct": 0.07533301060903876,
+      "mutual_information_bits": 0.07533301060903876,
+      "marginal_loss": null
+    },
+    "credit_history": {
+      "predictability_pct": 0.4347010257413295,
+      "mutual_information_bits": 0.4347010257413295,
+      "marginal_loss": null
+    },
+    "purpose": {
+      "predictability_pct": 0.10867152171486051,
+      "mutual_information_bits": 0.10867152171486051,
+      "marginal_loss": null
+    },
+    "credit_amount": {
+      "predictability_pct": 0.24616387813338012,
+      "mutual_information_bits": 0.24616387813338012,
+      "marginal_loss": null
+    },
+    "savings_status": {
+      "predictability_pct": 0.17678031314532663,
+      "mutual_information_bits": 0.17678031314532663,
+      "marginal_loss": null
+    },
+    "employment": {
+      "predictability_pct": 0.2657555749342517,
+      "mutual_information_bits": 0.2657555749342517,
+      "marginal_loss": null
+    },
+    "installment_commitment": {
+      "predictability_pct": 0.17106649226470527,
+      "mutual_information_bits": 0.17106649226470527,
+      "marginal_loss": null
+    },
+    "personal_status": {
+      "predictability_pct": 0.24718304039939326,
+      "mutual_information_bits": 0.24718304039939326,
+      "marginal_loss": null
+    },
+    "other_parties": {
+      "predictability_pct": 0.3949806494362141,
+      "mutual_information_bits": 0.3949806494362141,
+      "marginal_loss": null
+    },
+    "residence_since": {
+      "predictability_pct": 0.23124792042806994,
+      "mutual_information_bits": 0.23124792042806994,
+      "marginal_loss": null
+    },
+    "property_magnitude": {
+      "predictability_pct": 0.10337343678807587,
+      "mutual_information_bits": 0.10337343678807587,
+      "marginal_loss": null
+    },
+    "age": {
+      "predictability_pct": 0.16901916748992307,
+      "mutual_information_bits": 0.16901916748992307,
+      "marginal_loss": null
+    },
+    "other_payment_plans": {
+      "predictability_pct": 0.13504608173439875,
+      "mutual_information_bits": 0.13504608173439875,
+      "marginal_loss": null
+    },
+    "housing": {
+      "predictability_pct": 0.21157082895565785,
+      "mutual_information_bits": 0.21157082895565785,
+      "marginal_loss": null
+    },
+    "existing_credits": {
+      "predictability_pct": 0.1758973149843885,
+      "mutual_information_bits": 0.1758973149843885,
+      "marginal_loss": null
+    },
+    "job": {
+      "predictability_pct": 0.1681016180709863,
+      "mutual_information_bits": 0.1681016180709863,
+      "marginal_loss": null
+    },
+    "num_dependents": {
+      "predictability_pct": 0.2764918338795154,
+      "mutual_information_bits": 0.2764918338795154,
+      "marginal_loss": null
+    },
+    "own_telephone": {
+      "predictability_pct": 0.1794408312035336,
+      "mutual_information_bits": 0.1794408312035336,
+      "marginal_loss": null
+    },
+    "foreign_worker": {
+      "predictability_pct": 0.08015104256230497,
+      "mutual_information_bits": 0.08015104256230497,
+      "marginal_loss": null
+    }
+  },
+  "model_architecture": {
+    "attention_heads": 16,
+    "transformer_layers": 5,
+    "d_model": 128,
+    "dim_feedforward_factor": 4,
+    "loss_function": "Composite: Marginal (per-column) + Joint (transformer) + Spread (distance)",
+    "loss_weights": {
+      "marginal": 0.2,
+      "joint": 1.0,
+      "spread": 1.0
+    },
+    "curriculum_learning": true
+  },
+  "model_quality": {
+    "assessment": "UNKNOWN",
+    "recommendations": [],
+    "warnings": [],
+    "quality_checks": {
+      "column_sensitivity": {
+        "epoch": 12,
+        "grade": "C",
+        "timestamp": "2026-01-19T00:23:37.459796",
+        "metadata": {
+          "total_columns": 17,
+          "good_columns": 9,
+          "marginal_columns": 3,
+          "poor_columns": 5,
+          "good_percentage": 52.94117647058824,
+          "numeric_good": 0,
+          "categorical_good": 9
+        }
+      }
+    }
+  },
+  "technical_details": {
+    "pytorch_version": "2.9.0+cu128",
+    "device": "GPU",
+    "precision": "float32",
+    "normalization": "unit_sphere",
+    "loss_function": "InfoNCE (contrastive)"
+  },
+  "provenance": {
+    "created_at": "2026-01-19T00:26:38.262483",
+    "training_duration_minutes": 0,
+    "version_info": {}
+  }
+}

@@ -1,0 +1,403 @@
+{
+  "model_identification": {
+    "session_id": null,
+    "job_id": null,
+    "name": null,
+    "compute_cluster": "BURRITO",
+    "training_date": "2026-01-18",
+    "status": "DONE",
+    "model_type": "Embedding Space",
+    "framework": "FeatrixSphere unknown"
+  },
+  "training_dataset": {
+    "total_rows": 8693,
+    "train_rows": 6954,
+    "val_rows": 1739,
+    "total_features": 13,
+    "feature_names": [
+      "PassengerId",
+      "HomePlanet",
+      "CryoSleep",
+      "Cabin",
+      "Destination",
+      "Age",
+      "VIP",
+      "RoomService",
+      "FoodCourt",
+      "ShoppingMall",
+      "Spa",
+      "VRDeck",
+      "Name"
+    ]
+  },
+  "feature_inventory": [
+    {
+      "name": "PassengerId",
+      "type": "ColumnType.FREE_STRING",
+      "encoder_type": "StringCodec",
+      "column_importance": {
+        "weight": 1.0,
+        "reason": "included_in_training",
+        "description": "Column is included in model training with normal importance weighting"
+      }
+    },
+    {
+      "name": "HomePlanet",
+      "type": "ColumnType.SET",
+      "encoder_type": "SetCodec",
+      "column_importance": {
+        "weight": 1.0,
+        "reason": "included_in_training",
+        "description": "Column is included in model training with normal importance weighting"
+      },
+      "unique_values": 4,
+      "sample_values": [
+        "<UNKNOWN>",
+        "Europa",
+        "Mars",
+        "Earth"
+      ]
+    },
+    {
+      "name": "CryoSleep",
+      "type": "ColumnType.SET",
+      "encoder_type": "SetCodec",
+      "column_importance": {
+        "weight": 1.0,
+        "reason": "included_in_training",
+        "description": "Column is included in model training with normal importance weighting"
+      },
+      "unique_values": 3,
+      "sample_values": [
+        "True",
+        "<UNKNOWN>",
+        "False"
+      ]
+    },
+    {
+      "name": "Cabin",
+      "type": "ColumnType.FREE_STRING",
+      "encoder_type": "StringCodec",
+      "column_importance": {
+        "weight": 1.0,
+        "reason": "included_in_training",
+        "description": "Column is included in model training with normal importance weighting"
+      }
+    },
+    {
+      "name": "Destination",
+      "type": "ColumnType.SET",
+      "encoder_type": "SetCodec",
+      "column_importance": {
+        "weight": 1.0,
+        "reason": "included_in_training",
+        "description": "Column is included in model training with normal importance weighting"
+      },
+      "unique_values": 4,
+      "sample_values": [
+        "55 Cancri e",
+        "<UNKNOWN>",
+        "TRAPPIST-1e",
+        "PSO J318.5-22"
+      ]
+    },
+    {
+      "name": "Age",
+      "type": "ColumnType.SCALAR",
+      "encoder_type": "ScalarCodec",
+      "column_importance": {
+        "weight": 1.0,
+        "reason": "included_in_training",
+        "description": "Column is included in model training with normal importance weighting"
+      },
+      "statistics": {
+        "mean": 28.828092859241846,
+        "std": 14.446398780119104,
+        "median": 27.0,
+        "q10": 13.0,
+        "q90": 49.0,
+        "q25": 19.0,
+        "q75": 38.0,
+        "min": 0.0,
+        "max": 79.0
+      }
+    },
+    {
+      "name": "VIP",
+      "type": "ColumnType.SET",
+      "encoder_type": "SetCodec",
+      "column_importance": {
+        "weight": 1.0,
+        "reason": "included_in_training",
+        "description": "Column is included in model training with normal importance weighting"
+      },
+      "unique_values": 3,
+      "sample_values": [
+        "True",
+        "<UNKNOWN>",
+        "False"
+      ]
+    },
+    {
+      "name": "RoomService",
+      "type": "ColumnType.SCALAR",
+      "encoder_type": "ScalarCodec",
+      "column_importance": {
+        "weight": 1.0,
+        "reason": "included_in_training",
+        "description": "Column is included in model training with normal importance weighting"
+      },
+      "statistics": {
+        "mean": 222.82293497363796,
+        "std": 674.9004072298209,
+        "median": 0.0,
+        "q10": 0.0,
+        "q90": 737.0,
+        "q25": 0.0,
+        "q75": 46.0,
+        "min": 0.0,
+        "max": 14327.0
+      }
+    },
+    {
+      "name": "FoodCourt",
+      "type": "ColumnType.SCALAR",
+      "encoder_type": "ScalarCodec",
+      "column_importance": {
+        "weight": 1.0,
+        "reason": "included_in_training",
+        "description": "Column is included in model training with normal importance weighting"
+      },
+      "statistics": {
+        "mean": 456.7147050190784,
+        "std": 1574.7972205442609,
+        "median": 0.0,
+        "q10": 0.0,
+        "q90": 1038.7999999999975,
+        "q25": 0.0,
+        "q75": 84.75,
+        "min": 0.0,
+        "max": 27723.0
+      }
+    },
+    {
+      "name": "ShoppingMall",
+      "type": "ColumnType.SCALAR",
+      "encoder_type": "ScalarCodec",
+      "column_importance": {
+        "weight": 1.0,
+        "reason": "included_in_training",
+        "description": "Column is included in model training with normal importance weighting"
+      },
+      "statistics": {
+        "mean": 175.4990425688614,
+        "std": 613.9691584002189,
+        "median": 0.0,
+        "q10": 0.0,
+        "q90": 619.1999999999998,
+        "q25": 0.0,
+        "q75": 30.0,
+        "min": 0.0,
+        "max": 23492.0
+      }
+    },
+    {
+      "name": "Spa",
+      "type": "ColumnType.SCALAR",
+      "encoder_type": "ScalarCodec",
+      "column_importance": {
+        "weight": 1.0,
+        "reason": "included_in_training",
+        "description": "Column is included in model training with normal importance weighting"
+      },
+      "statistics": {
+        "mean": 315.69384164222873,
+        "std": 1118.0745409380838,
+        "median": 0.0,
+        "q10": 0.0,
+        "q90": 745.1000000000004,
+        "q25": 0.0,
+        "q75": 61.25,
+        "min": 0.0,
+        "max": 18572.0
+      }
+    },
+    {
+      "name": "VRDeck",
+      "type": "ColumnType.SCALAR",
+      "encoder_type": "ScalarCodec",
+      "column_importance": {
+        "weight": 1.0,
+        "reason": "included_in_training",
+        "description": "Column is included in model training with normal importance weighting"
+      },
+      "statistics": {
+        "mean": 304.189769219462,
+        "std": 1170.6393270308195,
+        "median": 0.0,
+        "q10": 0.0,
+        "q90": 719.8000000000002,
+        "q25": 0.0,
+        "q75": 49.5,
+        "min": 0.0,
+        "max": 24133.0
+      }
+    },
+    {
+      "name": "Name",
+      "type": "ColumnType.FREE_STRING",
+      "encoder_type": "StringCodec",
+      "column_importance": {
+        "weight": 1.0,
+        "reason": "included_in_training",
+        "description": "Column is included in model training with normal importance weighting"
+      }
+    }
+  ],
+  "training_configuration": {
+    "epochs_total": 0,
+    "best_epoch": 7,
+    "d_model": 128,
+    "batch_size": null,
+    "learning_rate": null,
+    "optimizer": "Adam",
+    "dropout_schedule": {
+      "enabled": true,
+      "initial": 0.5,
+      "final": 0.25
+    }
+  },
+  "training_metrics": {
+    "best_epoch": {
+      "epoch": 7,
+      "train_loss": null,
+      "val_loss": null,
+      "spread_loss": 19.01299985249837,
+      "joint_loss": 13.977927843729654,
+      "marginal_loss": 290.0724843343099
+    },
+    "final_epoch": {
+      "epoch": 24,
+      "train_loss": null,
+      "val_loss": null
+    },
+    "loss_progression": {
+      "initial_train": null,
+      "initial_val": null,
+      "improvement_pct": null
+    }
+  },
+  "column_statistics": {
+    "PassengerId": {
+      "predictability_pct": 0.038565748820986574,
+      "mutual_information_bits": 0.038565748820986574,
+      "marginal_loss": null
+    },
+    "HomePlanet": {
+      "predictability_pct": 10.519873734621232,
+      "mutual_information_bits": 10.519873734621232,
+      "marginal_loss": null
+    },
+    "CryoSleep": {
+      "predictability_pct": 9.792546886341645,
+      "mutual_information_bits": 9.792546886341645,
+      "marginal_loss": null
+    },
+    "Cabin": {
+      "predictability_pct": 2.214800167277016,
+      "mutual_information_bits": 2.214800167277016,
+      "marginal_loss": null
+    },
+    "Destination": {
+      "predictability_pct": 8.783853270841915,
+      "mutual_information_bits": 8.783853270841915,
+      "marginal_loss": null
+    },
+    "Age": {
+      "predictability_pct": 0.17132656281463338,
+      "mutual_information_bits": 0.17132656281463338,
+      "marginal_loss": null
+    },
+    "VIP": {
+      "predictability_pct": 0.25171353760667076,
+      "mutual_information_bits": 0.25171353760667076,
+      "marginal_loss": null
+    },
+    "RoomService": {
+      "predictability_pct": 0.401789369455778,
+      "mutual_information_bits": 0.401789369455778,
+      "marginal_loss": null
+    },
+    "FoodCourt": {
+      "predictability_pct": 0.4658592815475416,
+      "mutual_information_bits": 0.4658592815475416,
+      "marginal_loss": null
+    },
+    "ShoppingMall": {
+      "predictability_pct": 0.3683657448180798,
+      "mutual_information_bits": 0.3683657448180798,
+      "marginal_loss": null
+    },
+    "Spa": {
+      "predictability_pct": 0.3734289798217316,
+      "mutual_information_bits": 0.3734289798217316,
+      "marginal_loss": null
+    },
+    "VRDeck": {
+      "predictability_pct": 0.4243289302689102,
+      "mutual_information_bits": 0.4243289302689102,
+      "marginal_loss": null
+    },
+    "Name": {
+      "predictability_pct": 2.1808782350395086,
+      "mutual_information_bits": 2.1808782350395086,
+      "marginal_loss": null
+    }
+  },
+  "model_architecture": {
+    "attention_heads": 8,
+    "transformer_layers": 5,
+    "d_model": 128,
+    "dim_feedforward_factor": 4,
+    "loss_function": "Composite: Marginal (per-column) + Joint (transformer) + Spread (distance)",
+    "loss_weights": {
+      "marginal": 0.2,
+      "joint": 1.0,
+      "spread": 1.0
+    },
+    "curriculum_learning": true
+  },
+  "model_quality": {
+    "assessment": "UNKNOWN",
+    "recommendations": [],
+    "warnings": [],
+    "quality_checks": {
+      "column_sensitivity": {
+        "epoch": 12,
+        "grade": "C",
+        "timestamp": "2026-01-18T23:44:25.750298",
+        "metadata": {
+          "total_columns": 13,
+          "good_columns": 6,
+          "marginal_columns": 7,
+          "poor_columns": 0,
+          "good_percentage": 46.15384615384615,
+          "numeric_good": 1,
+          "categorical_good": 5
+        }
+      }
+    }
+  },
+  "technical_details": {
+    "pytorch_version": "2.9.0+cu128",
+    "device": "GPU",
+    "precision": "float32",
+    "normalization": "unit_sphere",
+    "loss_function": "InfoNCE (contrastive)"
+  },
+  "provenance": {
+    "created_at": "2026-01-18T23:52:32.704848",
+    "training_duration_minutes": 0,
+    "version_info": {}
+  }
+}

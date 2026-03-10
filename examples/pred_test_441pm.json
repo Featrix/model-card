@@ -1,0 +1,986 @@
+{
+  "model_identification": {
+    "session_id": null,
+    "job_id": null,
+    "name": null,
+    "target_column": "target",
+    "target_column_type": "set",
+    "compute_cluster": "BURRITO",
+    "training_date": "2026-01-13",
+    "status": "DONE",
+    "model_type": "Single Predictor",
+    "framework": "FeatrixSphere unknown"
+  },
+  "training_dataset": {
+    "train_rows": 800,
+    "val_rows": 200,
+    "total_rows": 1000,
+    "total_features": 20,
+    "feature_names": [
+      "checking_status",
+      "duration",
+      "credit_history",
+      "purpose",
+      "credit_amount",
+      "savings_status",
+      "employment",
+      "installment_commitment",
+      "personal_status",
+      "other_parties",
+      "residence_since",
+      "property_magnitude",
+      "age",
+      "other_payment_plans",
+      "housing",
+      "existing_credits",
+      "job",
+      "num_dependents",
+      "own_telephone",
+      "foreign_worker"
+    ],
+    "target_column": "target"
+  },
+  "class_imbalance": {
+    "class_distribution": {
+      "bad": 241,
+      "good": 559
+    },
+    "train_distribution": {
+      "bad": 192,
+      "good": 447
+    },
+    "val_distribution": {
+      "bad": 49,
+      "good": 112
+    },
+    "total_samples": 800,
+    "imbalance_ratio": 2.32,
+    "majority_class_count": 559,
+    "minority_class_count": 241,
+    "minority_class": "bad",
+    "majority_class": "good",
+    "is_binary": true
+  },
+  "training_configuration": {
+    "epochs_total": 25,
+    "best_epoch": 4,
+    "d_model": 128,
+    "batch_size": null,
+    "learning_rate": null,
+    "optimizer": "Adam"
+  },
+  "training_metrics": {
+    "best_epoch": {
+      "epoch": 4,
+      "validation_loss": 0.1333741990860945,
+      "train_loss": 0.19345104929647947
+    },
+    "classification_metrics": {
+      "accuracy": 0.6894409937888198,
+      "precision": 0.49230769230769234,
+      "recall": 0.6530612244897959,
+      "f1": 0.5614035087719298,
+      "auc": 0.741435860058309,
+      "is_binary": true
+    },
+    "optimal_threshold": {
+      "optimal_threshold": 0.465,
+      "pos_label": "bad",
+      "optimal_threshold_f1": 0.4537815125565991,
+      "accuracy_at_optimal_threshold": 0.5962732919254659
+    },
+    "argmax_metrics": null
+  },
+  "model_architecture": {
+    "predictor_parameters": 29256,
+    "predictor_layers": 13,
+    "predictor_hidden_layers": 0,
+    "predictor_d_hidden": null,
+    "embedding_space_d_model": 128,
+    "transformer_layers": 5,
+    "attention_heads": 16,
+    "total_parameters": 50615661
+  },
+  "embedding_space": {
+    "num_rows": 1000,
+    "num_columns": 20,
+    "num_parameters": 50586405,
+    "num_layers": 1314,
+    "d_model": 128,
+    "quality_checks": {
+      "overall_quality": {
+        "epoch": 14,
+        "grade": "A",
+        "timestamp": "2026-01-13T16:43:57.261894",
+        "metadata": {
+          "val_improvement_pct": 66.69761550122519,
+          "train_val_gap_pct": 22.340771923795614,
+          "quality_issues": [],
+          "embedding_health_issues": [],
+          "embedding_warnings": [],
+          "final_emb_std": null,
+          "emb_std_trend_pct": null,
+          "ww_warnings_count": 0,
+          "ww_critical_count": 0,
+          "best_checkpoint_loaded": true,
+          "quality_grade_str": "GOOD"
+        }
+      },
+      "validation_improvement": {
+        "epoch": 14,
+        "grade": "Pass",
+        "timestamp": "2026-01-13T16:43:57.261875",
+        "metadata": {
+          "val_improvement_pct": 66.69761550122519,
+          "initial_val_loss": 489.3514404296875,
+          "final_val_loss": 162.9656982421875,
+          "best_val_loss": 162.74708557128906
+        }
+      },
+      "training_stability": {
+        "epoch": 14,
+        "grade": "D",
+        "timestamp": "2026-01-13T16:43:57.261900",
+        "metadata": {
+          "train_val_gap_pct": 22.340771923795614,
+          "overfitting_detected": true,
+          "degradation_detected": false,
+          "best_checkpoint_loaded": true
+        }
+      }
+    }
+  },
+  "model_quality": {
+    "warnings": [],
+    "training_quality_warning": {
+      "type": "TRAINING_QUALITY_ISSUE",
+      "severity": "HIGH",
+      "failure_mode": "UNDERCONFIDENT",
+      "message": "Model training completed with quality issues: UNDERCONFIDENT",
+      "recommendations": [
+        "\u26a0\ufe0f  WARNING: 79.5% of predictions are between 0.4-0.6",
+        "   \u2192 Model is very uncertain/underconfident",
+        "   \u2192 May need more training (currently at epoch 24)",
+        "   \u2192 Consider if validation set is too different from training",
+        "   \u2192 This can also indicate the problem is genuinely difficult"
+      ],
+      "details": {
+        "auc": 0.6120626822157434,
+        "accuracy": 0.5962732919254659,
+        "f1": 0.453781512605042
+      },
+      "class_distribution": {
+        "train": {
+          "bad": 192,
+          "good": 447
+        },
+        "val": {
+          "bad": 49,
+          "good": 112
+        },
+        "total": {
+          "bad": 241,
+          "good": 559
+        },
+        "train_total": 639,
+        "val_total": 161,
+        "total_total": 800
+      },
+      "imbalance_ratio": 2.32,
+      "minority_class_count": 241,
+      "majority_class_count": 559,
+      "data_sufficiency": "ADEQUATE"
+    },
+    "quality_checks": {
+      "model_performance": [
+        {
+          "epoch": 4,
+          "grade": "B",
+          "timestamp": "2026-01-13T16:45:40.346100",
+          "metadata": {
+            "auc": 0.741435860058309,
+            "accuracy": 0.6894409937888198,
+            "f1": 0.5614035087719298,
+            "precision": 0.49230769230769234,
+            "recall": 0.6530612244897959,
+            "pr_auc": 0.5151125515184796
+          }
+        }
+      ],
+      "training_failure_detection": [
+        {
+          "epoch": 4,
+          "grade": "Pass",
+          "timestamp": "2026-01-13T16:45:40.346109",
+          "metadata": {}
+        }
+      ]
+    }
+  },
+  "technical_details": {
+    "pytorch_version": "2.9.0+cu128",
+    "device": "GPU",
+    "precision": "float32",
+    "loss_function": "FocalLoss"
+  },
+  "provenance": {
+    "created_at": "2026-01-13T16:54:13.349277",
+    "training_duration_minutes": null
+  },
+  "best_epochs": {
+    "best_pr_auc": {
+      "epoch": 6,
+      "pr_auc": 0.63103790133066,
+      "classification_display_metadata": {
+        "epoch": 6,
+        "timestamp": 1768340788.9889674,
+        "classification_metrics": {
+          "auc": {
+            "value": 0.7687682215743441,
+            "delta_1": 0.07707725947521882,
+            "delta_5": 0.0440962099125366,
+            "delta_10": null,
+            "trend": "\u2197",
+            "quality": "GOOD"
+          },
+          "pr_auc": {
+            "value": 0.63103790133066,
+            "delta_1": 0.18798564859630118,
+            "delta_5": 0.09134936083472645,
+            "delta_10": null,
+            "trend": "\u2197\u2197",
+            "quality": "GOOD"
+          },
+          "accuracy": {
+            "value": 0.7267080745341615,
+            "delta_1": 0.08695652173913049,
+            "delta_5": 0.037267080745341685,
+            "delta_10": null,
+            "trend": "\u2197",
+            "quality": "GOOD"
+          },
+          "precision": {
+            "value": 0.5373134328358209,
+            "delta_1": 0.09895726845225927,
+            "delta_5": 0.04608536266038232,
+            "delta_10": null,
+            "trend": "\u2197",
+            "quality": "FAIR"
+          },
+          "recall": {
+            "value": 0.7346938775510204,
+            "delta_1": 0.08163265306122458,
+            "delta_5": 0.16326530612244905,
+            "delta_10": null,
+            "trend": "\u2197\u2197",
+            "quality": "GOOD"
+          },
+          "specificity": {
+            "value": 0.7232142857142857,
+            "delta_1": 0.0892857142857143,
+            "delta_5": -0.017857142857142905,
+            "delta_10": null,
+            "trend": "\u2198",
+            "quality": "GOOD"
+          },
+          "f1": {
+            "value": 0.6206896551724138,
+            "delta_1": 0.09609949123798756,
+            "delta_5": 0.09238776837996099,
+            "delta_10": null,
+            "trend": "\u2197\u2197",
+            "quality": "GOOD"
+          }
+        },
+        "confusion_matrix": {
+          "tp": 36,
+          "fp": 31,
+          "tn": 81,
+          "fn": 13,
+          "threshold": 0.465,
+          "precision": 0.5373134328358209,
+          "recall": 0.7346938775510204,
+          "specificity": 0.7232142857142857,
+          "positive_predictive_value": 0.5373134328358209,
+          "negative_predictive_value": 0.8617021276595744
+        },
+        "per_row_tracking": {
+          "num_rows": 161,
+          "this_epoch": {
+            "correct": 117,
+            "wrong": 44,
+            "accuracy_pct": 72.67080745341616
+          },
+          "cumulative_categories": {
+            "never_wrong": 61,
+            "rarely_wrong": 41,
+            "sometimes_wrong": 22,
+            "frequently_wrong": 24,
+            "always_wrong": 13
+          },
+          "hardest_rows": [
+            {
+              "row_idx": 155,
+              "error_rate": 1.0,
+              "epochs_wrong": 7,
+              "window": 7,
+              "ground_truth": "bad"
+            },
+            {
+              "row_idx": 129,
+              "error_rate": 1.0,
+              "epochs_wrong": 7,
+              "window": 7,
+              "ground_truth": "bad"
+            },
+            {
+              "row_idx": 54,
+              "error_rate": 1.0,
+              "epochs_wrong": 7,
+              "window": 7,
+              "ground_truth": "good"
+            },
+            {
+              "row_idx": 34,
+              "error_rate": 1.0,
+              "epochs_wrong": 7,
+              "window": 7,
+              "ground_truth": "good"
+            },
+            {
+              "row_idx": 65,
+              "error_rate": 1.0,
+              "epochs_wrong": 7,
+              "window": 7,
+              "ground_truth": "good"
+            }
+          ],
+          "feature_analysis": {
+            "categorical_patterns": [
+              {
+                "feature": "checking_status",
+                "value": "0<=X<200",
+                "hard_freq": 0.8,
+                "hard_count": 4,
+                "easy_freq": 0.0,
+                "easy_count": 0
+              },
+              {
+                "feature": "purpose",
+                "value": "new car",
+                "hard_freq": 0.4,
+                "hard_count": 2,
+                "easy_freq": 0.0,
+                "easy_count": 0
+              },
+              {
+                "feature": "property_magnitude",
+                "value": "no known property",
+                "hard_freq": 0.4,
+                "hard_count": 2,
+                "easy_freq": 0.0,
+                "easy_count": 0
+              },
+              {
+                "feature": "job",
+                "value": "unemp/unskilled non res",
+                "hard_freq": 0.4,
+                "hard_count": 2,
+                "easy_freq": 0.0,
+                "easy_count": 0
+              },
+              {
+                "feature": "personal_status",
+                "value": "male mar/wid",
+                "hard_freq": 0.4,
+                "hard_count": 2,
+                "easy_freq": 0.0,
+                "easy_count": 0
+              }
+            ],
+            "numeric_patterns": [
+              {
+                "feature": "existing_credits",
+                "hard_mean": 1.0,
+                "hard_std": 0.0,
+                "easy_mean": 1.6,
+                "easy_std": 0.4898979485566356,
+                "effect_size": 1.7320508075688776
+              },
+              {
+                "feature": "num_dependents",
+                "hard_mean": 1.2,
+                "hard_std": 0.4000000000000001,
+                "easy_mean": 1.0,
+                "easy_std": 0.0,
+                "effect_size": 0.7071067811865472
+              },
+              {
+                "feature": "credit_amount",
+                "hard_mean": 5000.6,
+                "hard_std": 4848.406443358477,
+                "easy_mean": 2783.6,
+                "easy_std": 2324.9739439400173,
+                "effect_size": 0.5830925611964238
+              }
+            ]
+          }
+        }
+      }
+    },
+    "best_roc_auc": {
+      "epoch": 6,
+      "roc_auc": 0.7687682215743441,
+      "classification_display_metadata": {
+        "epoch": 6,
+        "timestamp": 1768340788.9889674,
+        "classification_metrics": {
+          "auc": {
+            "value": 0.7687682215743441,
+            "delta_1": 0.07707725947521882,
+            "delta_5": 0.0440962099125366,
+            "delta_10": null,
+            "trend": "\u2197",
+            "quality": "GOOD"
+          },
+          "pr_auc": {
+            "value": 0.63103790133066,
+            "delta_1": 0.18798564859630118,
+            "delta_5": 0.09134936083472645,
+            "delta_10": null,
+            "trend": "\u2197\u2197",
+            "quality": "GOOD"
+          },
+          "accuracy": {
+            "value": 0.7267080745341615,
+            "delta_1": 0.08695652173913049,
+            "delta_5": 0.037267080745341685,
+            "delta_10": null,
+            "trend": "\u2197",
+            "quality": "GOOD"
+          },
+          "precision": {
+            "value": 0.5373134328358209,
+            "delta_1": 0.09895726845225927,
+            "delta_5": 0.04608536266038232,
+            "delta_10": null,
+            "trend": "\u2197",
+            "quality": "FAIR"
+          },
+          "recall": {
+            "value": 0.7346938775510204,
+            "delta_1": 0.08163265306122458,
+            "delta_5": 0.16326530612244905,
+            "delta_10": null,
+            "trend": "\u2197\u2197",
+            "quality": "GOOD"
+          },
+          "specificity": {
+            "value": 0.7232142857142857,
+            "delta_1": 0.0892857142857143,
+            "delta_5": -0.017857142857142905,
+            "delta_10": null,
+            "trend": "\u2198",
+            "quality": "GOOD"
+          },
+          "f1": {
+            "value": 0.6206896551724138,
+            "delta_1": 0.09609949123798756,
+            "delta_5": 0.09238776837996099,
+            "delta_10": null,
+            "trend": "\u2197\u2197",
+            "quality": "GOOD"
+          }
+        },
+        "confusion_matrix": {
+          "tp": 36,
+          "fp": 31,
+          "tn": 81,
+          "fn": 13,
+          "threshold": 0.465,
+          "precision": 0.5373134328358209,
+          "recall": 0.7346938775510204,
+          "specificity": 0.7232142857142857,
+          "positive_predictive_value": 0.5373134328358209,
+          "negative_predictive_value": 0.8617021276595744
+        },
+        "per_row_tracking": {
+          "num_rows": 161,
+          "this_epoch": {
+            "correct": 117,
+            "wrong": 44,
+            "accuracy_pct": 72.67080745341616
+          },
+          "cumulative_categories": {
+            "never_wrong": 61,
+            "rarely_wrong": 41,
+            "sometimes_wrong": 22,
+            "frequently_wrong": 24,
+            "always_wrong": 13
+          },
+          "hardest_rows": [
+            {
+              "row_idx": 155,
+              "error_rate": 1.0,
+              "epochs_wrong": 7,
+              "window": 7,
+              "ground_truth": "bad"
+            },
+            {
+              "row_idx": 129,
+              "error_rate": 1.0,
+              "epochs_wrong": 7,
+              "window": 7,
+              "ground_truth": "bad"
+            },
+            {
+              "row_idx": 54,
+              "error_rate": 1.0,
+              "epochs_wrong": 7,
+              "window": 7,
+              "ground_truth": "good"
+            },
+            {
+              "row_idx": 34,
+              "error_rate": 1.0,
+              "epochs_wrong": 7,
+              "window": 7,
+              "ground_truth": "good"
+            },
+            {
+              "row_idx": 65,
+              "error_rate": 1.0,
+              "epochs_wrong": 7,
+              "window": 7,
+              "ground_truth": "good"
+            }
+          ],
+          "feature_analysis": {
+            "categorical_patterns": [
+              {
+                "feature": "checking_status",
+                "value": "0<=X<200",
+                "hard_freq": 0.8,
+                "hard_count": 4,
+                "easy_freq": 0.0,
+                "easy_count": 0
+              },
+              {
+                "feature": "purpose",
+                "value": "new car",
+                "hard_freq": 0.4,
+                "hard_count": 2,
+                "easy_freq": 0.0,
+                "easy_count": 0
+              },
+              {
+                "feature": "property_magnitude",
+                "value": "no known property",
+                "hard_freq": 0.4,
+                "hard_count": 2,
+                "easy_freq": 0.0,
+                "easy_count": 0
+              },
+              {
+                "feature": "job",
+                "value": "unemp/unskilled non res",
+                "hard_freq": 0.4,
+                "hard_count": 2,
+                "easy_freq": 0.0,
+                "easy_count": 0
+              },
+              {
+                "feature": "personal_status",
+                "value": "male mar/wid",
+                "hard_freq": 0.4,
+                "hard_count": 2,
+                "easy_freq": 0.0,
+                "easy_count": 0
+              }
+            ],
+            "numeric_patterns": [
+              {
+                "feature": "existing_credits",
+                "hard_mean": 1.0,
+                "hard_std": 0.0,
+                "easy_mean": 1.6,
+                "easy_std": 0.4898979485566356,
+                "effect_size": 1.7320508075688776
+              },
+              {
+                "feature": "num_dependents",
+                "hard_mean": 1.2,
+                "hard_std": 0.4000000000000001,
+                "easy_mean": 1.0,
+                "easy_std": 0.0,
+                "effect_size": 0.7071067811865472
+              },
+              {
+                "feature": "credit_amount",
+                "hard_mean": 5000.6,
+                "hard_std": 4848.406443358477,
+                "easy_mean": 2783.6,
+                "easy_std": 2324.9739439400173,
+                "effect_size": 0.5830925611964238
+              }
+            ]
+          }
+        }
+      }
+    }
+  },
+  "feature_inventory": [
+    {
+      "name": "checking_status",
+      "type": "ColumnType.SET",
+      "encoder_type": "SetCodec",
+      "column_importance": {
+        "weight": 1.0,
+        "reason": "included_in_training",
+        "description": "Column is included in model training with normal importance weighting"
+      },
+      "unique_values": 5,
+      "sample_values": [
+        "0<=X<200",
+        "no checking",
+        ">=200",
+        "<UNKNOWN>",
+        "<0"
+      ]
+    },
+    {
+      "name": "duration",
+      "type": "ColumnType.SCALAR",
+      "encoder_type": "ScalarCodec",
+      "column_importance": {
+        "weight": 1.0,
+        "reason": "included_in_training",
+        "description": "Column is included in model training with normal importance weighting"
+      },
+      "statistics": {
+        "mean": 21.225,
+        "std": 12.065087356341238,
+        "median": 18.0,
+        "q10": 9.0,
+        "q90": 36.0,
+        "q25": 12.0,
+        "q75": 24.0,
+        "min": 4.0,
+        "max": 72.0
+      }
+    },
+    {
+      "name": "credit_history",
+      "type": "ColumnType.SET",
+      "encoder_type": "SetCodec",
+      "column_importance": {
+        "weight": 1.0,
+        "reason": "included_in_training",
+        "description": "Column is included in model training with normal importance weighting"
+      },
+      "unique_values": 6,
+      "sample_values": [
+        "all paid",
+        "existing paid",
+        "no credits/all paid",
+        "delayed previously",
+        "<UNKNOWN>"
+      ]
+    },
+    {
+      "name": "purpose",
+      "type": "ColumnType.FREE_STRING",
+      "encoder_type": "StringCodec",
+      "column_importance": {
+        "weight": 1.0,
+        "reason": "included_in_training",
+        "description": "Column is included in model training with normal importance weighting"
+      }
+    },
+    {
+      "name": "credit_amount",
+      "type": "ColumnType.SCALAR",
+      "encoder_type": "ScalarCodec",
+      "column_importance": {
+        "weight": 1.0,
+        "reason": "included_in_training",
+        "description": "Column is included in model training with normal importance weighting"
+      },
+      "statistics": {
+        "mean": 3268.87625,
+        "std": 2758.8482915531426,
+        "median": 2330.0,
+        "q10": 932.0,
+        "q90": 7166.8,
+        "q25": 1374.0,
+        "q75": 4042.0,
+        "min": 250.0,
+        "max": 18424.0
+      }
+    },
+    {
+      "name": "savings_status",
+      "type": "ColumnType.SET",
+      "encoder_type": "SetCodec",
+      "column_importance": {
+        "weight": 1.0,
+        "reason": "included_in_training",
+        "description": "Column is included in model training with normal importance weighting"
+      },
+      "unique_values": 6,
+      "sample_values": [
+        "100<=X<500",
+        ">=1000",
+        "500<=X<1000",
+        "<100",
+        "no known savings"
+      ]
+    },
+    {
+      "name": "employment",
+      "type": "ColumnType.SET",
+      "encoder_type": "SetCodec",
+      "column_importance": {
+        "weight": 1.0,
+        "reason": "included_in_training",
+        "description": "Column is included in model training with normal importance weighting"
+      },
+      "unique_values": 6,
+      "sample_values": [
+        "4<=X<7",
+        "unemployed",
+        "1<=X<4",
+        ">=7",
+        "<UNKNOWN>"
+      ]
+    },
+    {
+      "name": "installment_commitment",
+      "type": "ColumnType.SET",
+      "encoder_type": "SetCodec",
+      "column_importance": {
+        "weight": 1.0,
+        "reason": "included_in_training",
+        "description": "Column is included in model training with normal importance weighting"
+      },
+      "unique_values": 5,
+      "sample_values": [
+        "3",
+        "2",
+        "<UNKNOWN>",
+        "1",
+        "4"
+      ]
+    },
+    {
+      "name": "personal_status",
+      "type": "ColumnType.SET",
+      "encoder_type": "SetCodec",
+      "column_importance": {
+        "weight": 1.0,
+        "reason": "included_in_training",
+        "description": "Column is included in model training with normal importance weighting"
+      },
+      "unique_values": 5,
+      "sample_values": [
+        "female div/dep/mar",
+        "male single",
+        "male div/sep",
+        "<UNKNOWN>",
+        "male mar/wid"
+      ]
+    },
+    {
+      "name": "other_parties",
+      "type": "ColumnType.SET",
+      "encoder_type": "SetCodec",
+      "column_importance": {
+        "weight": 1.0,
+        "reason": "included_in_training",
+        "description": "Column is included in model training with normal importance weighting"
+      },
+      "unique_values": 4,
+      "sample_values": [
+        "guarantor",
+        "none",
+        "co applicant",
+        "<UNKNOWN>"
+      ]
+    },
+    {
+      "name": "residence_since",
+      "type": "ColumnType.SET",
+      "encoder_type": "SetCodec",
+      "column_importance": {
+        "weight": 1.0,
+        "reason": "included_in_training",
+        "description": "Column is included in model training with normal importance weighting"
+      },
+      "unique_values": 5,
+      "sample_values": [
+        "3",
+        "2",
+        "<UNKNOWN>",
+        "1",
+        "4"
+      ]
+    },
+    {
+      "name": "property_magnitude",
+      "type": "ColumnType.SET",
+      "encoder_type": "SetCodec",
+      "column_importance": {
+        "weight": 1.0,
+        "reason": "included_in_training",
+        "description": "Column is included in model training with normal importance weighting"
+      },
+      "unique_values": 5,
+      "sample_values": [
+        "life insurance",
+        "<UNKNOWN>",
+        "car",
+        "no known property",
+        "real estate"
+      ]
+    },
+    {
+      "name": "age",
+      "type": "ColumnType.SCALAR",
+      "encoder_type": "ScalarCodec",
+      "column_importance": {
+        "weight": 1.0,
+        "reason": "included_in_training",
+        "description": "Column is included in model training with normal importance weighting"
+      },
+      "statistics": {
+        "mean": 35.48625,
+        "std": 11.365794628926464,
+        "median": 33.0,
+        "q10": 24.0,
+        "q90": 52.0,
+        "q25": 27.0,
+        "q75": 42.0,
+        "min": 19.0,
+        "max": 75.0
+      }
+    },
+    {
+      "name": "other_payment_plans",
+      "type": "ColumnType.SET",
+      "encoder_type": "SetCodec",
+      "column_importance": {
+        "weight": 1.0,
+        "reason": "included_in_training",
+        "description": "Column is included in model training with normal importance weighting"
+      },
+      "unique_values": 4,
+      "sample_values": [
+        "stores",
+        "none",
+        "<UNKNOWN>",
+        "bank"
+      ]
+    },
+    {
+      "name": "housing",
+      "type": "ColumnType.SET",
+      "encoder_type": "SetCodec",
+      "column_importance": {
+        "weight": 1.0,
+        "reason": "included_in_training",
+        "description": "Column is included in model training with normal importance weighting"
+      },
+      "unique_values": 4,
+      "sample_values": [
+        "own",
+        "<UNKNOWN>",
+        "rent",
+        "for free"
+      ]
+    },
+    {
+      "name": "existing_credits",
+      "type": "ColumnType.SET",
+      "encoder_type": "SetCodec",
+      "column_importance": {
+        "weight": 1.0,
+        "reason": "included_in_training",
+        "description": "Column is included in model training with normal importance weighting"
+      },
+      "unique_values": 5,
+      "sample_values": [
+        "3",
+        "2",
+        "<UNKNOWN>",
+        "1",
+        "4"
+      ]
+    },
+    {
+      "name": "job",
+      "type": "ColumnType.SET",
+      "encoder_type": "SetCodec",
+      "column_importance": {
+        "weight": 1.0,
+        "reason": "included_in_training",
+        "description": "Column is included in model training with normal importance weighting"
+      },
+      "unique_values": 5,
+      "sample_values": [
+        "unemp/unskilled non res",
+        "high qualif/self emp/mgmt",
+        "skilled",
+        "unskilled resident",
+        "<UNKNOWN>"
+      ]
+    },
+    {
+      "name": "num_dependents",
+      "type": "ColumnType.SET",
+      "encoder_type": "SetCodec",
+      "column_importance": {
+        "weight": 1.0,
+        "reason": "included_in_training",
+        "description": "Column is included in model training with normal importance weighting"
+      },
+      "unique_values": 3,
+      "sample_values": [
+        "1",
+        "<UNKNOWN>",
+        "2"
+      ]
+    },
+    {
+      "name": "own_telephone",
+      "type": "ColumnType.SET",
+      "encoder_type": "SetCodec",
+      "column_importance": {
+        "weight": 1.0,
+        "reason": "included_in_training",
+        "description": "Column is included in model training with normal importance weighting"
+      },
+      "unique_values": 3,
+      "sample_values": [
+        "yes",
+        "none",
+        "<UNKNOWN>"
+      ]
+    },
+    {
+      "name": "foreign_worker",
+      "type": "ColumnType.SET",
+      "encoder_type": "SetCodec",
+      "column_importance": {
+        "weight": 1.0,
+        "reason": "included_in_training",
+        "description": "Column is included in model training with normal importance weighting"
+      },
+      "unique_values": 3,
+      "sample_values": [
+        "yes",
+        "<UNKNOWN>",
+        "no"
+      ]
+    }
+  ]
+}

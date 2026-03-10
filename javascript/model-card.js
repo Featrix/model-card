@@ -304,10 +304,12 @@
       var td = data.training_dataset || {};
       var ci = data.class_imbalance || {};
 
-      var train0 = (ci.train_distribution && ci.train_distribution['0']) || 0;
-      var train1 = (ci.train_distribution && ci.train_distribution['1']) || 0;
-      var val0 = (ci.val_distribution && ci.val_distribution['0']) || 0;
-      var val1 = (ci.val_distribution && ci.val_distribution['1']) || 0;
+      var minClass = ci.minority_class || '1';
+      var majClass = ci.majority_class || '0';
+      var train0 = (ci.train_distribution && (ci.train_distribution[majClass] || ci.train_distribution['0'])) || 0;
+      var train1 = (ci.train_distribution && (ci.train_distribution[minClass] || ci.train_distribution['1'])) || 0;
+      var val0 = (ci.val_distribution && (ci.val_distribution[majClass] || ci.val_distribution['0'])) || 0;
+      var val1 = (ci.val_distribution && (ci.val_distribution[minClass] || ci.val_distribution['1'])) || 0;
       var totalTrain = train0 + train1;
       var totalVal = val0 + val1;
       var totalSamples = ci.total_samples || td.train_rows || (totalTrain + totalVal) || 0;
@@ -851,7 +853,8 @@
      */
     renderHTML: function(modelCardJson, options) {
       options = options || {};
-      var modelName = (modelCardJson.model_identification || {}).name || 'Model Card';
+      var _mi = modelCardJson.model_identification || {};
+      var modelName = _mi.name || _mi.target_column || 'Model Card';
       var now = new Date();
       var dateStr = now.getFullYear() + '-' +
                     String(now.getMonth() + 1).padStart(2, '0') + '-' +

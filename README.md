@@ -1,174 +1,192 @@
-# Featrix Model Card Renderers
+# Featrix Model Card
 
-Render Featrix Sphere Model Card JSON to HTML, plain text, or React components.
+Render Featrix Sphere model cards as interactive HTML, plain text, or React components.
 
-## Overview
+<!-- TODO: full-width screenshot of an HTML model card rendering (~800px wide, showing collapsible sections and status badge) -->
+<!-- ![Model Card Screenshot](docs/images/model-card-screenshot.png) -->
 
-This repository contains three renderers for Featrix Sphere Model Card JSON:
+## Live Demo
 
-1. **Python Package** (`python/`) - For pip installation
-2. **JavaScript** (`javascript/`) - Standalone JS for `<script>` tag usage
-3. **React Component** (`react/`) - For npm installation
+<!-- TODO: host a demo page with a real model card baked in -->
+<!-- Try it now: [Live Demo](https://bits.featrix.com/model-card-demo/) -->
 
-## Quick Start
+## Choose Your Integration
 
-### Python Package
+| Approach | Best for | Install |
+|----------|----------|---------|
+| [**JavaScript (CDN)**](#javascript-cdn) | Any web page — zero build step | `<script>` tag |
+| [**React Component**](#react-component) | React / Next.js apps | `npm install @featrix/modelcard` |
+| [**Python Package**](#python-package) | Jupyter notebooks, server-side rendering, CLI | `pip install featrix-modelcard` |
 
-```bash
-pip install featrix-modelcard
-```
+---
 
-```python
-from featrix_modelcard import render_html, render_detailed_text, print_text
-import json
+## JavaScript (CDN)
 
-# Load model card JSON
-with open('model_card.json') as f:
-    model_card = json.load(f)
-
-# Print brief summary to console
-print_text(model_card, detailed=False)
-
-# Generate HTML file
-from featrix_modelcard import render_html_to_file
-render_html_to_file(model_card, 'output.html')
-
-# Get HTML as string
-html = render_html(model_card)
-```
-
-### JavaScript (Standalone)
+Drop a single `<script>` tag into any HTML page. No bundler required.
 
 ```html
+<div id="model-card"></div>
+
 <script src="https://bits.featrix.com/js/featrix-modelcard/model-card.js"></script>
 <script>
-    const html = FeatrixModelCard.renderHTML(modelCardJson);
-    document.getElementById('container').innerHTML = html;
-    FeatrixModelCard.attachEventListeners(document.getElementById('container'));
+  const container = document.getElementById('model-card');
+  container.innerHTML = FeatrixModelCard.renderHTML(modelCardJson);
+  FeatrixModelCard.attachEventListeners(container);
 </script>
 ```
 
-### React Component
+Also available via public CDNs:
+
+```
+https://unpkg.com/@featrix/modelcard-js/model-card.js
+https://cdn.jsdelivr.net/npm/@featrix/modelcard-js/model-card.js
+```
+
+### Embed in an iframe
+
+To isolate model card styles from your page, render into an iframe:
+
+```html
+<iframe id="card-frame" style="width:100%; border:none;"></iframe>
+
+<script src="https://bits.featrix.com/js/featrix-modelcard/model-card.js"></script>
+<script>
+  const doc = document.getElementById('card-frame').contentDocument;
+  doc.open();
+  doc.write('<html><body>' + FeatrixModelCard.renderHTML(modelCardJson) + '</body></html>');
+  doc.close();
+  FeatrixModelCard.attachEventListeners(doc.body);
+</script>
+```
+
+### 3D Sphere Visualization
+
+Enable the interactive 3D sphere thumbnail by passing options:
+
+```js
+const html = FeatrixModelCard.renderHTML(modelCardJson, { showSphere: true });
+```
+
+---
+
+## React Component
 
 ```bash
 npm install @featrix/modelcard recharts
 ```
 
 ```tsx
-import ModelCard, { ModelCardData } from '@featrix/modelcard';
+import ModelCard from '@featrix/modelcard';
 
 function App() {
-  const modelCard: ModelCardData = { /* ... */ };
-  return <ModelCard data={modelCard} />;
+  return <ModelCard data={modelCardJson} />;
 }
 ```
 
-## File Structure
+<!-- TODO: screenshot of React component in a dashboard layout -->
+<!-- ![React Component](docs/images/react-component.png) -->
 
-```
-model-card/
-├── python/              # Python package for pip
-│   ├── setup.py
-│   ├── publish.sh
-│   ├── featrix_modelcard/
-│   │   ├── __init__.py
-│   │   ├── html_renderer.py
-│   │   └── text_renderer.py
-│   └── README.md
-├── javascript/          # Standalone JS for <script> tag
-│   ├── model-card.js
-│   ├── index.html
-│   └── README.md
-└── react/              # React component for npm
-    ├── package.json
-    ├── publish.sh
-    ├── src/
-    │   └── ModelCard.tsx
-    └── README.md
+The component includes interactive charts (via Recharts), collapsible sections, and full TypeScript type definitions.
+
+---
+
+## Python Package
+
+```bash
+pip install featrix-modelcard
 ```
 
-## Features
+### Generate HTML
 
-### HTML Renderer
-- ✅ Uses `<details>` and `<summary>` for collapsible sections
-- ✅ "Expand All" / "Collapse All" buttons
-- ✅ Print-friendly CSS (formats nicely on 1 page)
-- ✅ Black & white aesthetic with color-coded status indicators
-- ✅ Courier New monospace font
-- ✅ Clean, minimal design
+```python
+from featrix_modelcard import render_html, render_html_to_file
 
-### Text Renderer
-- ✅ Brief summary format
-- ✅ Detailed full format
-- ✅ Clean, readable plain text
+# Get a complete standalone HTML document as a string
+html = render_html(model_card)
 
-### React Component
-- ✅ Interactive collapsible sections
-- ✅ Dynamic charts using Recharts:
-  - Feature type distribution (pie chart)
-  - Classification metrics (bar chart)
-  - Column statistics (bar chart)
-- ✅ Expand/Collapse all functionality
-- ✅ TypeScript support with full type definitions
+# Or write it directly to a file
+render_html_to_file(model_card, "output.html")
+```
+
+The generated HTML loads the canonical JS renderer from CDN, so it always matches the JavaScript output.
+
+### Print plain text
+
+```python
+from featrix_modelcard import print_text
+
+# Quick summary
+print_text(model_card, detailed=False)
+
+# Full details
+print_text(model_card, detailed=True)
+```
+
+### Jupyter Notebook
+
+```python
+from featrix_modelcard import render_html
+from IPython.display import HTML
+
+HTML(render_html(model_card))
+```
+
+<!-- TODO: screenshot of model card rendered inline in a Jupyter notebook -->
+<!-- ![Jupyter Notebook](docs/images/jupyter-notebook.png) -->
+
+### Flask / Django
+
+Serve the HTML string from any Python web framework:
+
+```python
+from featrix_modelcard import render_html
+
+# Flask
+@app.route("/model-card/<session_id>")
+def model_card_view(session_id):
+    model_card = load_model_card(session_id)  # your lookup logic
+    return render_html(model_card)
+```
+
+### Enable 3D sphere
+
+```python
+html = render_html(model_card, show_sphere=True, session_id="your-session-id")
+```
+
+---
 
 ## Model Card JSON Format
 
-All renderers expect the Featrix Sphere Model Card JSON format with these sections:
+All renderers consume the same JSON schema. See [model-card-schema.json](model-card-schema.json) for the full specification.
 
-- `model_identification` - Basic metadata
-- `training_dataset` - Dataset info
-- `feature_inventory` - Feature details
-- `training_configuration` - Hyperparameters
-- `training_metrics` - Performance metrics
-- `model_architecture` - Network structure
-- `model_quality` - Quality assessments
-- `technical_details` - Technical info
-- `provenance` - Creation metadata
-- `column_statistics` - Column stats (Embedding Space only)
+Key sections:
 
-See the specification document for complete details.
+| Section | Contents |
+|---------|----------|
+| `model_identification` | Name, status, target column, training date |
+| `training_dataset` | Row counts, feature names |
+| `feature_inventory` | Feature types and details |
+| `training_configuration` | Hyperparameters |
+| `training_metrics` | Accuracy, AUC, F1, loss curves |
+| `model_architecture` | Network structure |
+| `model_quality` | Warnings and quality assessments |
+| `technical_details` | Runtime and environment info |
+| `provenance` | Creation metadata |
+| `column_statistics` | Per-column stats (Embedding Space models) |
+
+---
 
 ## Publishing
 
-### PyPI (Python Package)
+See [PUBLISH.md](PUBLISH.md) for instructions on publishing to PyPI, npm, and the Featrix CDN.
 
-```bash
-cd python
-./publish.sh
-```
-
-The package will be published as `featrix-modelcard` on PyPI.
-
-### NPM (React Component)
-
-```bash
-cd react
-./publish.sh
-```
-
-The package will be published as `@featrix/modelcard` on npm.
-
-### NPM (Standalone JavaScript)
-
-```bash
-cd javascript
-./publish.sh
-```
-
-The package will be published as `@featrix/modelcard-js` on npm. 
-
-**Publishing to Featrix CDN:**
-```bash
-cd javascript
-./publish-cdn.sh
-```
-
-After publishing, users can use it via:
-- **Featrix CDN**: `https://bits.featrix.com/js/featrix-modelcard/model-card.js`
-- **unpkg**: `https://unpkg.com/@featrix/modelcard-js/model-card.js`
-- **jsDelivr**: `https://cdn.jsdelivr.net/npm/@featrix/modelcard-js/model-card.js`
-
-See [PUBLISH.md](PUBLISH.md) for detailed publishing instructions.
+| Target | Package | Command |
+|--------|---------|---------|
+| PyPI | `featrix-modelcard` | `cd python && ./publish.sh` |
+| npm (React) | `@featrix/modelcard` | `cd react && ./publish.sh` |
+| npm (JS) | `@featrix/modelcard-js` | `cd javascript && ./publish.sh` |
+| Featrix CDN | — | `cd javascript && ./publish-cdn.sh` |
 
 ## License
 

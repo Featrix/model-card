@@ -851,8 +851,70 @@
     /**
      * Render complete HTML model card
      */
+    renderGenerating: function(modelCardJson) {
+      var message = modelCardJson.message || 'Model card is being generated.';
+      var MAX_RETRIES = 5;
+      var RELOAD_SECS = 30;
+      var storageKey = 'featrix_mc_retries_' + (modelCardJson.session_id || 'default');
+
+      return `
+<div class="featrix-model-card">
+  <style>
+    .featrix-mc-generating { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 60px 40px; text-align: center; }
+    .featrix-mc-spinner { width: 48px; height: 48px; border: 4px solid #e0e0e0; border-top-color: #1565c0; border-radius: 50%; animation: featrix-spin 0.9s linear infinite; margin-bottom: 24px; }
+    @keyframes featrix-spin { to { transform: rotate(360deg); } }
+    .featrix-mc-generating h2 { font-size: 18px; font-weight: 600; color: #333; margin-bottom: 8px; }
+    .featrix-mc-generating p { font-size: 14px; color: #666; margin-bottom: 4px; }
+    .featrix-mc-countdown { font-size: 13px; color: #999; margin-top: 16px; }
+    .featrix-mc-giveup { font-size: 13px; color: #999; margin-top: 16px; }
+  </style>
+  <div class="featrix-mc-generating" id="featrix-generating-state">
+    <div class="featrix-mc-spinner"></div>
+    <h2>Model Card Generating</h2>
+    <p>${message}</p>
+    <div class="featrix-mc-countdown" id="featrix-countdown"></div>
+    <div class="featrix-mc-giveup" id="featrix-giveup" style="display:none;">
+      Still generating &mdash; <a href="" onclick="location.reload();return false;">reload manually</a>
+    </div>
+  </div>
+  <script>
+    (function() {
+      var MAX_RETRIES = ${MAX_RETRIES};
+      var RELOAD_SECS = ${RELOAD_SECS};
+      var key = '${storageKey}';
+      var retries = parseInt(sessionStorage.getItem(key) || '0', 10);
+      var countdownEl = document.getElementById('featrix-countdown');
+      var giveupEl = document.getElementById('featrix-giveup');
+
+      if (retries >= MAX_RETRIES) {
+        if (countdownEl) countdownEl.style.display = 'none';
+        if (giveupEl) giveupEl.style.display = '';
+        return;
+      }
+
+      sessionStorage.setItem(key, retries + 1);
+      var remaining = RELOAD_SECS;
+      function tick() {
+        if (countdownEl) countdownEl.textContent = 'Refreshing in ' + remaining + 's\u2026 (attempt ' + (retries + 1) + ' of ' + MAX_RETRIES + ')';
+        if (remaining <= 0) { location.reload(); return; }
+        remaining--;
+        setTimeout(tick, 1000);
+      }
+      tick();
+    })();
+  </script>
+</div>`;
+    },
+
     renderHTML: function(modelCardJson, options) {
       options = options || {};
+
+      // Detect "still generating" API response — render spinner + auto-reload
+      if (modelCardJson && !modelCardJson.model_identification &&
+          (modelCardJson.status === 'generating' || modelCardJson.message)) {
+        return this.renderGenerating(modelCardJson);
+      }
+
       var _mi = modelCardJson.model_identification || {};
       var modelName = _mi.name || _mi.target_column || 'Model Card';
       var now = new Date();

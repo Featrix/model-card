@@ -13,7 +13,7 @@
   'use strict';
 
   const FeatrixModelCard = {
-    VERSION: '1.10',
+    VERSION: '1.11',
     BUILD: 'dev',
 
     /**
@@ -679,6 +679,67 @@
      * Call this after inserting HTML into the DOM
      */
     /**
+     * Render data processing notes section
+     */
+    renderDataProcessingNotes: function(data) {
+      var notes = data.data_processing_notes;
+      if (!notes || notes.length === 0) return '';
+
+      var severityColor = { info: '#1976d2', warning: '#f57c00', critical: '#c62828' };
+      var severityBg   = { info: '#e3f2fd', warning: '#fff3e0', critical: '#ffebee' };
+      var severityBorder = { info: '#90caf9', warning: '#ffcc02', critical: '#ef9a9a' };
+
+      var categoryLabel = {
+        column_dropped:   'Column Dropped',
+        rows_filtered:    'Rows Filtered',
+        type_detection:   'Type Detection',
+        data_transform:   'Data Transform',
+        csv_parsing:      'CSV Parsing',
+        dataset_sampling: 'Dataset Sampling'
+      };
+
+      var html = '<details class="section" open><summary>DATA PROCESSING NOTES</summary><div class="section-content">';
+      html += '<table style="width:100%; border-collapse:collapse; font-size:13px;">';
+      html += '<thead><tr style="border-bottom:2px solid #000;">';
+      html += '<th style="text-align:left; padding:6px 10px; width:110px;">Severity</th>';
+      html += '<th style="text-align:left; padding:6px 10px; width:140px;">Category</th>';
+      html += '<th style="text-align:left; padding:6px 10px;">Message</th>';
+      html += '<th style="text-align:left; padding:6px 10px; width:180px;">Affected</th>';
+      html += '</tr></thead><tbody>';
+
+      notes.forEach(function(note) {
+        var sev = (note.severity || 'info').toLowerCase();
+        var cat = (note.category || '').toLowerCase();
+        var color  = severityColor[sev]  || '#555';
+        var bg     = severityBg[sev]     || '#f5f5f5';
+        var border = severityBorder[sev] || '#ccc';
+        var catText = categoryLabel[cat] || note.category || 'Note';
+
+        var affected = [];
+        if (note.columns && note.columns.length > 0) {
+          affected.push(note.columns.map(function(c) {
+            return '<code style="font-size:11px; background:#eee; padding:1px 4px; border-radius:3px;">' + c + '</code>';
+          }).join(' '));
+        }
+        if (note.rows_affected != null) {
+          affected.push(note.rows_affected.toLocaleString() + ' rows');
+        }
+
+        html += '<tr style="border-bottom:1px solid #eee; background:' + bg + ';">';
+        html += '<td style="padding:8px 10px; vertical-align:top;">';
+        html += '<span style="background:' + color + '; color:#fff; font-size:10px; font-weight:bold; padding:2px 7px; border-radius:3px; text-transform:uppercase;">' + sev + '</span>';
+        html += '</td>';
+        html += '<td style="padding:8px 10px; vertical-align:top; color:#444; font-size:12px;">' + catText + '</td>';
+        html += '<td style="padding:8px 10px; vertical-align:top;">' + (note.message || '') + '</td>';
+        html += '<td style="padding:8px 10px; vertical-align:top; font-size:12px;">' + (affected.join('<br>') || '—') + '</td>';
+        html += '</tr>';
+      });
+
+      html += '</tbody></table></div></details>';
+      return html;
+    },
+
+    /**
      * Load an external script if not already present
      */
     _loadScript: function(src, checkGlobal) {
@@ -948,7 +1009,8 @@
         this.renderEmbeddingSpace(modelCardJson),
         this.renderBestEpochs(modelCardJson),
         this.renderTrainingOptimization(modelCardJson),
-        this.renderTrainingDataset(modelCardJson)
+        this.renderTrainingDataset(modelCardJson),
+        this.renderDataProcessingNotes(modelCardJson)
       ].join('');
       
       // Return a fragment wrapped in a scoped container, not a full HTML document

@@ -129,6 +129,16 @@ export interface ModelCardData {
   disk_usage?: {
     best_model_path?: string;
   };
+  data_processing_notes?: DataProcessingNote[];
+}
+
+export interface DataProcessingNote {
+  category: string;
+  message: string;
+  severity: string;
+  columns?: string[];
+  rows_affected?: number;
+  details?: Record<string, unknown>;
 }
 
 interface ModelCardProps {
@@ -228,6 +238,7 @@ export const ModelCard: React.FC<ModelCardProps> = ({ data, className = '' }) =>
   const ci = data.class_imbalance;
   const be = data.best_epochs;
   const to = data.training_optimization;
+  const dpn = data.data_processing_notes;
   const ma = data.model_architecture || {};
   const ms = data.model_stack?.[0] || {};
   const sp = data.single_predictor || {};
@@ -696,6 +707,62 @@ export const ModelCard: React.FC<ModelCardProps> = ({ data, className = '' }) =>
               <div style={{ marginTop: '15px', color: '#666', fontSize: '13px' }}>
                 Imbalance ratio: <strong>{ci.imbalance_ratio}:1</strong> (minority class is {((ci.minority_class_count / ci.total_samples) * 100).toFixed(1)}% of data)
               </div>
+            </div>
+          </details>
+        )}
+
+        {/* DATA PROCESSING NOTES */}
+        {dpn && dpn.length > 0 && (
+          <details className="section" open>
+            <summary>DATA PROCESSING NOTES</summary>
+            <div className="section-content">
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+                <thead>
+                  <tr style={{ borderBottom: '2px solid #000' }}>
+                    <th style={{ textAlign: 'left', padding: '6px 10px', width: '110px' }}>Severity</th>
+                    <th style={{ textAlign: 'left', padding: '6px 10px', width: '140px' }}>Category</th>
+                    <th style={{ textAlign: 'left', padding: '6px 10px' }}>Message</th>
+                    <th style={{ textAlign: 'left', padding: '6px 10px', width: '180px' }}>Affected</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {dpn.map((note, i) => {
+                    const sev = (note.severity || 'info').toLowerCase();
+                    const severityColor: Record<string, string> = { info: '#1976d2', warning: '#f57c00', critical: '#c62828' };
+                    const severityBg: Record<string, string> = { info: '#e3f2fd', warning: '#fff3e0', critical: '#ffebee' };
+                    const categoryLabel: Record<string, string> = {
+                      column_dropped: 'Column Dropped', rows_filtered: 'Rows Filtered',
+                      type_detection: 'Type Detection', data_transform: 'Data Transform',
+                      csv_parsing: 'CSV Parsing', dataset_sampling: 'Dataset Sampling',
+                    };
+                    const affected: string[] = [];
+                    if (note.columns && note.columns.length > 0) {
+                      affected.push(note.columns.join(', '));
+                    }
+                    if (note.rows_affected != null) {
+                      affected.push(`${note.rows_affected.toLocaleString()} rows`);
+                    }
+                    return (
+                      <tr key={i} style={{ borderBottom: '1px solid #eee', background: severityBg[sev] || '#f5f5f5' }}>
+                        <td style={{ padding: '8px 10px', verticalAlign: 'top' }}>
+                          <span style={{
+                            background: severityColor[sev] || '#555', color: '#fff',
+                            fontSize: '10px', fontWeight: 'bold', padding: '2px 7px',
+                            borderRadius: '3px', textTransform: 'uppercase',
+                          }}>{sev}</span>
+                        </td>
+                        <td style={{ padding: '8px 10px', verticalAlign: 'top', color: '#444', fontSize: '12px' }}>
+                          {categoryLabel[note.category] || note.category || 'Note'}
+                        </td>
+                        <td style={{ padding: '8px 10px', verticalAlign: 'top' }}>{note.message}</td>
+                        <td style={{ padding: '8px 10px', verticalAlign: 'top', fontSize: '12px' }}>
+                          {affected.length > 0 ? affected.map((a, j) => <div key={j}>{a}</div>) : '—'}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
           </details>
         )}

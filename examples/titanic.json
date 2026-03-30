@@ -399,5 +399,19 @@
     "created_at": "2026-01-18T23:52:32.704848",
     "training_duration_minutes": 0,
     "version_info": {}
-  }
+  },
+  "data_processing_notes": [
+    {
+      "category": "column_dropped",
+      "message": "Dropped 1 pandas index artifact column(s): ['Unnamed: 0'] — row indices from a prior df.to_csv() export without index=False",
+      "severity": "info",
+      "columns": ["Unnamed: 0"]
+    },
+    {
+      "category": "type_detection",
+      "message": "Column 'Cabin' detected as free-text with 148 unique values across 891 rows — treated as categorical",
+      "severity": "info",
+      "columns": ["Cabin"]
+    }
+  ]
 }

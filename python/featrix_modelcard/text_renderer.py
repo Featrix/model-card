@@ -150,6 +150,7 @@ def render_detailed_text(data: Dict[str, Any]) -> str:
         _render_best_epochs(data),
         _render_training_optimization(data),
         _render_training_dataset(data),
+        _render_data_processing_notes(data),
     ]
     return "\n".join(s for s in sections if s)
 
@@ -377,6 +378,49 @@ def _render_training_dataset(data: dict) -> str:
         lines.append(f"  Training rows: {td['train_rows']:,}")
 
     lines.append("")
+    return "\n".join(lines)
+
+
+def _render_data_processing_notes(data: dict) -> str:
+    notes = data.get("data_processing_notes")
+    if not notes:
+        return ""
+
+    category_labels = {
+        "column_dropped": "Column Dropped",
+        "rows_filtered": "Rows Filtered",
+        "type_detection": "Type Detection",
+        "data_transform": "Data Transform",
+        "csv_parsing": "CSV Parsing",
+        "dataset_sampling": "Dataset Sampling",
+    }
+
+    sep = "-" * 60
+    lines = [
+        "DATA PROCESSING NOTES",
+        "=" * 60,
+        "",
+    ]
+
+    for note in notes:
+        sev = (note.get("severity") or "info").upper()
+        cat = category_labels.get(note.get("category", ""), note.get("category", "Note"))
+        msg = note.get("message", "")
+
+        affected_parts = []
+        cols = note.get("columns")
+        if cols:
+            affected_parts.append("Columns: " + ", ".join(cols))
+        rows = note.get("rows_affected")
+        if rows is not None:
+            affected_parts.append(f"{rows:,} rows affected")
+
+        lines.append(f"  [{sev}] {cat}")
+        lines.append(f"    {msg}")
+        if affected_parts:
+            lines.append(f"    ({'; '.join(affected_parts)})")
+        lines.append("")
+
     return "\n".join(lines)
 
 

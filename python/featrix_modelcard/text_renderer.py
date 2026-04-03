@@ -26,10 +26,17 @@ def format_value(value: Any, precision: int = 4) -> str:
 
 
 def format_pct(value: Optional[float]) -> str:
-    """Format a 0-1 float as a percentage."""
+    """Format a 0-1 float as a percentage (for accuracy only)."""
     if value is None:
         return "N/A"
     return f"{value * 100:.1f}%"
+
+
+def format_metric(value: Optional[float]) -> str:
+    """Format a 0-1 float as a raw decimal (for AUC, F1, precision, recall, etc.)."""
+    if value is None:
+        return "N/A"
+    return f"{value:.4f}"
 
 
 def format_large_number(value) -> str:
@@ -114,9 +121,9 @@ def render_brief_text(data: Dict[str, Any]) -> str:
     lines.append("")
     lines.append(
         f"Accuracy: {format_pct(acc)}  "
-        f"AUC: {format_pct(roc_auc)}  "
-        f"PR-AUC: {format_pct(pr_auc)}  "
-        f"F1: {format_pct(f1)}"
+        f"AUC: {format_metric(roc_auc)}  "
+        f"PR-AUC: {format_metric(pr_auc)}  "
+        f"F1: {format_metric(f1)}"
     )
 
     # Class imbalance summary
@@ -192,8 +199,8 @@ def _render_model_identification(data: dict) -> str:
         "-" * 60,
         f"  Target Column:  {mi.get('target_column', 'N/A')}",
         f"  Model Type:     {model_type}",
-        f"  Best ROC-AUC:   {format_pct(roc_auc)}",
-        f"  Best PR-AUC:    {format_pct(pr_auc)}"
+        f"  Best ROC-AUC:   {format_metric(roc_auc)}",
+        f"  Best PR-AUC:    {format_metric(pr_auc)}"
         + (f"  [{pr_auc_lift:.1f}x lift]" if pr_auc_lift else ""),
         "",
         f"  Status:         {status}",
@@ -259,7 +266,7 @@ def _render_best_epochs(data: dict) -> str:
             m = metrics.get(mkey)
             if not m:
                 continue
-            val = format_pct(m.get("value"))
+            val = format_pct(m.get("value")) if mkey == "accuracy" else format_metric(m.get("value"))
             lines.append(f"    {mkey.upper().replace('_', ' '):12s} {val}")
 
         # Confusion matrix
@@ -283,11 +290,11 @@ def _render_best_epochs(data: dict) -> str:
             precision = tp / (tp + fp) if (tp + fp) > 0 else 0
 
             lines.append("")
-            lines.append(f"    Hit Rate (Recall):  {hit_rate * 100:.1f}%   TP/(TP+FN)")
-            lines.append(f"    Miss Rate:          {miss_rate * 100:.1f}%   FN/(TP+FN)")
-            lines.append(f"    Specificity (TNR):  {specificity * 100:.1f}%   TN/(TN+FP)")
-            lines.append(f"    False Alarm (FPR):  {fpr * 100:.1f}%   FP/(TN+FP)")
-            lines.append(f"    Precision (PPV):    {precision * 100:.1f}%   TP/(TP+FP)")
+            lines.append(f"    Hit Rate (Recall):  {hit_rate:.4f}   TP/(TP+FN)")
+            lines.append(f"    Miss Rate:          {miss_rate:.4f}   FN/(TP+FN)")
+            lines.append(f"    Specificity (TNR):  {specificity:.4f}   TN/(TN+FP)")
+            lines.append(f"    False Alarm (FPR):  {fpr:.4f}   FP/(TN+FP)")
+            lines.append(f"    Precision (PPV):    {precision:.4f}   TP/(TP+FP)")
 
         lines.append("")
 
@@ -332,7 +339,7 @@ def _render_training_optimization(data: dict) -> str:
         lines.append(f"  Adaptive Loss:         {'Yes' if to['adaptive_loss'] else 'No'}{adj}")
 
     if to.get("checkpoint_value") is not None:
-        lines.append(f"  Best Checkpoint:       {to['checkpoint_value'] * 100:.2f}% at epoch {to.get('checkpoint_epoch', 'N/A')}")
+        lines.append(f"  Best Checkpoint:       {to['checkpoint_value']:.4f} at epoch {to.get('checkpoint_epoch', 'N/A')}")
 
     if to.get("positive_class") is not None:
         lines.append(f"  Positive Class:        \"{to['positive_class']}\"")

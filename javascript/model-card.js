@@ -13,7 +13,7 @@
   'use strict';
 
   const FeatrixModelCard = {
-    VERSION: '1.11',
+    VERSION: '1.13',
     BUILD: 'dev',
 
     /**
@@ -44,7 +44,7 @@
       if (value === null || value === undefined) {
         return '<em>N/A</em>';
       }
-      return (value * 100).toFixed(2) + '%';
+      return value.toFixed(4);
     },
 
     /**
@@ -87,6 +87,27 @@
       if (severityLower === 'moderate') return '#ffc107';
       if (severityLower === 'low') return '#007bff';
       return '#6c757d';
+    },
+
+    /**
+     * Detect training phase: 'es', 'sp', or null (done/unknown)
+     */
+    getTrainingPhase: function(data) {
+      var mi = data.model_identification || {};
+      // Use explicit field if backend provides it
+      if (mi.training_phase) return mi.training_phase.toLowerCase();
+      // Infer from model_type
+      var mt = (mi.model_type || '').toLowerCase();
+      if (mt === 'foundation' || mt === 'embedding space' || mt === 'es') return 'es';
+      if (mt.indexOf('predictor') !== -1 || mt.indexOf('tbd') !== -1 || mt === 'sp' || mt === 'single predictor') return 'sp';
+      return null;
+    },
+
+    /**
+     * Is the model currently training?
+     */
+    isTraining: function(data) {
+      return ((data.model_identification || {}).status || '').toLowerCase() === 'training';
     },
 
     /**
@@ -182,11 +203,58 @@
       var frameworkDisplay = mi.framework || 'N/A';
       frameworkDisplay = frameworkDisplay.replace(/\s+unknown$/i, '').trim() || 'N/A';
 
+      // Phase-aware rendering
+      var training = this.isTraining(data);
+      var phase = this.getTrainingPhase(data);
+      var hideAucCards = training && phase === 'es';
+
+      // Phase indicator
+      var phaseIndicator = '';
+      if (training && phase) {
+        var phaseDesc = phase === 'es' ? 'Phase 1/2: Training Foundation Model' : 'Phase 2/2: Training Predictor';
+        phaseIndicator = '<div style="margin-bottom: 15px; padding: 8px 14px; background: #fff8e1; border-left: 3px solid #ffc107; font-size: 13px; color: #6d4c00;">' + phaseDesc + '</div>';
+      }
+
+      // Epoch progress indicator (only during training)
+      var epochProgress = '';
+      if (training) {
+        var tc = data.training_configuration || {};
+        var currentEpoch = tc.current_epoch || tc.best_epoch || null;
+        var plannedEpochs = tc.planned_epochs || null;
+        if (currentEpoch !== null) {
+          var epochText = 'Epoch ' + currentEpoch;
+          var barHtml = '';
+          if (plannedEpochs) {
+            var pct = Math.min(100, Math.round((currentEpoch / plannedEpochs) * 100));
+            epochText += ' / ' + plannedEpochs;
+            barHtml = '<div style="display: inline-block; width: 120px; height: 8px; background: #e0e0e0; border-radius: 4px; vertical-align: middle; margin-left: 10px;">' +
+                      '<div style="width: ' + pct + '%; height: 100%; background: #ffc107; border-radius: 4px;"></div></div>' +
+                      ' <span style="font-size: 11px; color: #999;">' + pct + '%</span>';
+          }
+          epochProgress = '<div style="margin-top: 10px; font-size: 13px; color: #555;"><strong>' + epochText + '</strong>' + barHtml + '</div>';
+        }
+      }
+
+      // AUC hero cards (hidden during ES training)
+      var aucCards = '';
+      if (!hideAucCards) {
+        aucCards = `
+                <div class="metric" style="background: #e3f2fd; border-color: #90caf9;">
+                    <div class="metric-label" style="color: #1976d2;">Best ROC-AUC</div>
+                    <div class="metric-value" style="font-size: 28px; color: #1565c0;">${bestRocAuc !== null ? bestRocAuc.toFixed(4) : 'N/A'}</div>
+                </div>
+                <div class="metric" style="background: #e8f5e9; border-color: #a5d6a7;"${prevalence !== null ? ' title="Random baseline: ' + (prevalence * 100).toFixed(1) + '% (class prevalence)"' : ''}>
+                    <div class="metric-label" style="color: #388e3c;">Best PR-AUC</div>
+                    <div class="metric-value" style="font-size: 28px; color: #2e7d32;">${bestPrAuc !== null ? bestPrAuc.toFixed(4) : 'N/A'}${prAucLift !== null ? ' <span style="font-size: 14px; font-weight: normal;">[' + prAucLift.toFixed(1) + 'x]</span>' : ''}</div>
+                </div>`;
+      }
+
       return `
     <details class="section" open>
         <summary>MODEL IDENTIFICATION</summary>
         <div class="section-content">
-            <div class="grid">
+            ${phaseIndicator}
+            <div class="grid"${hideAucCards ? ' style="grid-template-columns: repeat(2, 1fr);"' : ''}>
                 <div class="metric">
                     <div class="metric-label">Target Column</div>
                     <div class="metric-value" style="font-size: 20px;">${mi.target_column || 'N/A'}</div>
@@ -195,21 +263,15 @@
                     <div class="metric-label">Model Type</div>
                     <div class="metric-value" style="font-size: 20px;">${modelTypeDisplay}</div>
                 </div>
-                <div class="metric" style="background: #e3f2fd; border-color: #90caf9;">
-                    <div class="metric-label" style="color: #1976d2;">Best ROC-AUC</div>
-                    <div class="metric-value" style="font-size: 28px; color: #1565c0;">${bestRocAuc !== null ? (bestRocAuc * 100).toFixed(1) + '%' : 'N/A'}</div>
-                </div>
-                <div class="metric" style="background: #e8f5e9; border-color: #a5d6a7;"${prevalence !== null ? ' title="Random baseline: ' + (prevalence * 100).toFixed(1) + '% (class prevalence)"' : ''}>
-                    <div class="metric-label" style="color: #388e3c;">Best PR-AUC</div>
-                    <div class="metric-value" style="font-size: 28px; color: #2e7d32;">${bestPrAuc !== null ? (bestPrAuc * 100).toFixed(1) + '%' : 'N/A'}${prAucLift !== null ? ' <span style="font-size: 14px; font-weight: normal;">[' + prAucLift.toFixed(1) + 'x]</span>' : ''}</div>
-                </div>
+                ${aucCards}
             </div>
             <div style="margin-top: 20px; padding-top: 15px; border-top: 1px solid #ddd; font-size: 12px; color: #666; line-height: 2;">
-                <span class="status-badge" style="background-color: ${statusColor}; font-size: 11px; padding: 2px 8px;">${((mi.status || 'N/A').toLowerCase() === 'done' ? 'READY' : (mi.status || 'N/A').toUpperCase())}</span>
+                <span class="status-badge${(mi.status || '').toLowerCase() === 'training' ? ' training' : ''}" style="background-color: ${statusColor}; font-size: 11px; padding: 2px 8px;">${((mi.status || 'N/A').toLowerCase() === 'done' ? 'READY' : (mi.status || 'N/A').toUpperCase())}</span>
                 &nbsp;&nbsp;${mi.training_date || 'N/A'}
                 &nbsp;&nbsp;•&nbsp;&nbsp;<strong>Model:</strong> <code style="font-size: 11px;">${modelIdDisplay}</code>
                 &nbsp;&nbsp;•&nbsp;&nbsp;<strong>Cluster:</strong> ${(mi.compute_cluster || 'N/A').toUpperCase()}
                 &nbsp;&nbsp;•&nbsp;&nbsp;<strong>Dims:</strong> ${(data.embedding_space && data.embedding_space.d_model) || 'N/A'}
+                ${epochProgress}
             </div>${sphereSessionId ? `
             <div style="margin-top: 20px; padding-top: 15px; border-top: 1px solid #ddd;">
                 <div class="sphere-thumbnail" data-session-id="${sphereSessionId}" title="Click to expand">
@@ -378,19 +440,19 @@
         <div class="grid">
             <div class="metric">
                 <div class="metric-label" title="How often we are correct when we raise an alert">Precision</div>
-                <div class="metric-value">${cm.precision !== null && cm.precision !== undefined ? cm.precision.toFixed(3) : 'N/A'}</div>
+                <div class="metric-value">${cm.precision !== null && cm.precision !== undefined ? cm.precision.toFixed(4) : 'N/A'}</div>
             </div>
             <div class="metric">
                 <div class="metric-label" title="How many true rare events we catch">Recall</div>
-                <div class="metric-value">${cm.recall !== null && cm.recall !== undefined ? cm.recall.toFixed(3) : 'N/A'}</div>
+                <div class="metric-value">${cm.recall !== null && cm.recall !== undefined ? cm.recall.toFixed(4) : 'N/A'}</div>
             </div>
             <div class="metric">
                 <div class="metric-label">F1 Score</div>
-                <div class="metric-value">${cm.f1 !== null && cm.f1 !== undefined ? cm.f1.toFixed(3) : 'N/A'}</div>
+                <div class="metric-value">${cm.f1 !== null && cm.f1 !== undefined ? cm.f1.toFixed(4) : 'N/A'}</div>
             </div>
             <div class="metric">
                 <div class="metric-label">AUC</div>
-                <div class="metric-value">${cm.auc !== null && cm.auc !== undefined ? cm.auc.toFixed(3) : 'N/A'}</div>
+                <div class="metric-value">${cm.auc !== null && cm.auc !== undefined ? cm.auc.toFixed(4) : 'N/A'}</div>
             </div>
         </div>
         `;
@@ -456,6 +518,8 @@
     renderBestEpochs: function(data) {
       var be = data.best_epochs;
       if (!be) return '';
+      // Hide during ES training (no predictor metrics yet)
+      if (this.isTraining(data) && this.getTrainingPhase(data) === 'es') return '';
 
       var self = this;
 
@@ -471,7 +535,11 @@
           if (!m) continue;
           html += '<tr>';
           html += '<td style="text-transform: uppercase; font-weight: bold;">' + key.replace('_', ' ') + '</td>';
-          html += '<td style="font-size: 18px; font-weight: bold;">' + (typeof m.value === 'number' ? (m.value * 100).toFixed(2) + '%' : 'N/A') + '</td>';
+          var displayVal = 'N/A';
+          if (typeof m.value === 'number') {
+            displayVal = key === 'accuracy' ? (m.value * 100).toFixed(2) + '%' : m.value.toFixed(4);
+          }
+          html += '<td style="font-size: 18px; font-weight: bold;">' + displayVal + '</td>';
           html += '</tr>';
         }
         html += '</table>';
@@ -513,11 +581,11 @@
 
         // Derived metrics
         html += '<table class="derived-metrics">';
-        html += '<tr><td><strong>Hit Rate</strong> (Recall)</td><td class="dm-value">' + (hitRate * 100).toFixed(1) + '%</td><td class="dm-formula">TP / (TP+FN)</td></tr>';
-        html += '<tr><td><strong>Miss Rate</strong></td><td class="dm-value">' + (missRate * 100).toFixed(1) + '%</td><td class="dm-formula">FN / (TP+FN)</td></tr>';
-        html += '<tr><td><strong>Specificity</strong> (TNR)</td><td class="dm-value">' + (specificity * 100).toFixed(1) + '%</td><td class="dm-formula">TN / (TN+FP)</td></tr>';
-        html += '<tr><td><strong>False Alarm</strong> (FPR)</td><td class="dm-value">' + (falseAlarmRate * 100).toFixed(1) + '%</td><td class="dm-formula">FP / (TN+FP)</td></tr>';
-        html += '<tr><td><strong>Precision</strong> (PPV)</td><td class="dm-value">' + (precision * 100).toFixed(1) + '%</td><td class="dm-formula">TP / (TP+FP)</td></tr>';
+        html += '<tr><td><strong>Hit Rate</strong> (Recall)</td><td class="dm-value">' + hitRate.toFixed(4) + '</td><td class="dm-formula">TP / (TP+FN)</td></tr>';
+        html += '<tr><td><strong>Miss Rate</strong></td><td class="dm-value">' + missRate.toFixed(4) + '</td><td class="dm-formula">FN / (TP+FN)</td></tr>';
+        html += '<tr><td><strong>Specificity</strong> (TNR)</td><td class="dm-value">' + specificity.toFixed(4) + '</td><td class="dm-formula">TN / (TN+FP)</td></tr>';
+        html += '<tr><td><strong>False Alarm</strong> (FPR)</td><td class="dm-value">' + falseAlarmRate.toFixed(4) + '</td><td class="dm-formula">FP / (TN+FP)</td></tr>';
+        html += '<tr><td><strong>Precision</strong> (PPV)</td><td class="dm-value">' + precision.toFixed(4) + '</td><td class="dm-formula">TP / (TP+FP)</td></tr>';
         html += '</table>';
 
         html += '</div></div>';
@@ -661,7 +729,7 @@
 
       if (to.checkpoint_value !== undefined) {
         html += '<tr><td><strong>Best Checkpoint</strong></td>';
-        html += '<td>' + (to.checkpoint_value * 100).toFixed(2) + '% at epoch ' + (to.checkpoint_epoch || 'N/A') + '</td></tr>';
+        html += '<td>' + to.checkpoint_value.toFixed(4) + ' at epoch ' + (to.checkpoint_epoch || 'N/A') + '</td></tr>';
       }
 
       if (to.positive_class !== undefined) {
@@ -910,6 +978,48 @@
     },
 
     /**
+     * Start polling for model card updates during training.
+     * Stops automatically when status changes away from TRAINING.
+     *
+     * @param {Object} options
+     * @param {HTMLElement} options.container - DOM element that holds the rendered card
+     * @param {Function} options.fetchModelCard - async function returning the model card JSON
+     * @param {number} [options.intervalMs=15000] - polling interval in ms
+     * @param {Object} [options.renderOptions] - options passed to renderHTML
+     * @returns {Function} stop - call to cancel polling
+     */
+    startTrainingPoll: function(options) {
+      var self = this;
+      var container = options.container;
+      var fetchModelCard = options.fetchModelCard;
+      var intervalMs = options.intervalMs || 15000;
+      var renderOptions = options.renderOptions || {};
+      var timerId = null;
+
+      function poll() {
+        fetchModelCard().then(function(json) {
+          if (!json) return;
+          container.innerHTML = self.renderHTML(json, renderOptions);
+          self.attachEventListeners(container);
+
+          var status = ((json.model_identification || {}).status || '').toLowerCase();
+          if (status === 'training') {
+            timerId = setTimeout(poll, intervalMs);
+          }
+        }).catch(function(err) {
+          console.warn('FeatrixModelCard: poll error:', err.message);
+          timerId = setTimeout(poll, intervalMs);
+        });
+      }
+
+      timerId = setTimeout(poll, intervalMs);
+
+      return function stop() {
+        if (timerId) { clearTimeout(timerId); timerId = null; }
+      };
+    },
+
+    /**
      * Render complete HTML model card
      */
     renderGenerating: function(modelCardJson) {
@@ -1098,12 +1208,19 @@
             background: #f5f5f5;
         }
         
+        @keyframes featrix-training-pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.7; transform: scale(1.05); }
+        }
         .featrix-model-card .status-badge, .featrix-model-card .quality-badge, .featrix-model-card .severity-badge {
             display: inline-block;
             padding: 4px 12px;
             color: white;
             font-size: 12px;
             font-weight: 600;
+        }
+        .featrix-model-card .status-badge.training {
+            animation: featrix-training-pulse 2s ease-in-out infinite;
         }
         
         .featrix-model-card .warning-item {

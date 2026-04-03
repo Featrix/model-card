@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 
 // Type definitions for the model card JSON structure
 export interface ClassificationMetric {
@@ -89,6 +89,7 @@ export interface ModelCardData {
     status: string;
     model_type: string;
     framework: string;
+    training_phase?: string;
   };
   embedding_space?: {
     num_columns: number;
@@ -110,6 +111,12 @@ export interface ModelCardData {
   best_epochs?: {
     best_roc_auc?: BestEpochData;
     best_pr_auc?: BestEpochData;
+  };
+  training_configuration?: {
+    current_epoch?: number;
+    planned_epochs?: number;
+    best_epoch?: number;
+    [key: string]: unknown;
   };
   training_optimization?: TrainingOptimization;
   model_architecture?: {
@@ -144,6 +151,10 @@ export interface DataProcessingNote {
 interface ModelCardProps {
   data: ModelCardData;
   className?: string;
+  /** Called periodically during training so the parent can re-fetch and update `data`. */
+  onRefetch?: () => void;
+  /** Polling interval in ms (default 15000). Only active when status is TRAINING. */
+  pollIntervalMs?: number;
 }
 
 const COLORS = {
@@ -209,6 +220,14 @@ const getModelTypeDisplay = (modelType: string, targetType: string | null): stri
   return modelType;
 };
 
+const getTrainingPhase = (mi: ModelCardData['model_identification']): 'es' | 'sp' | null => {
+  if (mi.training_phase) return mi.training_phase.toLowerCase() as 'es' | 'sp';
+  const mt = (mi.model_type || '').toLowerCase();
+  if (mt === 'foundation' || mt === 'embedding space' || mt === 'es') return 'es';
+  if (mt.includes('predictor') || mt.includes('tbd') || mt === 'sp' || mt === 'single predictor') return 'sp';
+  return null;
+};
+
 const parseModelPath = (path?: string): { sessionId: string | null } => {
   if (!path) return { sessionId: null };
   const parts = path.split('/');
@@ -220,9 +239,19 @@ const parseModelPath = (path?: string): { sessionId: string | null } => {
   return { sessionId: null };
 };
 
-export const ModelCard: React.FC<ModelCardProps> = ({ data, className = '' }) => {
+export const ModelCard: React.FC<ModelCardProps> = ({ data, className = '', onRefetch, pollIntervalMs = 15000 }) => {
   const [activeTab, setActiveTab] = useState<'roc-auc' | 'pr-auc'>('roc-auc');
   const [showPerRowTracking, setShowPerRowTracking] = useState<{ [key: string]: boolean }>({});
+
+  // Auto-refresh polling during training
+  const onRefetchRef = useRef(onRefetch);
+  onRefetchRef.current = onRefetch;
+  useEffect(() => {
+    const isTraining = data.model_identification?.status?.toLowerCase() === 'training';
+    if (!isTraining || !onRefetchRef.current) return;
+    const id = setInterval(() => { onRefetchRef.current?.(); }, pollIntervalMs);
+    return () => clearInterval(id);
+  }, [data.model_identification?.status, pollIntervalMs]);
 
   const expandAll = () => {
     document.querySelectorAll('details').forEach(d => d.open = true);
@@ -242,6 +271,10 @@ export const ModelCard: React.FC<ModelCardProps> = ({ data, className = '' }) =>
   const ma = data.model_architecture || {};
   const ms = data.model_stack?.[0] || {};
   const sp = data.single_predictor || {};
+
+  const isTraining = mi.status?.toLowerCase() === 'training';
+  const phase = getTrainingPhase(mi);
+  const hideAucCards = isTraining && phase === 'es';
 
   const parsed = parseModelPath(data.disk_usage?.best_model_path);
   const modelIdDisplay = parsed.sessionId || mi.session_id?.substring(0, 20) || 'N/A';
@@ -291,11 +324,11 @@ export const ModelCard: React.FC<ModelCardProps> = ({ data, className = '' }) =>
             return (
               <tr key={key}>
                 <td style={{ textTransform: 'uppercase', fontWeight: 'bold' }}>{key.replace('_', ' ')}</td>
-                <td>{typeof m.value === 'number' ? `${(m.value * 100).toFixed(2)}%` : 'N/A'}</td>
+                <td>{typeof m.value === 'number' ? (key === 'accuracy' ? `${(m.value * 100).toFixed(2)}%` : m.value.toFixed(4)) : 'N/A'}</td>
                 <td><span className="quality-badge" style={getQualityStyle(m.quality)}>{m.quality || 'N/A'}</span></td>
                 <td style={{ fontSize: '18px' }}>{m.trend || ''}</td>
-                <td>{m.delta_1 !== null ? `${m.delta_1 > 0 ? '+' : ''}${(m.delta_1 * 100).toFixed(2)}%` : '-'}</td>
-                <td>{m.delta_5 !== null ? `${m.delta_5 > 0 ? '+' : ''}${(m.delta_5 * 100).toFixed(2)}%` : '-'}</td>
+                <td>{m.delta_1 !== null ? `${m.delta_1 > 0 ? '+' : ''}${key === 'accuracy' ? `${(m.delta_1 * 100).toFixed(2)}%` : m.delta_1.toFixed(4)}` : '-'}</td>
+                <td>{m.delta_5 !== null ? `${m.delta_5 > 0 ? '+' : ''}${key === 'accuracy' ? `${(m.delta_5 * 100).toFixed(2)}%` : m.delta_5.toFixed(4)}` : '-'}</td>
               </tr>
             );
           })}
@@ -338,11 +371,11 @@ export const ModelCard: React.FC<ModelCardProps> = ({ data, className = '' }) =>
           </table>
           <table className="derived-metrics">
             <tbody>
-              <tr><td><strong>Hit Rate</strong> (Recall)</td><td className="dm-value">{(hitRate * 100).toFixed(1)}%</td><td className="dm-formula">TP / (TP+FN)</td></tr>
-              <tr><td><strong>Miss Rate</strong></td><td className="dm-value">{(missRate * 100).toFixed(1)}%</td><td className="dm-formula">FN / (TP+FN)</td></tr>
-              <tr><td><strong>Specificity</strong> (TNR)</td><td className="dm-value">{(specificity * 100).toFixed(1)}%</td><td className="dm-formula">TN / (TN+FP)</td></tr>
-              <tr><td><strong>False Alarm</strong> (FPR)</td><td className="dm-value">{(falseAlarmRate * 100).toFixed(1)}%</td><td className="dm-formula">FP / (TN+FP)</td></tr>
-              <tr><td><strong>Precision</strong> (PPV)</td><td className="dm-value">{(precision * 100).toFixed(1)}%</td><td className="dm-formula">TP / (TP+FP)</td></tr>
+              <tr><td><strong>Hit Rate</strong> (Recall)</td><td className="dm-value">{hitRate.toFixed(4)}</td><td className="dm-formula">TP / (TP+FN)</td></tr>
+              <tr><td><strong>Miss Rate</strong></td><td className="dm-value">{missRate.toFixed(4)}</td><td className="dm-formula">FN / (TP+FN)</td></tr>
+              <tr><td><strong>Specificity</strong> (TNR)</td><td className="dm-value">{specificity.toFixed(4)}</td><td className="dm-formula">TN / (TN+FP)</td></tr>
+              <tr><td><strong>False Alarm</strong> (FPR)</td><td className="dm-value">{falseAlarmRate.toFixed(4)}</td><td className="dm-formula">FP / (TN+FP)</td></tr>
+              <tr><td><strong>Precision</strong> (PPV)</td><td className="dm-value">{precision.toFixed(4)}</td><td className="dm-formula">TP / (TP+FP)</td></tr>
             </tbody>
           </table>
         </div>
@@ -469,7 +502,12 @@ export const ModelCard: React.FC<ModelCardProps> = ({ data, className = '' }) =>
         .featrix-model-card .btn { padding: 6px 12px; background: #fff; color: #000; border: 1px solid #999; cursor: pointer; font-size: 12px; font-family: inherit; }
         .featrix-model-card .btn:hover { background: #f0f0f0; }
 
+        @keyframes featrix-training-pulse {
+          0%, 100% { opacity: 1; transform: scale(1); }
+          50% { opacity: 0.7; transform: scale(1.05); }
+        }
         .featrix-model-card .status-badge, .featrix-model-card .quality-badge { display: inline-block; padding: 4px 12px; color: white; font-size: 12px; font-weight: 600; }
+        .featrix-model-card .status-badge.training { animation: featrix-training-pulse 2s ease-in-out infinite; }
 
         .featrix-model-card code { background: #fff; padding: 2px 6px; border: 1px solid #000; font-family: 'Courier New', monospace; font-size: 13px; }
 
@@ -495,7 +533,12 @@ export const ModelCard: React.FC<ModelCardProps> = ({ data, className = '' }) =>
         <details className="section" open>
           <summary>MODEL IDENTIFICATION</summary>
           <div className="section-content">
-            <div className="grid">
+            {isTraining && phase && (
+              <div style={{ marginBottom: '15px', padding: '8px 14px', background: '#fff8e1', borderLeft: '3px solid #ffc107', fontSize: '13px', color: '#6d4c00' }}>
+                {phase === 'es' ? 'Phase 1/2: Training Foundation Model' : 'Phase 2/2: Training Predictor'}
+              </div>
+            )}
+            <div className="grid" style={hideAucCards ? { gridTemplateColumns: 'repeat(2, 1fr)' } : undefined}>
               <div className="metric">
                 <div className="metric-label">Target Column</div>
                 <div className="metric-value" style={{ fontSize: '20px' }}>{mi.target_column || 'N/A'}</div>
@@ -504,28 +547,52 @@ export const ModelCard: React.FC<ModelCardProps> = ({ data, className = '' }) =>
                 <div className="metric-label">Model Type</div>
                 <div className="metric-value" style={{ fontSize: '20px' }}>{getModelTypeDisplay(mi.model_type, mi.target_column_type)}</div>
               </div>
-              <div className="metric" style={{ background: '#e3f2fd', borderColor: '#90caf9' }}>
-                <div className="metric-label" style={{ color: '#1976d2' }}>Best ROC-AUC</div>
-                <div className="metric-value" style={{ fontSize: '28px', color: '#1565c0' }}>
-                  {bestRocAuc !== null ? `${(bestRocAuc * 100).toFixed(1)}%` : 'N/A'}
-                </div>
-              </div>
-              <div className="metric" style={{ background: '#e8f5e9', borderColor: '#a5d6a7' }}>
-                <div className="metric-label" style={{ color: '#388e3c' }}>Best PR-AUC</div>
-                <div className="metric-value" style={{ fontSize: '28px', color: '#2e7d32' }}>
-                  {bestPrAuc !== null ? `${(bestPrAuc * 100).toFixed(1)}%` : 'N/A'}
-                  {prAucLift !== null && <span style={{ fontSize: '14px', fontWeight: 'normal' }}> [{prAucLift.toFixed(1)}x]</span>}
-                </div>
-              </div>
+              {!hideAucCards && (
+                <>
+                  <div className="metric" style={{ background: '#e3f2fd', borderColor: '#90caf9' }}>
+                    <div className="metric-label" style={{ color: '#1976d2' }}>Best ROC-AUC</div>
+                    <div className="metric-value" style={{ fontSize: '28px', color: '#1565c0' }}>
+                      {bestRocAuc !== null ? bestRocAuc.toFixed(4) : 'N/A'}
+                    </div>
+                  </div>
+                  <div className="metric" style={{ background: '#e8f5e9', borderColor: '#a5d6a7' }}>
+                    <div className="metric-label" style={{ color: '#388e3c' }}>Best PR-AUC</div>
+                    <div className="metric-value" style={{ fontSize: '28px', color: '#2e7d32' }}>
+                      {bestPrAuc !== null ? bestPrAuc.toFixed(4) : 'N/A'}
+                      {prAucLift !== null && <span style={{ fontSize: '14px', fontWeight: 'normal' }}> [{prAucLift.toFixed(1)}x]</span>}
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
             <div style={{ marginTop: '20px', paddingTop: '15px', borderTop: '1px solid #ddd', fontSize: '12px', color: '#666', lineHeight: 2 }}>
-              <span className="status-badge" style={{ backgroundColor: getStatusColor(mi.status), fontSize: '11px', padding: '2px 8px' }}>
+              <span className={`status-badge${mi.status?.toLowerCase() === 'training' ? ' training' : ''}`} style={{ backgroundColor: getStatusColor(mi.status), fontSize: '11px', padding: '2px 8px' }}>
                 {getStatusDisplay(mi.status)}
               </span>
               &nbsp;&nbsp;{mi.training_date || 'N/A'}
               &nbsp;&nbsp;•&nbsp;&nbsp;<strong>Model:</strong> <code style={{ fontSize: '11px' }}>{modelIdDisplay}</code>
               &nbsp;&nbsp;•&nbsp;&nbsp;<strong>Cluster:</strong> {(mi.compute_cluster || 'N/A').toUpperCase()}
               &nbsp;&nbsp;•&nbsp;&nbsp;<strong>Dims:</strong> {es?.d_model || 'N/A'}
+              {isTraining && (() => {
+                const tc = data.training_configuration;
+                const currentEpoch = tc?.current_epoch ?? tc?.best_epoch ?? null;
+                const plannedEpochs = tc?.planned_epochs ?? null;
+                if (currentEpoch === null) return null;
+                const pct = plannedEpochs ? Math.min(100, Math.round((currentEpoch / plannedEpochs) * 100)) : null;
+                return (
+                  <div style={{ marginTop: '10px', fontSize: '13px', color: '#555' }}>
+                    <strong>Epoch {currentEpoch}{plannedEpochs ? ` / ${plannedEpochs}` : ''}</strong>
+                    {pct !== null && (
+                      <>
+                        <div style={{ display: 'inline-block', width: '120px', height: '8px', background: '#e0e0e0', borderRadius: '4px', verticalAlign: 'middle', marginLeft: '10px' }}>
+                          <div style={{ width: `${pct}%`, height: '100%', background: '#ffc107', borderRadius: '4px' }} />
+                        </div>
+                        {' '}<span style={{ fontSize: '11px', color: '#999' }}>{pct}%</span>
+                      </>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
           </div>
         </details>
@@ -566,8 +633,8 @@ export const ModelCard: React.FC<ModelCardProps> = ({ data, className = '' }) =>
           </details>
         )}
 
-        {/* MODEL DETAILS - Best Epochs with Tabs */}
-        {be && (
+        {/* MODEL DETAILS - Best Epochs with Tabs (hidden during ES training) */}
+        {be && !hideAucCards && (
           <details className="section" open>
             <summary>MODEL DETAILS</summary>
             <div className="section-content">
@@ -650,7 +717,7 @@ export const ModelCard: React.FC<ModelCardProps> = ({ data, className = '' }) =>
                   {to.checkpoint_value !== undefined && (
                     <tr>
                       <td><strong>Best Checkpoint</strong></td>
-                      <td>{(to.checkpoint_value * 100).toFixed(2)}% at epoch {to.checkpoint_epoch ?? 'N/A'}</td>
+                      <td>{to.checkpoint_value.toFixed(4)} at epoch {to.checkpoint_epoch ?? 'N/A'}</td>
                     </tr>
                   )}
                   {to.positive_class !== undefined && (

@@ -13,7 +13,7 @@
   'use strict';
 
   const FeatrixModelCard = {
-    VERSION: '1.13',
+    VERSION: '1.14',
     BUILD: 'dev',
 
     /**
@@ -808,6 +808,119 @@
     },
 
     /**
+     * Render selective prediction section
+     */
+    renderSelectivePrediction: function(data) {
+      var sp = data.selective_prediction;
+      if (!sp) return '';
+
+      function getDemurBadge(value, baseline) {
+        if (value === null || value === undefined) return { text: 'N/A \u2014 answers everything', bg: '#6c757d', fg: 'white' };
+        if (value === 1.0) return { text: 'PERFECT \u2713', bg: '#28a745', fg: 'white' };
+        if (value > baseline + 0.05) return { text: 'BETTER THAN RANDOM', bg: '#28a745', fg: 'white' };
+        if (Math.abs(value - baseline) <= 0.05) return { text: '\u2248 RANDOM', bg: '#ffc107', fg: '#000' };
+        return { text: 'ANTI-ALIGNED \u26a0', bg: '#dc3545', fg: 'white' };
+      }
+
+      function renderSPEntry(entry) {
+        if (!entry) return '';
+        var dec = entry.demur_error_capture;
+        var baseline = entry.demur_random_baseline;
+        var isAlwaysAnswers = dec === null || dec === undefined;
+        var badge = getDemurBadge(dec, baseline);
+        var n_covered = entry.n_covered || 0;
+        var n_total = entry.n_total || 0;
+        var n_demurred = entry.n_demurred || 0;
+        var coverage = entry.coverage || 0;
+        var tp = entry.n_demurred_true_positives || 0;
+        var fp = entry.n_demurred_false_positives || 0;
+        var fn = entry.n_demurred_false_negatives || 0;
+        var tn = entry.n_demurred_true_negatives || 0;
+
+        var headlineHtml;
+        if (isAlwaysAnswers) {
+          headlineHtml = '<span class="quality-badge" style="background-color:#6c757d;color:white;">' + badge.text + '</span>';
+        } else {
+          headlineHtml = '<span style="font-size:22px;font-weight:bold;">' + dec.toFixed(4) + '</span>' +
+            ' <span class="quality-badge" style="background-color:' + badge.bg + ';color:' + badge.fg + ';">' + badge.text + '</span>' +
+            ' <span style="color:#666;font-size:12px;">vs ' + baseline.toFixed(2) + ' random</span>';
+        }
+
+        var auc_lift = entry.auc_lift || 0;
+        var liftColor = auc_lift >= 0 ? '#28a745' : '#dc3545';
+        var metricsHtml = '<div class="grid" style="grid-template-columns:repeat(5,1fr);margin-bottom:15px;">' +
+          '<div class="metric"><div class="metric-label">Covered AUC</div><div class="metric-value" style="font-size:18px;">' + (entry.covered_auc || 0).toFixed(4) + '</div></div>' +
+          '<div class="metric"><div class="metric-label">Full AUC</div><div class="metric-value" style="font-size:18px;">' + (entry.full_auc || 0).toFixed(4) + '</div></div>' +
+          '<div class="metric"><div class="metric-label">AUC Lift</div><div class="metric-value" style="font-size:18px;color:' + liftColor + ';">' + (auc_lift >= 0 ? '+' : '') + auc_lift.toFixed(4) + '</div></div>' +
+          '<div class="metric"><div class="metric-label">Coverage</div><div class="metric-value" style="font-size:18px;">' + (coverage * 100).toFixed(1) + '%</div></div>' +
+          '<div class="metric"><div class="metric-label">Threshold</div><div class="metric-value" style="font-size:18px;">' + (entry.confidence_threshold || 0).toFixed(2) + '</div></div>' +
+          '</div>';
+
+        var tableHtml = '';
+        if (!isAlwaysAnswers && n_demurred > 0) {
+          var colH = 'style="color:#666;font-weight:normal;font-size:11px;text-transform:uppercase;padding:4px 12px;text-align:center;"';
+          var rowL = 'style="color:#666;font-size:11px;text-transform:uppercase;padding:4px 12px;white-space:nowrap;"';
+          var cellNorm = 'style="border:1px solid #ddd;background:#f5f5f5;padding:10px 18px;text-align:center;font-weight:bold;font-size:16px;min-width:80px;"';
+          var cellHl = 'style="border:1px solid #c8e6c9;background:#e8f5e9;padding:10px 18px;text-align:center;font-weight:bold;font-size:16px;color:#2e7d32;min-width:80px;"';
+          tableHtml = '<div style="margin-bottom:15px;">' +
+            '<h4 style="margin:0 0 10px 0;font-size:13px;font-weight:bold;color:#333;">Declined rows \u2014 what they would have been</h4>' +
+            '<table style="width:auto;">' +
+            '<tr><th></th><th ' + colH + '>Actual +</th><th ' + colH + '>Actual \u2212</th></tr>' +
+            '<tr><td ' + rowL + '>Would predict +</td>' +
+            '<td ' + cellNorm + '>' + tp + '<br><span style="font-size:10px;font-weight:normal;color:#888;">thrown away</span></td>' +
+            '<td ' + cellHl + '>' + fp + '<br><span style="font-size:10px;font-weight:normal;color:#388e3c;">error hidden \u2713</span></td></tr>' +
+            '<tr><td ' + rowL + '>Would predict \u2212</td>' +
+            '<td ' + cellHl + '>' + fn + '<br><span style="font-size:10px;font-weight:normal;color:#388e3c;">error hidden \u2713</span></td>' +
+            '<td ' + cellNorm + '>' + tn + '<br><span style="font-size:10px;font-weight:normal;color:#888;">thrown away</span></td></tr>' +
+            '</table></div>';
+        }
+
+        var contextHtml = '<div style="color:#555;font-size:13px;">Answered ' +
+          n_covered.toLocaleString() + '/' + n_total.toLocaleString() +
+          ' (' + (coverage * 100).toFixed(1) + '%) \u2014 declined ' + n_demurred.toLocaleString() + '</div>';
+
+        return '<div style="margin-bottom:15px;">' + headlineHtml + '</div>' + metricsHtml + tableHtml + contextHtml;
+      }
+
+      var strategyOrder = ['best_always_answers', 'best_balanced_may_demur', 'best_detects_positives_may_demur', 'best_rules_out_negatives_may_demur'];
+      var strategyLabels = {
+        best_always_answers: 'Always Answers',
+        best_balanced_may_demur: 'Balanced',
+        best_detects_positives_may_demur: 'Detect Positives',
+        best_rules_out_negatives_may_demur: 'Rule Out Negatives'
+      };
+
+      var html = '<details class="section" open><summary>SELECTIVE PREDICTION</summary><div class="section-content">';
+
+      if (sp.summary) {
+        html += '<h3 class="epoch-title">Summary</h3>';
+        html += renderSPEntry(sp.summary);
+      }
+
+      if (sp.strategies) {
+        var available = strategyOrder.filter(function(k) { return sp.strategies[k]; });
+        if (available.length > 0) {
+          if (sp.summary) html += '<div style="margin-top:25px;">';
+          html += '<h3 class="epoch-title">Strategies</h3>';
+          html += '<div class="epoch-tabs">';
+          available.forEach(function(key, i) {
+            html += '<button class="epoch-tab sp-strategy-tab' + (i === 0 ? ' active' : '') + '" data-sp-tab="' + key + '">' + strategyLabels[key] + '</button>';
+          });
+          html += '</div>';
+          available.forEach(function(key, i) {
+            html += '<div class="epoch-tab-content sp-strategy-content' + (i === 0 ? ' active' : '') + '" data-sp-tab="' + key + '">';
+            html += '<div class="epoch-section">' + renderSPEntry(sp.strategies[key]) + '</div>';
+            html += '</div>';
+          });
+          if (sp.summary) html += '</div>';
+        }
+      }
+
+      html += '</div></details>';
+      return html;
+    },
+
+    /**
      * Load an external script if not already present
      */
     _loadScript: function(src, checkGlobal) {
@@ -973,6 +1086,20 @@
         });
       }
 
+      // Strategy tabs for selective prediction
+      var strategyTabs = modelCard.querySelectorAll('.sp-strategy-tab');
+      strategyTabs.forEach(function(tab) {
+        tab.addEventListener('click', function() {
+          var tabId = this.getAttribute('data-sp-tab');
+          var container = this.closest('.section-content');
+          container.querySelectorAll('.sp-strategy-tab').forEach(function(t) { t.classList.remove('active'); });
+          container.querySelectorAll('.sp-strategy-content').forEach(function(c) { c.classList.remove('active'); });
+          this.classList.add('active');
+          var target = container.querySelector('.sp-strategy-content[data-sp-tab="' + tabId + '"]');
+          if (target) target.classList.add('active');
+        });
+      });
+
       // Initialize sphere viewer if thumbnail is present
       this._initSphere(modelCard);
     },
@@ -1118,6 +1245,7 @@
         this.renderModelIdentification(modelCardJson, sphereSessionId),
         this.renderEmbeddingSpace(modelCardJson),
         this.renderBestEpochs(modelCardJson),
+        this.renderSelectivePrediction(modelCardJson),
         this.renderTrainingOptimization(modelCardJson),
         this.renderTrainingDataset(modelCardJson),
         this.renderDataProcessingNotes(modelCardJson)

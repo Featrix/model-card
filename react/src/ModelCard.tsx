@@ -21,6 +21,34 @@ export interface ConfusionMatrix {
   specificity: number;
 }
 
+export interface SelectivePredictionEntry {
+  coverage: number;
+  covered_auc: number;
+  full_auc: number;
+  full_accuracy: number;
+  auc_lift: number;
+  confidence_threshold: number;
+  n_covered: number;
+  n_total: number;
+  demur_error_capture: number | null;
+  demur_random_baseline: number;
+  n_demurred: number;
+  n_demurred_true_positives: number;
+  n_demurred_false_positives: number;
+  n_demurred_true_negatives: number;
+  n_demurred_false_negatives: number;
+}
+
+export interface SelectivePrediction {
+  summary?: SelectivePredictionEntry;
+  strategies?: {
+    best_always_answers?: SelectivePredictionEntry;
+    best_balanced_may_demur?: SelectivePredictionEntry;
+    best_detects_positives_may_demur?: SelectivePredictionEntry;
+    best_rules_out_negatives_may_demur?: SelectivePredictionEntry;
+  };
+}
+
 export interface PerRowTracking {
   this_epoch?: {
     correct: number;
@@ -137,6 +165,7 @@ export interface ModelCardData {
     best_model_path?: string;
   };
   data_processing_notes?: DataProcessingNote[];
+  selective_prediction?: SelectivePrediction;
 }
 
 export interface DataProcessingNote {
@@ -220,6 +249,14 @@ const getModelTypeDisplay = (modelType: string, targetType: string | null): stri
   return modelType;
 };
 
+const getDemurBadge = (value: number | null, baseline: number): { text: string; bg: string; fg: string } => {
+  if (value === null) return { text: 'N/A — answers everything', bg: '#6c757d', fg: 'white' };
+  if (value === 1.0) return { text: 'PERFECT ✓', bg: '#28a745', fg: 'white' };
+  if (value > baseline + 0.05) return { text: 'BETTER THAN RANDOM', bg: '#28a745', fg: 'white' };
+  if (Math.abs(value - baseline) <= 0.05) return { text: '≈ RANDOM', bg: '#ffc107', fg: '#000' };
+  return { text: 'ANTI-ALIGNED ⚠', bg: '#dc3545', fg: 'white' };
+};
+
 const getTrainingPhase = (mi: ModelCardData['model_identification']): 'es' | 'sp' | null => {
   if (mi.training_phase) return mi.training_phase.toLowerCase() as 'es' | 'sp';
   const mt = (mi.model_type || '').toLowerCase();
@@ -242,6 +279,7 @@ const parseModelPath = (path?: string): { sessionId: string | null } => {
 export const ModelCard: React.FC<ModelCardProps> = ({ data, className = '', onRefetch, pollIntervalMs = 15000 }) => {
   const [activeTab, setActiveTab] = useState<'roc-auc' | 'pr-auc'>('roc-auc');
   const [showPerRowTracking, setShowPerRowTracking] = useState<{ [key: string]: boolean }>({});
+  const [activeStrategyTab, setActiveStrategyTab] = useState<string>('best_always_answers');
 
   // Auto-refresh polling during training
   const onRefetchRef = useRef(onRefetch);
@@ -437,6 +475,164 @@ export const ModelCard: React.FC<ModelCardProps> = ({ data, className = '', onRe
         {renderConfusionMatrix(cdm?.confusion_matrix)}
         {renderPerRowTracking(cdm?.per_row_tracking, tabKey)}
       </div>
+    );
+  };
+
+  const renderSPEntry = (entry: SelectivePredictionEntry) => {
+    const {
+      demur_error_capture, demur_random_baseline,
+      covered_auc, full_auc, auc_lift, coverage, confidence_threshold,
+      n_covered, n_total, n_demurred,
+      n_demurred_true_positives: tp, n_demurred_false_positives: fp,
+      n_demurred_true_negatives: tn, n_demurred_false_negatives: fn,
+    } = entry;
+    const isAlwaysAnswers = demur_error_capture === null;
+    const badge = getDemurBadge(demur_error_capture, demur_random_baseline);
+    const cellStyle = (highlight: boolean): React.CSSProperties => ({
+      border: highlight ? '1px solid #c8e6c9' : '1px solid #ddd',
+      background: highlight ? '#e8f5e9' : '#f5f5f5',
+      padding: '10px 18px',
+      textAlign: 'center',
+      fontWeight: 'bold',
+      fontSize: '16px',
+      color: highlight ? '#2e7d32' : '#000',
+      minWidth: '80px',
+    });
+    const rowLabelStyle: React.CSSProperties = {
+      color: '#666', fontSize: '11px', textTransform: 'uppercase', padding: '4px 12px', whiteSpace: 'nowrap',
+    };
+    const colHeaderStyle: React.CSSProperties = {
+      color: '#666', fontWeight: 'normal', fontSize: '11px', textTransform: 'uppercase', padding: '4px 12px', textAlign: 'center',
+    };
+    return (
+      <div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', marginBottom: '15px' }}>
+          {isAlwaysAnswers ? (
+            <span className="quality-badge" style={{ backgroundColor: '#6c757d', color: 'white' }}>N/A — answers everything</span>
+          ) : (
+            <>
+              <span style={{ fontSize: '22px', fontWeight: 'bold' }}>{demur_error_capture!.toFixed(4)}</span>
+              <span className="quality-badge" style={{ backgroundColor: badge.bg, color: badge.fg }}>{badge.text}</span>
+              <span style={{ color: '#666', fontSize: '12px' }}>vs {demur_random_baseline.toFixed(2)} random</span>
+            </>
+          )}
+        </div>
+        <div className="grid" style={{ gridTemplateColumns: 'repeat(5, 1fr)', marginBottom: '15px' }}>
+          <div className="metric">
+            <div className="metric-label">Covered AUC</div>
+            <div className="metric-value" style={{ fontSize: '18px' }}>{covered_auc.toFixed(4)}</div>
+          </div>
+          <div className="metric">
+            <div className="metric-label">Full AUC</div>
+            <div className="metric-value" style={{ fontSize: '18px' }}>{full_auc.toFixed(4)}</div>
+          </div>
+          <div className="metric">
+            <div className="metric-label">AUC Lift</div>
+            <div className="metric-value" style={{ fontSize: '18px', color: auc_lift >= 0 ? '#28a745' : '#dc3545' }}>
+              {auc_lift >= 0 ? '+' : ''}{auc_lift.toFixed(4)}
+            </div>
+          </div>
+          <div className="metric">
+            <div className="metric-label">Coverage</div>
+            <div className="metric-value" style={{ fontSize: '18px' }}>{(coverage * 100).toFixed(1)}%</div>
+          </div>
+          <div className="metric">
+            <div className="metric-label">Threshold</div>
+            <div className="metric-value" style={{ fontSize: '18px' }}>{confidence_threshold.toFixed(2)}</div>
+          </div>
+        </div>
+        {!isAlwaysAnswers && n_demurred > 0 && (
+          <div style={{ marginBottom: '15px' }}>
+            <h4 style={{ margin: '0 0 10px 0', fontSize: '13px', fontWeight: 'bold', color: '#333' }}>Declined rows — what they would have been</h4>
+            <table style={{ width: 'auto' }}>
+              <tbody>
+                <tr>
+                  <th></th>
+                  <th style={colHeaderStyle}>Actual +</th>
+                  <th style={colHeaderStyle}>Actual −</th>
+                </tr>
+                <tr>
+                  <td style={rowLabelStyle}>Would predict +</td>
+                  <td style={cellStyle(false)}>
+                    {tp}<br /><span style={{ fontSize: '10px', fontWeight: 'normal', color: '#888' }}>thrown away</span>
+                  </td>
+                  <td style={cellStyle(true)}>
+                    {fp}<br /><span style={{ fontSize: '10px', fontWeight: 'normal', color: '#388e3c' }}>error hidden ✓</span>
+                  </td>
+                </tr>
+                <tr>
+                  <td style={rowLabelStyle}>Would predict −</td>
+                  <td style={cellStyle(true)}>
+                    {fn}<br /><span style={{ fontSize: '10px', fontWeight: 'normal', color: '#388e3c' }}>error hidden ✓</span>
+                  </td>
+                  <td style={cellStyle(false)}>
+                    {tn}<br /><span style={{ fontSize: '10px', fontWeight: 'normal', color: '#888' }}>thrown away</span>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        )}
+        <div style={{ color: '#555', fontSize: '13px' }}>
+          Answered {n_covered.toLocaleString()}/{n_total.toLocaleString()} ({(coverage * 100).toFixed(1)}%) — declined {n_demurred.toLocaleString()}
+        </div>
+      </div>
+    );
+  };
+
+  const renderSelectivePrediction = () => {
+    const sp = data.selective_prediction;
+    if (!sp) return null;
+
+    const strategyOrder: Array<keyof NonNullable<SelectivePrediction['strategies']>> = [
+      'best_always_answers',
+      'best_balanced_may_demur',
+      'best_detects_positives_may_demur',
+      'best_rules_out_negatives_may_demur',
+    ];
+    const strategyLabels: Record<string, string> = {
+      best_always_answers: 'Always Answers',
+      best_balanced_may_demur: 'Balanced',
+      best_detects_positives_may_demur: 'Detect Positives',
+      best_rules_out_negatives_may_demur: 'Rule Out Negatives',
+    };
+    const availableStrategies = strategyOrder.filter(k => sp.strategies?.[k]);
+
+    return (
+      <details className="section" open>
+        <summary>SELECTIVE PREDICTION</summary>
+        <div className="section-content">
+          {sp.summary && (
+            <>
+              <h3 className="epoch-title">Summary</h3>
+              {renderSPEntry(sp.summary)}
+            </>
+          )}
+          {availableStrategies.length > 0 && (
+            <div style={{ marginTop: sp.summary ? '25px' : '0' }}>
+              <h3 className="epoch-title">Strategies</h3>
+              <div className="epoch-tabs">
+                {availableStrategies.map(key => (
+                  <button
+                    key={key}
+                    className={`epoch-tab ${activeStrategyTab === key ? 'active' : ''}`}
+                    onClick={() => setActiveStrategyTab(key)}
+                  >
+                    {strategyLabels[key]}
+                  </button>
+                ))}
+              </div>
+              {availableStrategies.map(key => (
+                <div key={key} className={`epoch-tab-content ${activeStrategyTab === key ? 'active' : ''}`}>
+                  <div className="epoch-section">
+                    {renderSPEntry(sp.strategies![key]!)}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </details>
     );
   };
 
@@ -661,6 +857,9 @@ export const ModelCard: React.FC<ModelCardProps> = ({ data, className = '', onRe
             </div>
           </details>
         )}
+
+        {/* SELECTIVE PREDICTION */}
+        {renderSelectivePrediction()}
 
         {/* TRAINING OPTIMIZATION */}
         {to && (

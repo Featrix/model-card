@@ -5,7 +5,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setup(
     name="featrix-modelcard",
-    version="1.13",
+    version="1.15",
     author="Featrix",
     description="Render Featrix Sphere Model Card JSON to HTML or plain text",
     long_description=long_description,

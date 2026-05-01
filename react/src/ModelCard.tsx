@@ -105,6 +105,13 @@ export interface TrainingOptimization {
   positive_class?: string;
 }
 
+export interface UserIntent {
+  task: string;
+  objective: string;
+  params?: Record<string, unknown>;
+  source?: string;
+}
+
 export interface ModelCardData {
   model_identification: {
     session_id: string;
@@ -118,6 +125,8 @@ export interface ModelCardData {
     model_type: string;
     framework: string;
     training_phase?: string;
+    user_intent?: UserIntent | null;
+    encoding_intent?: string | null;
   };
   embedding_space?: {
     num_columns: number;
@@ -248,6 +257,9 @@ const getModelTypeDisplay = (modelType: string, targetType: string | null): stri
   }
   return modelType;
 };
+
+const humanizeObjective = (objective: string): string =>
+  objective.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
 
 const getDemurBadge = (value: number | null, baseline: number): { text: string; bg: string; fg: string } => {
   if (value === null) return { text: 'N/A — answers everything', bg: '#6c757d', fg: 'white' };
@@ -734,6 +746,16 @@ export const ModelCard: React.FC<ModelCardProps> = ({ data, className = '', onRe
                 {phase === 'es' ? 'Phase 1/2: Training Foundation Model' : 'Phase 2/2: Training Predictor'}
               </div>
             )}
+            {mi.user_intent && (
+              <div style={{ marginBottom: '15px', padding: '12px 16px', background: '#ede7f6', borderLeft: '3px solid #7b1fa2', display: 'flex', alignItems: 'baseline', gap: '10px', flexWrap: 'wrap' }}>
+                <span style={{ fontSize: '11px', textTransform: 'uppercase', color: '#7b1fa2', fontWeight: 'bold', whiteSpace: 'nowrap' }}>Objective</span>
+                <span style={{ fontSize: '18px', fontWeight: 'bold', color: '#4a148c' }}>{humanizeObjective(mi.user_intent.objective)}</span>
+                <span style={{ fontSize: '12px', color: '#7b1fa2' }}>{mi.user_intent.task}</span>
+                {mi.user_intent.source && (
+                  <span style={{ fontSize: '11px', color: '#9c4dcc', marginLeft: 'auto' }}>{mi.user_intent.source.replace(/_/g, ' ')}</span>
+                )}
+              </div>
+            )}
             <div className="grid" style={hideAucCards ? { gridTemplateColumns: 'repeat(2, 1fr)' } : undefined}>
               <div className="metric">
                 <div className="metric-label">Target Column</div>
@@ -769,6 +791,7 @@ export const ModelCard: React.FC<ModelCardProps> = ({ data, className = '', onRe
               &nbsp;&nbsp;•&nbsp;&nbsp;<strong>Model:</strong> <code style={{ fontSize: '11px' }}>{modelIdDisplay}</code>
               &nbsp;&nbsp;•&nbsp;&nbsp;<strong>Cluster:</strong> {(mi.compute_cluster || 'N/A').toUpperCase()}
               &nbsp;&nbsp;•&nbsp;&nbsp;<strong>Dims:</strong> {es?.d_model || 'N/A'}
+              {mi.encoding_intent && <>&nbsp;&nbsp;•&nbsp;&nbsp;<strong>Encoding:</strong> {mi.encoding_intent}</>}
               {isTraining && (() => {
                 const tc = data.training_configuration;
                 const currentEpoch = tc?.current_epoch ?? tc?.best_epoch ?? null;

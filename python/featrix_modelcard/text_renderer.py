@@ -203,12 +203,24 @@ def _render_model_identification(data: dict) -> str:
         prevalence = ci["minority_class_count"] / ci["total_samples"]
     pr_auc_lift = (pr_auc / prevalence) if (pr_auc and prevalence) else None
 
+    ui = mi.get("user_intent")
+    encoding_intent = mi.get("encoding_intent")
+
     lines = [
         f"MODEL CARD: {model_name}",
         "=" * 80,
         "",
         "MODEL IDENTIFICATION",
         "-" * 60,
+    ]
+
+    if ui:
+        objective_display = ui.get("objective", "").replace("_", " ").title()
+        source_display = (ui.get("source") or "").replace("_", " ")
+        lines.append(f"  Objective:      {objective_display}  ({ui.get('task', 'N/A')})"
+                     + (f"  [{source_display}]" if source_display else ""))
+
+    lines += [
         f"  Target Column:  {mi.get('target_column', 'N/A')}",
         f"  Model Type:     {model_type}",
         f"  Best ROC-AUC:   {format_metric(roc_auc)}",
@@ -221,8 +233,12 @@ def _render_model_identification(data: dict) -> str:
         f"  Cluster:        {(mi.get('compute_cluster') or 'N/A').upper()}",
         f"  Dims:           {es.get('d_model', 'N/A')}",
         f"  Framework:      {framework}",
-        "",
     ]
+
+    if encoding_intent:
+        lines.append(f"  Encoding:       {encoding_intent}")
+
+    lines.append("")
     return "\n".join(lines)
 
 

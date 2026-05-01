@@ -13,7 +13,7 @@
   'use strict';
 
   const FeatrixModelCard = {
-    VERSION: '1.14',
+    VERSION: '1.15',
     BUILD: 'dev',
 
     /**
@@ -215,6 +215,20 @@
         phaseIndicator = '<div style="margin-bottom: 15px; padding: 8px 14px; background: #fff8e1; border-left: 3px solid #ffc107; font-size: 13px; color: #6d4c00;">' + phaseDesc + '</div>';
       }
 
+      // User intent callout
+      var userIntentHtml = '';
+      if (mi.user_intent) {
+        var ui = mi.user_intent;
+        var objectiveDisplay = (ui.objective || '').replace(/_/g, ' ').replace(/\b\w/g, function(c) { return c.toUpperCase(); });
+        var sourceDisplay = ui.source ? ui.source.replace(/_/g, ' ') : '';
+        userIntentHtml = '<div style="margin-bottom:15px;padding:12px 16px;background:#ede7f6;border-left:3px solid #7b1fa2;display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;">' +
+          '<span style="font-size:11px;text-transform:uppercase;color:#7b1fa2;font-weight:bold;white-space:nowrap;">Objective</span>' +
+          '<span style="font-size:18px;font-weight:bold;color:#4a148c;">' + objectiveDisplay + '</span>' +
+          '<span style="font-size:12px;color:#7b1fa2;">' + (ui.task || '') + '</span>' +
+          (sourceDisplay ? '<span style="font-size:11px;color:#9c4dcc;margin-left:auto;">' + sourceDisplay + '</span>' : '') +
+          '</div>';
+      }
+
       // Epoch progress indicator (only during training)
       var epochProgress = '';
       if (training) {
@@ -254,6 +268,7 @@
         <summary>MODEL IDENTIFICATION</summary>
         <div class="section-content">
             ${phaseIndicator}
+            ${userIntentHtml}
             <div class="grid"${hideAucCards ? ' style="grid-template-columns: repeat(2, 1fr);"' : ''}>
                 <div class="metric">
                     <div class="metric-label">Target Column</div>
@@ -271,6 +286,7 @@
                 &nbsp;&nbsp;•&nbsp;&nbsp;<strong>Model:</strong> <code style="font-size: 11px;">${modelIdDisplay}</code>
                 &nbsp;&nbsp;•&nbsp;&nbsp;<strong>Cluster:</strong> ${(mi.compute_cluster || 'N/A').toUpperCase()}
                 &nbsp;&nbsp;•&nbsp;&nbsp;<strong>Dims:</strong> ${(data.embedding_space && data.embedding_space.d_model) || 'N/A'}
+                ${mi.encoding_intent ? '&nbsp;&nbsp;•&nbsp;&nbsp;<strong>Encoding:</strong> ' + mi.encoding_intent : ''}
                 ${epochProgress}
             </div>${sphereSessionId ? `
             <div style="margin-top: 20px; padding-top: 15px; border-top: 1px solid #ddd;">

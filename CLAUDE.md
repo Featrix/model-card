@@ -15,7 +15,7 @@ Never edit files outside of this repository (`model-card/`). If a bug or issue i
 ## Version Files
 
 - Version bumps in this repo are OK when making meaningful changes
-- Current version: **1.13**
+- Current version: **1.15**
 
 ## Code Style
 

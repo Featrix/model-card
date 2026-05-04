@@ -151,7 +151,7 @@
       // Try to get model ID from disk_usage.best_model_path first
       var du = data.disk_usage || {};
       var parsed = this.parseModelPath(du.best_model_path);
-      var modelIdDisplay = parsed.sessionId || (mi.session_id ? mi.session_id.substring(0, 20) : 'N/A');
+      var modelIdDisplay = parsed.sessionId || (mi.session_id ? mi.session_id.substring(0, 20) : null) || (mi.model_id ? String(mi.model_id).substring(0, 20) : null) || 'N/A';
       var jobIdDisplay = parsed.jobId || 'N/A';
 
       // Get best epoch metrics
@@ -1255,6 +1255,28 @@
             }
           }
         }
+      }
+
+      // Debug: log any expected fields that are missing/null so backend can see what's not being sent
+      var mi2 = modelCardJson.model_identification || {};
+      var du2 = modelCardJson.disk_usage || {};
+      var missing = [];
+      var check = function(label, path, value) {
+        if (value === null || value === undefined) missing.push('  ' + label + ' (' + path + ')');
+      };
+      check('model_id / session_id', 'model_identification.model_id / session_id / disk_usage.best_model_path',
+        mi2.model_id || mi2.session_id || du2.best_model_path);
+      check('user_intent', 'model_identification.user_intent', mi2.user_intent);
+      check('encoding_intent', 'model_identification.encoding_intent', mi2.encoding_intent);
+      check('best_epochs', 'best_epochs', modelCardJson.best_epochs);
+      check('class_imbalance', 'class_imbalance', modelCardJson.class_imbalance);
+      check('training_optimization', 'training_optimization', modelCardJson.training_optimization);
+      check('selective_prediction', 'selective_prediction', modelCardJson.selective_prediction);
+      check('embedding_space', 'embedding_space', modelCardJson.embedding_space);
+      check('data_processing_notes', 'data_processing_notes',
+        (modelCardJson.data_processing_notes && modelCardJson.data_processing_notes.length) ? true : null);
+      if (missing.length > 0) {
+        console.warn('[FeatrixModelCard] Missing/null fields in model card JSON (paste to backend for debugging):\n' + missing.join('\n'));
       }
 
       var sections = [

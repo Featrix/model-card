@@ -125,6 +125,7 @@ export interface ModelCardData {
     model_type: string;
     framework: string;
     training_phase?: string;
+    model_id?: string | number | null;
     user_intent?: UserIntent | null;
     encoding_intent?: string | null;
   };
@@ -327,7 +328,7 @@ export const ModelCard: React.FC<ModelCardProps> = ({ data, className = '', onRe
   const hideAucCards = isTraining && phase === 'es';
 
   const parsed = parseModelPath(data.disk_usage?.best_model_path);
-  const modelIdDisplay = parsed.sessionId || mi.session_id?.substring(0, 20) || 'N/A';
+  const modelIdDisplay = parsed.sessionId || mi.session_id?.substring(0, 20) || mi.model_id?.toString().substring(0, 20) || 'N/A';
 
   // Best metrics
   let bestRocAuc: number | null = null;

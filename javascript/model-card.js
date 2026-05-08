@@ -885,6 +885,8 @@
         var liftColor = (auc_lift == null || auc_lift >= 0) ? '#28a745' : '#dc3545';
 
         var intentLabel = INTENT_DISPLAY[intent || ''] || (intent ? intent.replace(/_/g, ' ') : 'Balanced (default)');
+        var CONTRACT_INTENTS = ['only_alert_when_confident', 'catch_everything', 'catch_everything_aggressive'];
+        var showFallbackBanner = entry.intent_feasible === false && CONTRACT_INTENTS.indexOf(intent || '') !== -1;
         var sourceTag = '';
         if (source) {
           var sourceColor = source === 'per_epoch' ? '#e65100' : '#2e7d32';
@@ -896,6 +898,19 @@
 
         var html = '<div style="margin-bottom:12px;font-size:12px;color:#555;">' +
           '<strong>Optimized for:</strong> ' + intentLabel + sourceTag + '</div>';
+
+        if (showFallbackBanner) {
+          html += '<div style="margin-bottom:15px;padding:12px 16px;background:#fff8e1;border-left:4px solid #ffc107;font-size:13px;">' +
+            '<div style="font-weight:bold;margin-bottom:6px;color:#5d4037;">\u26a0 Operating point fell back to max-AUC</div>' +
+            '<div style="margin-bottom:8px;color:#5d4037;">This model was trained with intent=<strong>' + (intent || '') + '</strong>, but no operating point in the validation sweep could meet that floor. The framework returned the highest-AUC fallback instead.</div>' +
+            '<div style="margin-bottom:8px;color:#5d4037;"><strong>What this means for production:</strong><ul style="margin:4px 0 0 18px;padding:0;">' +
+            '<li>The headline metrics describe the fallback point, not the contract you asked for.</li>' +
+            '<li>Deploying this model will not deliver the requested floor.</li>' +
+            '<li>To honor your contract: lower your floor, retrain, or accept that the data does not support it.</li>' +
+            '</ul></div>' +
+            (entry.intent_feasibility_reason ? '<div style="color:#5d4037;font-style:italic;">' + entry.intent_feasibility_reason + '</div>' : '') +
+            '</div>';
+        }
 
         if (source === 'per_epoch') {
           html += '<div style="margin-bottom:12px;padding:8px 12px;background:#fff3e0;border-left:3px solid #ff9800;font-size:12px;color:#e65100;">' +

@@ -22,6 +22,8 @@ export interface ConfusionMatrix {
 }
 
 export interface SelectivePredictionEntry {
+  intent_feasible?: boolean | null;
+  intent_feasibility_reason?: string | null;
   coverage: number | null;
   covered_auc: number | null;
   full_auc: number | null;
@@ -518,7 +520,11 @@ export const ModelCard: React.FC<ModelCardProps> = ({ data, className = '', onRe
       n_demurred_true_positives: tp, n_demurred_false_positives: fp,
       n_demurred_true_negatives: tn, n_demurred_false_negatives: fn,
       intent, source, calibration_method,
+      intent_feasible, intent_feasibility_reason,
     } = entry;
+
+    const CONTRACT_INTENTS = new Set(['only_alert_when_confident', 'catch_everything', 'catch_everything_aggressive']);
+    const showFallbackBanner = intent_feasible === false && CONTRACT_INTENTS.has(intent ?? '');
 
     const isNoop = intent === 'rank' || intent === 'predict_probabilities';
     const isAlwaysAnswers = demur_error_capture === null;
@@ -551,6 +557,28 @@ export const ModelCard: React.FC<ModelCardProps> = ({ data, className = '', onRe
             </span>
           )}
         </div>
+
+        {/* Intent feasibility fallback banner */}
+        {showFallbackBanner && (
+          <div style={{ marginBottom: '15px', padding: '12px 16px', background: '#fff8e1', borderLeft: '4px solid #ffc107', fontSize: '13px' }}>
+            <div style={{ fontWeight: 'bold', marginBottom: '6px', color: '#5d4037' }}>⚠ Operating point fell back to max-AUC</div>
+            <div style={{ marginBottom: '8px', color: '#5d4037' }}>
+              This model was trained with intent=<strong>{intent}</strong>, but no operating point in the validation sweep could meet that floor.
+              The framework returned the highest-AUC fallback instead.
+            </div>
+            <div style={{ marginBottom: '8px', color: '#5d4037' }}>
+              <strong>What this means for production:</strong>
+              <ul style={{ margin: '4px 0 0 18px', padding: 0 }}>
+                <li>The headline metrics describe the fallback point, not the contract you asked for.</li>
+                <li>Deploying this model will not deliver the requested floor.</li>
+                <li>To honor your contract: lower your floor, retrain, or accept that the data does not support it.</li>
+              </ul>
+            </div>
+            {intent_feasibility_reason && (
+              <div style={{ color: '#5d4037', fontStyle: 'italic' }}>{intent_feasibility_reason}</div>
+            )}
+          </div>
+        )}
 
         {/* per_epoch warning */}
         {source === 'per_epoch' && (

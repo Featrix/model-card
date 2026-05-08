@@ -488,6 +488,19 @@ def _render_selective_prediction(data: dict) -> str:
             f"  [{source.replace('_', ' ')}{' · ' + cal if cal else ''}]" if source else ""
         ))
 
+        # Intent feasibility banner
+        contract_intents = {"only_alert_when_confident", "catch_everything", "catch_everything_aggressive"}
+        intent_feasible = entry.get("intent_feasible")
+        feasibility_reason = entry.get("intent_feasibility_reason")
+        if intent_feasible is False and intent in contract_intents:
+            out.append(f"    ⚠ OPERATING POINT FELL BACK TO MAX-AUC")
+            out.append(f"    This model was trained with intent={intent}, but no operating point")
+            out.append(f"    could meet the requested floor. The highest-AUC fallback was returned.")
+            out.append(f"    Deploying will not deliver the requested floor.")
+            if feasibility_reason:
+                out.append(f"    {feasibility_reason}")
+            out.append("")
+
         if source == "per_epoch":
             out.append("    ⚠ Operating point computed on uncalibrated probabilities")
 

@@ -22,12 +22,12 @@ export interface ConfusionMatrix {
 }
 
 export interface SelectivePredictionEntry {
-  coverage: number;
-  covered_auc: number;
-  full_auc: number;
-  full_accuracy: number;
-  auc_lift: number;
-  confidence_threshold: number;
+  coverage: number | null;
+  covered_auc: number | null;
+  full_auc: number | null;
+  full_accuracy: number | null;
+  auc_lift: number | null;
+  confidence_threshold: number | null;
   n_covered: number;
   n_total: number;
   demur_error_capture: number | null;
@@ -37,16 +37,16 @@ export interface SelectivePredictionEntry {
   n_demurred_false_positives: number;
   n_demurred_true_negatives: number;
   n_demurred_false_negatives: number;
+  intent?: string | null;
+  source?: string | null;
+  calibration_method?: string | null;
+  epoch?: number;
 }
 
 export interface SelectivePrediction {
   summary?: SelectivePredictionEntry;
-  strategies?: {
-    best_always_answers?: SelectivePredictionEntry;
-    best_balanced_may_demur?: SelectivePredictionEntry;
-    best_detects_positives_may_demur?: SelectivePredictionEntry;
-    best_rules_out_negatives_may_demur?: SelectivePredictionEntry;
-  };
+  strategies?: Record<string, SelectivePredictionEntry>;
+  history?: SelectivePredictionEntry[];
 }
 
 export interface PerRowTracking {
@@ -175,6 +175,7 @@ export interface ModelCardData {
     best_model_path?: string;
   };
   data_processing_notes?: DataProcessingNote[];
+  coverage?: SelectivePrediction;
   selective_prediction?: SelectivePrediction;
 }
 
@@ -261,6 +262,22 @@ const getModelTypeDisplay = (modelType: string, targetType: string | null): stri
 
 const humanizeObjective = (objective: string): string =>
   objective.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+
+const INTENT_DISPLAY: Record<string, string> = {
+  balanced: 'Balanced (default)',
+  only_alert_when_confident: 'Only alert when confident',
+  catch_everything: 'Catch everything',
+  minimize_cost: 'Minimize expected cost',
+  rank: 'Ranking — no operating point',
+  predict_probabilities: 'Calibrated probabilities — no operating point',
+};
+
+const STRATEGY_GROUPS: Array<{ keys: string[]; label: string }> = [
+  { keys: ['everything', 'best_always_answers'], label: 'Always answer' },
+  { keys: ['only_when_sure', 'best_balanced_may_demur'], label: 'Balanced demur' },
+  { keys: ['only_on_strong_positives', 'best_detects_positives_may_demur'], label: 'Detect positives' },
+  { keys: ['only_on_strong_negatives', 'best_rules_out_negatives_may_demur'], label: 'Rule out negatives' },
+];
 
 const getDemurBadge = (value: number | null, baseline: number): { text: string; bg: string; fg: string } => {
   if (value === null) return { text: 'N/A — answers everything', bg: '#6c757d', fg: 'white' };
@@ -492,24 +509,27 @@ export const ModelCard: React.FC<ModelCardProps> = ({ data, className = '', onRe
   };
 
   const renderSPEntry = (entry: SelectivePredictionEntry) => {
+    if (entry.coverage === null || entry.coverage === undefined) return null;
+
     const {
       demur_error_capture, demur_random_baseline,
       covered_auc, full_auc, auc_lift, coverage, confidence_threshold,
       n_covered, n_total, n_demurred,
       n_demurred_true_positives: tp, n_demurred_false_positives: fp,
       n_demurred_true_negatives: tn, n_demurred_false_negatives: fn,
+      intent, source, calibration_method,
     } = entry;
+
+    const isNoop = intent === 'rank' || intent === 'predict_probabilities';
     const isAlwaysAnswers = demur_error_capture === null;
-    const badge = getDemurBadge(demur_error_capture, demur_random_baseline);
+    const badge = getDemurBadge(demur_error_capture, demur_random_baseline ?? 0);
+    const coveragePct = (coverage * 100).toFixed(1);
+
     const cellStyle = (highlight: boolean): React.CSSProperties => ({
       border: highlight ? '1px solid #c8e6c9' : '1px solid #ddd',
       background: highlight ? '#e8f5e9' : '#f5f5f5',
-      padding: '10px 18px',
-      textAlign: 'center',
-      fontWeight: 'bold',
-      fontSize: '16px',
-      color: highlight ? '#2e7d32' : '#000',
-      minWidth: '80px',
+      padding: '10px 18px', textAlign: 'center', fontWeight: 'bold',
+      fontSize: '16px', color: highlight ? '#2e7d32' : '#000', minWidth: '80px',
     });
     const rowLabelStyle: React.CSSProperties = {
       color: '#666', fontSize: '11px', textTransform: 'uppercase', padding: '4px 12px', whiteSpace: 'nowrap',
@@ -517,99 +537,121 @@ export const ModelCard: React.FC<ModelCardProps> = ({ data, className = '', onRe
     const colHeaderStyle: React.CSSProperties = {
       color: '#666', fontWeight: 'normal', fontSize: '11px', textTransform: 'uppercase', padding: '4px 12px', textAlign: 'center',
     };
+
+    const intentLabel = INTENT_DISPLAY[intent ?? ''] ?? (intent ? humanizeObjective(intent) : 'Balanced (default)');
+
     return (
       <div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', marginBottom: '15px' }}>
-          {isAlwaysAnswers ? (
-            <span className="quality-badge" style={{ backgroundColor: '#6c757d', color: 'white' }}>N/A — answers everything</span>
-          ) : (
-            <>
-              <span style={{ fontSize: '22px', fontWeight: 'bold' }}>{demur_error_capture!.toFixed(4)}</span>
-              <span className="quality-badge" style={{ backgroundColor: badge.bg, color: badge.fg }}>{badge.text}</span>
-              <span style={{ color: '#666', fontSize: '12px' }}>vs {demur_random_baseline.toFixed(2)} random</span>
-            </>
+        {/* Intent label */}
+        <div style={{ marginBottom: '12px', fontSize: '12px', color: '#555' }}>
+          <strong>Optimized for:</strong> {intentLabel}
+          {source && (
+            <span style={{ marginLeft: '10px', padding: '2px 6px', background: source === 'per_epoch' ? '#fff3e0' : '#e8f5e9', border: `1px solid ${source === 'per_epoch' ? '#ffcc02' : '#a5d6a7'}`, fontSize: '11px', color: source === 'per_epoch' ? '#e65100' : '#2e7d32' }}>
+              {source.replace(/_/g, ' ')}{calibration_method ? ` · ${calibration_method}` : ''}
+            </span>
           )}
         </div>
-        <div className="grid" style={{ gridTemplateColumns: 'repeat(5, 1fr)', marginBottom: '15px' }}>
-          <div className="metric">
-            <div className="metric-label">Covered AUC</div>
-            <div className="metric-value" style={{ fontSize: '18px' }}>{covered_auc.toFixed(4)}</div>
-          </div>
-          <div className="metric">
-            <div className="metric-label">Full AUC</div>
-            <div className="metric-value" style={{ fontSize: '18px' }}>{full_auc.toFixed(4)}</div>
-          </div>
-          <div className="metric">
-            <div className="metric-label">AUC Lift</div>
-            <div className="metric-value" style={{ fontSize: '18px', color: auc_lift >= 0 ? '#28a745' : '#dc3545' }}>
-              {auc_lift >= 0 ? '+' : ''}{auc_lift.toFixed(4)}
-            </div>
-          </div>
-          <div className="metric">
-            <div className="metric-label">Coverage</div>
-            <div className="metric-value" style={{ fontSize: '18px' }}>{(coverage * 100).toFixed(1)}%</div>
-          </div>
-          <div className="metric">
-            <div className="metric-label">Threshold</div>
-            <div className="metric-value" style={{ fontSize: '18px' }}>{confidence_threshold.toFixed(2)}</div>
-          </div>
-        </div>
-        {!isAlwaysAnswers && n_demurred > 0 && (
-          <div style={{ marginBottom: '15px' }}>
-            <h4 style={{ margin: '0 0 10px 0', fontSize: '13px', fontWeight: 'bold', color: '#333' }}>Declined rows — what they would have been</h4>
-            <table style={{ width: 'auto' }}>
-              <tbody>
-                <tr>
-                  <th></th>
-                  <th style={colHeaderStyle}>Actual +</th>
-                  <th style={colHeaderStyle}>Actual −</th>
-                </tr>
-                <tr>
-                  <td style={rowLabelStyle}>Would predict +</td>
-                  <td style={cellStyle(false)}>
-                    {tp}<br /><span style={{ fontSize: '10px', fontWeight: 'normal', color: '#888' }}>thrown away</span>
-                  </td>
-                  <td style={cellStyle(true)}>
-                    {fp}<br /><span style={{ fontSize: '10px', fontWeight: 'normal', color: '#388e3c' }}>error hidden ✓</span>
-                  </td>
-                </tr>
-                <tr>
-                  <td style={rowLabelStyle}>Would predict −</td>
-                  <td style={cellStyle(true)}>
-                    {fn}<br /><span style={{ fontSize: '10px', fontWeight: 'normal', color: '#388e3c' }}>error hidden ✓</span>
-                  </td>
-                  <td style={cellStyle(false)}>
-                    {tn}<br /><span style={{ fontSize: '10px', fontWeight: 'normal', color: '#888' }}>thrown away</span>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
+
+        {/* per_epoch warning */}
+        {source === 'per_epoch' && (
+          <div style={{ marginBottom: '12px', padding: '8px 12px', background: '#fff3e0', borderLeft: '3px solid #ff9800', fontSize: '12px', color: '#e65100' }}>
+            Operating point computed on uncalibrated probabilities — calibration did not run.
           </div>
         )}
-        <div style={{ color: '#555', fontSize: '13px' }}>
-          Answered {n_covered.toLocaleString()}/{n_total.toLocaleString()} ({(coverage * 100).toFixed(1)}%) — declined {n_demurred.toLocaleString()}
-        </div>
+
+        {/* rank / predict_probabilities — scoring model, no operating point */}
+        {isNoop ? (
+          <div style={{ padding: '15px', background: '#f5f5f5', border: '1px solid #ddd', fontSize: '13px', color: '#555' }}>
+            This model is meant for scoring, not operating-point decisions — use raw <code>predict_proba()</code> output.
+          </div>
+        ) : (
+          <>
+            {/* Demur headline */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', marginBottom: '15px' }}>
+              {isAlwaysAnswers ? (
+                <span className="quality-badge" style={{ backgroundColor: '#6c757d', color: 'white' }}>N/A — answers everything</span>
+              ) : (
+                <>
+                  <span style={{ fontSize: '22px', fontWeight: 'bold' }}>{demur_error_capture!.toFixed(4)}</span>
+                  <span className="quality-badge" style={{ backgroundColor: badge.bg, color: badge.fg }}>{badge.text}</span>
+                  <span style={{ color: '#666', fontSize: '12px' }}>vs {(demur_random_baseline ?? 0).toFixed(2)} random</span>
+                </>
+              )}
+            </div>
+
+            {/* Metrics grid */}
+            <div className="grid" style={{ gridTemplateColumns: 'repeat(5, 1fr)', marginBottom: '15px' }}>
+              <div className="metric">
+                <div className="metric-label">Covered AUC</div>
+                <div className="metric-value" style={{ fontSize: '18px' }}>{covered_auc != null ? covered_auc.toFixed(4) : '—'}</div>
+              </div>
+              <div className="metric">
+                <div className="metric-label">Full AUC</div>
+                <div className="metric-value" style={{ fontSize: '18px' }}>{full_auc != null ? full_auc.toFixed(4) : '—'}</div>
+              </div>
+              <div className="metric">
+                <div className="metric-label">AUC Lift</div>
+                <div className="metric-value" style={{ fontSize: '18px', color: (auc_lift ?? 0) >= 0 ? '#28a745' : '#dc3545' }}>
+                  {auc_lift != null ? `${auc_lift >= 0 ? '+' : ''}${auc_lift.toFixed(4)}` : '—'}
+                </div>
+              </div>
+              <div className="metric">
+                <div className="metric-label">Coverage</div>
+                <div className="metric-value" style={{ fontSize: '18px' }}>{coveragePct}%</div>
+              </div>
+              <div className="metric">
+                <div className="metric-label">Threshold</div>
+                <div className="metric-value" style={{ fontSize: '18px' }}>{confidence_threshold != null ? confidence_threshold.toFixed(2) : '—'}</div>
+              </div>
+            </div>
+
+            {/* 2×2 declined rows grid */}
+            {!isAlwaysAnswers && n_demurred > 0 && (
+              <div style={{ marginBottom: '15px' }}>
+                <h4 style={{ margin: '0 0 10px 0', fontSize: '13px', fontWeight: 'bold', color: '#333' }}>Declined rows — what they would have been</h4>
+                <table style={{ width: 'auto' }}>
+                  <tbody>
+                    <tr>
+                      <th></th>
+                      <th style={colHeaderStyle}>Actual +</th>
+                      <th style={colHeaderStyle}>Actual −</th>
+                    </tr>
+                    <tr>
+                      <td style={rowLabelStyle}>Would predict +</td>
+                      <td style={cellStyle(false)}>{tp}<br /><span style={{ fontSize: '10px', fontWeight: 'normal', color: '#888' }}>thrown away</span></td>
+                      <td style={cellStyle(true)}>{fp}<br /><span style={{ fontSize: '10px', fontWeight: 'normal', color: '#388e3c' }}>error hidden ✓</span></td>
+                    </tr>
+                    <tr>
+                      <td style={rowLabelStyle}>Would predict −</td>
+                      <td style={cellStyle(true)}>{fn}<br /><span style={{ fontSize: '10px', fontWeight: 'normal', color: '#388e3c' }}>error hidden ✓</span></td>
+                      <td style={cellStyle(false)}>{tn}<br /><span style={{ fontSize: '10px', fontWeight: 'normal', color: '#888' }}>thrown away</span></td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {/* Context line */}
+            <div style={{ color: '#555', fontSize: '13px' }}>
+              Answered {n_covered.toLocaleString()}/{n_total.toLocaleString()} ({coveragePct}%) — declined {n_demurred.toLocaleString()}
+            </div>
+          </>
+        )}
       </div>
     );
   };
 
   const renderSelectivePrediction = () => {
-    const sp = data.selective_prediction;
+    const sp = data.coverage ?? data.selective_prediction;
     if (!sp) return null;
 
-    const strategyOrder: Array<keyof NonNullable<SelectivePrediction['strategies']>> = [
-      'best_always_answers',
-      'best_balanced_may_demur',
-      'best_detects_positives_may_demur',
-      'best_rules_out_negatives_may_demur',
-    ];
-    const strategyLabels: Record<string, string> = {
-      best_always_answers: 'Always Answers',
-      best_balanced_may_demur: 'Balanced',
-      best_detects_positives_may_demur: 'Detect Positives',
-      best_rules_out_negatives_may_demur: 'Rule Out Negatives',
-    };
-    const availableStrategies = strategyOrder.filter(k => sp.strategies?.[k]);
+    // Build strategy tabs from either new or legacy naming
+    const availableGroups = STRATEGY_GROUPS
+      .map(g => ({ label: g.label, key: g.keys.find(k => sp.strategies?.[k]) ?? null }))
+      .filter(g => g.key !== null) as Array<{ label: string; key: string }>;
+
+    const initialTab = availableGroups[0]?.key ?? '';
+    const activeTab = availableGroups.find(g => g.key === activeStrategyTab) ? activeStrategyTab : initialTab;
 
     return (
       <details className="section" open>
@@ -621,27 +663,52 @@ export const ModelCard: React.FC<ModelCardProps> = ({ data, className = '', onRe
               {renderSPEntry(sp.summary)}
             </>
           )}
-          {availableStrategies.length > 0 && (
+
+          {availableGroups.length > 0 && (
             <div style={{ marginTop: sp.summary ? '25px' : '0' }}>
               <h3 className="epoch-title">Strategies</h3>
               <div className="epoch-tabs">
-                {availableStrategies.map(key => (
-                  <button
-                    key={key}
-                    className={`epoch-tab ${activeStrategyTab === key ? 'active' : ''}`}
-                    onClick={() => setActiveStrategyTab(key)}
-                  >
-                    {strategyLabels[key]}
+                {availableGroups.map(({ label, key }) => (
+                  <button key={key} className={`epoch-tab ${activeTab === key ? 'active' : ''}`} onClick={() => setActiveStrategyTab(key)}>
+                    {label}
                   </button>
                 ))}
               </div>
-              {availableStrategies.map(key => (
-                <div key={key} className={`epoch-tab-content ${activeStrategyTab === key ? 'active' : ''}`}>
+              {availableGroups.map(({ key }) => (
+                <div key={key} className={`epoch-tab-content ${activeTab === key ? 'active' : ''}`}>
                   <div className="epoch-section">
                     {renderSPEntry(sp.strategies![key]!)}
                   </div>
                 </div>
               ))}
+            </div>
+          )}
+
+          {sp.history && sp.history.length > 0 && (
+            <div style={{ marginTop: '25px' }}>
+              <h3 className="epoch-title">History</h3>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Epoch</th>
+                    <th>Coverage</th>
+                    <th>Covered AUC</th>
+                    <th>Demur Error Capture</th>
+                    <th>vs Random</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {sp.history.map((h, i) => (
+                    <tr key={i}>
+                      <td>{h.epoch ?? i}</td>
+                      <td>{h.coverage != null ? `${(h.coverage * 100).toFixed(1)}%` : '—'}</td>
+                      <td>{h.covered_auc != null ? h.covered_auc.toFixed(4) : '—'}</td>
+                      <td>{h.demur_error_capture != null ? h.demur_error_capture.toFixed(4) : 'N/A'}</td>
+                      <td style={{ color: '#888', fontSize: '12px' }}>{h.demur_random_baseline != null ? h.demur_random_baseline.toFixed(2) : '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           )}
         </div>

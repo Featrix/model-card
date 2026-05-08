@@ -827,8 +827,26 @@
      * Render selective prediction section
      */
     renderSelectivePrediction: function(data) {
-      var sp = data.selective_prediction;
+      // Support both new key ('coverage') and legacy key ('selective_prediction')
+      var sp = data.coverage || data.selective_prediction;
       if (!sp) return '';
+
+      var INTENT_DISPLAY = {
+        'balanced': 'Balanced (default)',
+        'only_alert_when_confident': 'Only alert when confident',
+        'catch_everything': 'Catch everything',
+        'minimize_cost': 'Minimize expected cost',
+        'rank': 'Ranking \u2014 no operating point',
+        'predict_probabilities': 'Calibrated probabilities \u2014 no operating point'
+      };
+
+      // Strategy groups: each group tries new name then legacy name
+      var STRATEGY_GROUPS = [
+        { keys: ['everything', 'best_always_answers'], label: 'Always answer' },
+        { keys: ['only_when_sure', 'best_balanced_may_demur'], label: 'Balanced demur' },
+        { keys: ['only_on_strong_positives', 'best_detects_positives_may_demur'], label: 'Detect positives' },
+        { keys: ['only_on_strong_negatives', 'best_rules_out_negatives_may_demur'], label: 'Rule out negatives' }
+      ];
 
       function getDemurBadge(value, baseline) {
         if (value === null || value === undefined) return { text: 'N/A \u2014 answers everything', bg: '#6c757d', fg: 'white' };
@@ -838,12 +856,23 @@
         return { text: 'ANTI-ALIGNED \u26a0', bg: '#dc3545', fg: 'white' };
       }
 
+      function fmtAuc(v) { return (v != null) ? v.toFixed(4) : '\u2014'; }
+      function fmtPct(v) { return (v != null) ? (v * 100).toFixed(1) + '%' : '\u2014'; }
+      function fmtThreshold(v) { return (v != null) ? v.toFixed(2) : '\u2014'; }
+
       function renderSPEntry(entry) {
         if (!entry) return '';
+        if (entry.coverage === null || entry.coverage === undefined) return '';
+
         var dec = entry.demur_error_capture;
-        var baseline = entry.demur_random_baseline;
+        var baseline = entry.demur_random_baseline || 0;
+        var intent = entry.intent || null;
+        var source = entry.source || null;
+        var calMethod = entry.calibration_method || null;
+        var isNoop = intent === 'rank' || intent === 'predict_probabilities';
         var isAlwaysAnswers = dec === null || dec === undefined;
         var badge = getDemurBadge(dec, baseline);
+
         var n_covered = entry.n_covered || 0;
         var n_total = entry.n_total || 0;
         var n_demurred = entry.n_demurred || 0;
@@ -852,7 +881,33 @@
         var fp = entry.n_demurred_false_positives || 0;
         var fn = entry.n_demurred_false_negatives || 0;
         var tn = entry.n_demurred_true_negatives || 0;
+        var auc_lift = entry.auc_lift;
+        var liftColor = (auc_lift == null || auc_lift >= 0) ? '#28a745' : '#dc3545';
 
+        var intentLabel = INTENT_DISPLAY[intent || ''] || (intent ? intent.replace(/_/g, ' ') : 'Balanced (default)');
+        var sourceTag = '';
+        if (source) {
+          var sourceColor = source === 'per_epoch' ? '#e65100' : '#2e7d32';
+          var sourceBg = source === 'per_epoch' ? '#fff3e0' : '#e8f5e9';
+          var sourceBorder = source === 'per_epoch' ? '#ffcc02' : '#a5d6a7';
+          sourceTag = ' <span style="padding:2px 6px;background:' + sourceBg + ';border:1px solid ' + sourceBorder + ';font-size:11px;color:' + sourceColor + ';">' +
+            source.replace(/_/g, ' ') + (calMethod ? ' \u00b7 ' + calMethod : '') + '</span>';
+        }
+
+        var html = '<div style="margin-bottom:12px;font-size:12px;color:#555;">' +
+          '<strong>Optimized for:</strong> ' + intentLabel + sourceTag + '</div>';
+
+        if (source === 'per_epoch') {
+          html += '<div style="margin-bottom:12px;padding:8px 12px;background:#fff3e0;border-left:3px solid #ff9800;font-size:12px;color:#e65100;">' +
+            'Operating point computed on uncalibrated probabilities \u2014 calibration did not run.</div>';
+        }
+
+        if (isNoop) {
+          return html + '<div style="padding:15px;background:#f5f5f5;border:1px solid #ddd;font-size:13px;color:#555;">' +
+            'This model is meant for scoring, not operating-point decisions \u2014 use raw <code>predict_proba()</code> output.</div>';
+        }
+
+        // Demur headline
         var headlineHtml;
         if (isAlwaysAnswers) {
           headlineHtml = '<span class="quality-badge" style="background-color:#6c757d;color:white;">' + badge.text + '</span>';
@@ -861,24 +916,24 @@
             ' <span class="quality-badge" style="background-color:' + badge.bg + ';color:' + badge.fg + ';">' + badge.text + '</span>' +
             ' <span style="color:#666;font-size:12px;">vs ' + baseline.toFixed(2) + ' random</span>';
         }
+        html += '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:15px;">' + headlineHtml + '</div>';
 
-        var auc_lift = entry.auc_lift || 0;
-        var liftColor = auc_lift >= 0 ? '#28a745' : '#dc3545';
-        var metricsHtml = '<div class="grid" style="grid-template-columns:repeat(5,1fr);margin-bottom:15px;">' +
-          '<div class="metric"><div class="metric-label">Covered AUC</div><div class="metric-value" style="font-size:18px;">' + (entry.covered_auc || 0).toFixed(4) + '</div></div>' +
-          '<div class="metric"><div class="metric-label">Full AUC</div><div class="metric-value" style="font-size:18px;">' + (entry.full_auc || 0).toFixed(4) + '</div></div>' +
-          '<div class="metric"><div class="metric-label">AUC Lift</div><div class="metric-value" style="font-size:18px;color:' + liftColor + ';">' + (auc_lift >= 0 ? '+' : '') + auc_lift.toFixed(4) + '</div></div>' +
-          '<div class="metric"><div class="metric-label">Coverage</div><div class="metric-value" style="font-size:18px;">' + (coverage * 100).toFixed(1) + '%</div></div>' +
-          '<div class="metric"><div class="metric-label">Threshold</div><div class="metric-value" style="font-size:18px;">' + (entry.confidence_threshold || 0).toFixed(2) + '</div></div>' +
+        // Metrics grid
+        html += '<div class="grid" style="grid-template-columns:repeat(5,1fr);margin-bottom:15px;">' +
+          '<div class="metric"><div class="metric-label">Covered AUC</div><div class="metric-value" style="font-size:18px;">' + fmtAuc(entry.covered_auc) + '</div></div>' +
+          '<div class="metric"><div class="metric-label">Full AUC</div><div class="metric-value" style="font-size:18px;">' + fmtAuc(entry.full_auc) + '</div></div>' +
+          '<div class="metric"><div class="metric-label">AUC Lift</div><div class="metric-value" style="font-size:18px;color:' + liftColor + ';">' + (auc_lift != null ? (auc_lift >= 0 ? '+' : '') + auc_lift.toFixed(4) : '\u2014') + '</div></div>' +
+          '<div class="metric"><div class="metric-label">Coverage</div><div class="metric-value" style="font-size:18px;">' + fmtPct(coverage) + '</div></div>' +
+          '<div class="metric"><div class="metric-label">Threshold</div><div class="metric-value" style="font-size:18px;">' + fmtThreshold(entry.confidence_threshold) + '</div></div>' +
           '</div>';
 
-        var tableHtml = '';
+        // 2×2 declined rows
         if (!isAlwaysAnswers && n_demurred > 0) {
           var colH = 'style="color:#666;font-weight:normal;font-size:11px;text-transform:uppercase;padding:4px 12px;text-align:center;"';
           var rowL = 'style="color:#666;font-size:11px;text-transform:uppercase;padding:4px 12px;white-space:nowrap;"';
           var cellNorm = 'style="border:1px solid #ddd;background:#f5f5f5;padding:10px 18px;text-align:center;font-weight:bold;font-size:16px;min-width:80px;"';
           var cellHl = 'style="border:1px solid #c8e6c9;background:#e8f5e9;padding:10px 18px;text-align:center;font-weight:bold;font-size:16px;color:#2e7d32;min-width:80px;"';
-          tableHtml = '<div style="margin-bottom:15px;">' +
+          html += '<div style="margin-bottom:15px;">' +
             '<h4 style="margin:0 0 10px 0;font-size:13px;font-weight:bold;color:#333;">Declined rows \u2014 what they would have been</h4>' +
             '<table style="width:auto;">' +
             '<tr><th></th><th ' + colH + '>Actual +</th><th ' + colH + '>Actual \u2212</th></tr>' +
@@ -891,45 +946,59 @@
             '</table></div>';
         }
 
-        var contextHtml = '<div style="color:#555;font-size:13px;">Answered ' +
+        html += '<div style="color:#555;font-size:13px;">Answered ' +
           n_covered.toLocaleString() + '/' + n_total.toLocaleString() +
-          ' (' + (coverage * 100).toFixed(1) + '%) \u2014 declined ' + n_demurred.toLocaleString() + '</div>';
+          ' (' + fmtPct(coverage) + ') \u2014 declined ' + n_demurred.toLocaleString() + '</div>';
 
-        return '<div style="margin-bottom:15px;">' + headlineHtml + '</div>' + metricsHtml + tableHtml + contextHtml;
+        return html;
       }
-
-      var strategyOrder = ['best_always_answers', 'best_balanced_may_demur', 'best_detects_positives_may_demur', 'best_rules_out_negatives_may_demur'];
-      var strategyLabels = {
-        best_always_answers: 'Always Answers',
-        best_balanced_may_demur: 'Balanced',
-        best_detects_positives_may_demur: 'Detect Positives',
-        best_rules_out_negatives_may_demur: 'Rule Out Negatives'
-      };
 
       var html = '<details class="section" open><summary>SELECTIVE PREDICTION</summary><div class="section-content">';
 
       if (sp.summary) {
-        html += '<h3 class="epoch-title">Summary</h3>';
-        html += renderSPEntry(sp.summary);
+        html += '<h3 class="epoch-title">Summary</h3>' + renderSPEntry(sp.summary);
       }
 
+      // Strategy tabs
       if (sp.strategies) {
-        var available = strategyOrder.filter(function(k) { return sp.strategies[k]; });
-        if (available.length > 0) {
+        var availableGroups = STRATEGY_GROUPS.map(function(g) {
+          var foundKey = null;
+          for (var i = 0; i < g.keys.length; i++) {
+            if (sp.strategies[g.keys[i]]) { foundKey = g.keys[i]; break; }
+          }
+          return foundKey ? { label: g.label, key: foundKey } : null;
+        }).filter(function(g) { return g !== null; });
+
+        if (availableGroups.length > 0) {
           if (sp.summary) html += '<div style="margin-top:25px;">';
           html += '<h3 class="epoch-title">Strategies</h3>';
           html += '<div class="epoch-tabs">';
-          available.forEach(function(key, i) {
-            html += '<button class="epoch-tab sp-strategy-tab' + (i === 0 ? ' active' : '') + '" data-sp-tab="' + key + '">' + strategyLabels[key] + '</button>';
+          availableGroups.forEach(function(g, i) {
+            html += '<button class="epoch-tab sp-strategy-tab' + (i === 0 ? ' active' : '') + '" data-sp-tab="' + g.key + '">' + g.label + '</button>';
           });
           html += '</div>';
-          available.forEach(function(key, i) {
-            html += '<div class="epoch-tab-content sp-strategy-content' + (i === 0 ? ' active' : '') + '" data-sp-tab="' + key + '">';
-            html += '<div class="epoch-section">' + renderSPEntry(sp.strategies[key]) + '</div>';
-            html += '</div>';
+          availableGroups.forEach(function(g, i) {
+            html += '<div class="epoch-tab-content sp-strategy-content' + (i === 0 ? ' active' : '') + '" data-sp-tab="' + g.key + '">';
+            html += '<div class="epoch-section">' + renderSPEntry(sp.strategies[g.key]) + '</div></div>';
           });
           if (sp.summary) html += '</div>';
         }
+      }
+
+      // History table
+      if (sp.history && sp.history.length > 0) {
+        html += '<div style="margin-top:25px;"><h3 class="epoch-title">History</h3>';
+        html += '<table><thead><tr><th>Epoch</th><th>Coverage</th><th>Covered AUC</th><th>Demur Error Capture</th><th>vs Random</th></tr></thead><tbody>';
+        sp.history.forEach(function(h, i) {
+          html += '<tr>' +
+            '<td>' + (h.epoch != null ? h.epoch : i) + '</td>' +
+            '<td>' + (h.coverage != null ? (h.coverage * 100).toFixed(1) + '%' : '\u2014') + '</td>' +
+            '<td>' + (h.covered_auc != null ? h.covered_auc.toFixed(4) : '\u2014') + '</td>' +
+            '<td>' + (h.demur_error_capture != null ? h.demur_error_capture.toFixed(4) : 'N/A') + '</td>' +
+            '<td style="color:#888;font-size:12px;">' + (h.demur_random_baseline != null ? h.demur_random_baseline.toFixed(2) : '\u2014') + '</td>' +
+            '</tr>';
+        });
+        html += '</tbody></table></div>';
       }
 
       html += '</div></details>';
@@ -1271,7 +1340,7 @@
       check('best_epochs', 'best_epochs', modelCardJson.best_epochs);
       check('class_imbalance', 'class_imbalance', modelCardJson.class_imbalance);
       check('training_optimization', 'training_optimization', modelCardJson.training_optimization);
-      check('selective_prediction', 'selective_prediction', modelCardJson.selective_prediction);
+      check('selective_prediction', 'coverage / selective_prediction', modelCardJson.coverage || modelCardJson.selective_prediction);
       check('embedding_space', 'embedding_space', modelCardJson.embedding_space);
       check('data_processing_notes', 'data_processing_notes',
         (modelCardJson.data_processing_notes && modelCardJson.data_processing_notes.length) ? true : null);

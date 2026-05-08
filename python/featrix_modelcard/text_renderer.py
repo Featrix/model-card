@@ -141,7 +141,7 @@ def render_brief_text(data: Dict[str, Any]) -> str:
         )
 
     # Selective prediction summary
-    sp_summary = (data.get("selective_prediction") or {}).get("summary")
+    sp_summary = (data.get("coverage") or data.get("selective_prediction") or {}).get("summary")
     if sp_summary and sp_summary.get("demur_error_capture") is not None:
         dec = sp_summary["demur_error_capture"]
         baseline = sp_summary.get("demur_random_baseline", 0.0)
@@ -416,8 +416,25 @@ def _render_training_dataset(data: dict) -> str:
     return "\n".join(lines)
 
 
+_INTENT_DISPLAY = {
+    "balanced": "Balanced (default)",
+    "only_alert_when_confident": "Only alert when confident",
+    "catch_everything": "Catch everything",
+    "minimize_cost": "Minimize expected cost",
+    "rank": "Ranking — no operating point",
+    "predict_probabilities": "Calibrated probabilities — no operating point",
+}
+
+_STRATEGY_GROUPS: list[tuple[list[str], str]] = [
+    (["everything", "best_always_answers"], "Always answer"),
+    (["only_when_sure", "best_balanced_may_demur"], "Balanced demur"),
+    (["only_on_strong_positives", "best_detects_positives_may_demur"], "Detect positives"),
+    (["only_on_strong_negatives", "best_rules_out_negatives_may_demur"], "Rule out negatives"),
+]
+
+
 def _render_selective_prediction(data: dict) -> str:
-    sp = data.get("selective_prediction")
+    sp = data.get("coverage") or data.get("selective_prediction")
     if not sp:
         return ""
 
@@ -432,76 +449,107 @@ def _render_selective_prediction(data: dict) -> str:
             return "≈ RANDOM"
         return "ANTI-ALIGNED ⚠"
 
+    def _fmt_auc(v: Optional[float]) -> str:
+        return f"{v:.4f}" if v is not None else "—"
+
+    def _fmt_pct(v: Optional[float]) -> str:
+        return f"{v * 100:.1f}%" if v is not None else "—"
+
     def _render_entry(label: str, entry: dict) -> list[str]:
+        if entry.get("coverage") is None:
+            return []
+
         dec = entry.get("demur_error_capture")
-        baseline = entry.get("demur_random_baseline", 0.0)
-        coverage = entry.get("coverage", 0.0)
+        baseline = entry.get("demur_random_baseline") or 0.0
+        coverage = entry.get("coverage") or 0.0
         n_covered = entry.get("n_covered", 0)
         n_total = entry.get("n_total", 0)
         n_demurred = entry.get("n_demurred", 0)
-        covered_auc = entry.get("covered_auc", 0.0)
-        full_auc = entry.get("full_auc", 0.0)
-        auc_lift = entry.get("auc_lift", 0.0)
-        threshold = entry.get("confidence_threshold", 0.0)
+        auc_lift = entry.get("auc_lift")
+        threshold = entry.get("confidence_threshold")
         tp = entry.get("n_demurred_true_positives", 0)
         fp = entry.get("n_demurred_false_positives", 0)
         fn = entry.get("n_demurred_false_negatives", 0)
         tn = entry.get("n_demurred_true_negatives", 0)
+        intent = entry.get("intent")
+        source = entry.get("source")
+        cal = entry.get("calibration_method")
 
-        badge = _demur_badge(dec, baseline)
+        intent_label = _INTENT_DISPLAY.get(intent or "", "") or (
+            intent.replace("_", " ").title() if intent else "Balanced (default)"
+        )
+        is_noop = intent in ("rank", "predict_probabilities")
         is_always_answers = dec is None
+        badge = _demur_badge(dec, baseline)
 
         out = [f"\n  {label}"]
         out.append(f"  {'~' * 40}")
+        out.append(f"    Optimized for: {intent_label}" + (
+            f"  [{source.replace('_', ' ')}{' · ' + cal if cal else ''}]" if source else ""
+        ))
+
+        if source == "per_epoch":
+            out.append("    ⚠ Operating point computed on uncalibrated probabilities")
+
+        if is_noop:
+            out.append("    Scoring model — use raw predict_proba() output, no operating point")
+            return out
 
         if is_always_answers:
             out.append(f"    Demur Error Capture: {badge}")
         else:
-            out.append(
-                f"    Demur Error Capture: {dec:.4f}  [{badge}]  (vs {baseline:.2f} random)"
-            )
+            out.append(f"    Demur Error Capture: {dec:.4f}  [{badge}]  (vs {baseline:.2f} random)")
 
+        lift_str = (f"{'+' if auc_lift >= 0 else ''}{auc_lift:.4f}") if auc_lift is not None else "—"
+        thresh_str = f"{threshold:.2f}" if threshold is not None else "—"
         out.append(
-            f"    Covered AUC: {covered_auc:.4f}   Full AUC: {full_auc:.4f}   "
-            f"AUC Lift: {'+' if auc_lift >= 0 else ''}{auc_lift:.4f}   "
-            f"Coverage: {coverage * 100:.1f}%   Threshold: {threshold:.2f}"
+            f"    Covered AUC: {_fmt_auc(entry.get('covered_auc'))}   "
+            f"Full AUC: {_fmt_auc(entry.get('full_auc'))}   "
+            f"AUC Lift: {lift_str}   "
+            f"Coverage: {_fmt_pct(coverage)}   Threshold: {thresh_str}"
         )
 
         if not is_always_answers and n_demurred > 0:
             out.append("")
             out.append("    Declined rows — what they would have been:")
-            out.append(f"                       Actual +     Actual −")
-            out.append(f"      Would predict +   {tp:>5d} (away)  {fp:>5d} (hidden ✓)")
-            out.append(f"      Would predict −   {fn:>5d} (hidden ✓)  {tn:>5d} (away)")
+            out.append(f"                       Actual +          Actual −")
+            out.append(f"      Would predict +   {tp:>5d} (away)       {fp:>5d} (hidden ✓)")
+            out.append(f"      Would predict −   {fn:>5d} (hidden ✓)   {tn:>5d} (away)")
 
-        out.append(
-            f"\n    Answered {n_covered:,}/{n_total:,} ({coverage * 100:.1f}%) — declined {n_demurred:,}"
-        )
+        out.append(f"\n    Answered {n_covered:,}/{n_total:,} ({_fmt_pct(coverage)}) — declined {n_demurred:,}")
         return out
 
-    lines = [
-        "SELECTIVE PREDICTION",
-        "-" * 60,
-    ]
+    lines = ["SELECTIVE PREDICTION", "-" * 60]
 
     summary = sp.get("summary")
     if summary:
         lines.extend(_render_entry("Summary", summary))
 
     strategies = sp.get("strategies") or {}
-    strategy_order = [
-        ("best_always_answers", "Always Answers"),
-        ("best_balanced_may_demur", "Balanced"),
-        ("best_detects_positives_may_demur", "Detect Positives"),
-        ("best_rules_out_negatives_may_demur", "Rule Out Negatives"),
-    ]
-    has_strategies = any(k in strategies for k, _ in strategy_order)
+    has_strategies = any(
+        any(k in strategies for k in keys)
+        for keys, _ in _STRATEGY_GROUPS
+    )
     if has_strategies:
         lines.append("\n  Strategies")
-        for key, label in strategy_order:
-            entry = strategies.get(key)
+        for keys, label in _STRATEGY_GROUPS:
+            entry = next((strategies[k] for k in keys if k in strategies), None)
             if entry:
                 lines.extend(_render_entry(label, entry))
+
+    history = sp.get("history") or []
+    if history:
+        lines.append("\n  History")
+        lines.append(f"  {'Epoch':>6}  {'Coverage':>9}  {'Covered AUC':>12}  {'Demur Capture':>14}  {'vs Random':>10}")
+        for h in history:
+            epoch = h.get("epoch", "?")
+            cov = _fmt_pct(h.get("coverage"))
+            cauc = _fmt_auc(h.get("covered_auc"))
+            dec_h = h.get("demur_error_capture")
+            dec_str = f"{dec_h:.4f}" if dec_h is not None else "N/A"
+            baseline_h = h.get("demur_random_baseline")
+            base_str = f"{baseline_h:.2f}" if baseline_h is not None else "—"
+            lines.append(f"  {str(epoch):>6}  {cov:>9}  {cauc:>12}  {dec_str:>14}  {base_str:>10}")
 
     lines.append("")
     return "\n".join(lines)

@@ -13,7 +13,7 @@
   'use strict';
 
   const FeatrixModelCard = {
-    VERSION: '1.15',
+    VERSION: '1.16',
     BUILD: 'dev',
 
     /**
@@ -884,6 +884,18 @@
         var auc_lift = entry.auc_lift;
         var liftColor = (auc_lift == null || auc_lift >= 0) ? '#28a745' : '#dc3545';
 
+        var covered_precision = entry.covered_precision != null ? entry.covered_precision : null;
+        var covered_recall = entry.covered_recall != null ? entry.covered_recall : null;
+        var extraMetricLabel = null;
+        var extraMetricValue = null;
+        if (intent === 'only_alert_when_confident' && covered_precision !== null) {
+          extraMetricLabel = 'Covered Precision';
+          extraMetricValue = covered_precision.toFixed(4);
+        } else if ((intent === 'catch_everything' || intent === 'catch_everything_aggressive') && covered_recall !== null) {
+          extraMetricLabel = 'Covered Recall';
+          extraMetricValue = covered_recall.toFixed(4);
+        }
+
         var intentLabel = INTENT_DISPLAY[intent || ''] || (intent ? intent.replace(/_/g, ' ') : 'Balanced (default)');
         var CONTRACT_INTENTS = ['only_alert_when_confident', 'catch_everything', 'catch_everything_aggressive'];
         var showFallbackBanner = entry.intent_feasible === false && CONTRACT_INTENTS.indexOf(intent || '') !== -1;
@@ -934,8 +946,10 @@
         html += '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:15px;">' + headlineHtml + '</div>';
 
         // Metrics grid
-        html += '<div class="grid" style="grid-template-columns:repeat(5,1fr);margin-bottom:15px;">' +
+        var gridCols = extraMetricLabel ? 6 : 5;
+        html += '<div class="grid" style="grid-template-columns:repeat(' + gridCols + ',1fr);margin-bottom:15px;">' +
           '<div class="metric"><div class="metric-label">Covered AUC</div><div class="metric-value" style="font-size:18px;">' + fmtAuc(entry.covered_auc) + '</div></div>' +
+          (extraMetricLabel ? '<div class="metric"><div class="metric-label">' + extraMetricLabel + '</div><div class="metric-value" style="font-size:18px;">' + extraMetricValue + '</div></div>' : '') +
           '<div class="metric"><div class="metric-label">Full AUC</div><div class="metric-value" style="font-size:18px;">' + fmtAuc(entry.full_auc) + '</div></div>' +
           '<div class="metric"><div class="metric-label">AUC Lift</div><div class="metric-value" style="font-size:18px;color:' + liftColor + ';">' + (auc_lift != null ? (auc_lift >= 0 ? '+' : '') + auc_lift.toFixed(4) : '\u2014') + '</div></div>' +
           '<div class="metric"><div class="metric-label">Coverage</div><div class="metric-value" style="font-size:18px;">' + fmtPct(coverage) + '</div></div>' +

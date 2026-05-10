@@ -42,6 +42,8 @@ export interface SelectivePredictionEntry {
   intent?: string | null;
   source?: string | null;
   calibration_method?: string | null;
+  covered_precision?: number | null;
+  covered_recall?: number | null;
   epoch?: number;
 }
 
@@ -521,7 +523,16 @@ export const ModelCard: React.FC<ModelCardProps> = ({ data, className = '', onRe
       n_demurred_true_negatives: tn, n_demurred_false_negatives: fn,
       intent, source, calibration_method,
       intent_feasible, intent_feasibility_reason,
+      covered_precision, covered_recall,
     } = entry;
+
+    const showPrecision = intent === 'only_alert_when_confident' && covered_precision != null;
+    const showRecall = (intent === 'catch_everything' || intent === 'catch_everything_aggressive') && covered_recall != null;
+    const extraMetric = showPrecision
+      ? { label: 'Covered Precision', value: covered_precision!.toFixed(4) }
+      : showRecall
+      ? { label: 'Covered Recall', value: covered_recall!.toFixed(4) }
+      : null;
 
     const CONTRACT_INTENTS = new Set(['only_alert_when_confident', 'catch_everything', 'catch_everything_aggressive']);
     const showFallbackBanner = intent_feasible === false && CONTRACT_INTENTS.has(intent ?? '');
@@ -608,11 +619,17 @@ export const ModelCard: React.FC<ModelCardProps> = ({ data, className = '', onRe
             </div>
 
             {/* Metrics grid */}
-            <div className="grid" style={{ gridTemplateColumns: 'repeat(5, 1fr)', marginBottom: '15px' }}>
+            <div className="grid" style={{ gridTemplateColumns: `repeat(${extraMetric ? 6 : 5}, 1fr)`, marginBottom: '15px' }}>
               <div className="metric">
                 <div className="metric-label">Covered AUC</div>
                 <div className="metric-value" style={{ fontSize: '18px' }}>{covered_auc != null ? covered_auc.toFixed(4) : '—'}</div>
               </div>
+              {extraMetric && (
+                <div className="metric">
+                  <div className="metric-label">{extraMetric.label}</div>
+                  <div className="metric-value" style={{ fontSize: '18px' }}>{extraMetric.value}</div>
+                </div>
+              )}
               <div className="metric">
                 <div className="metric-label">Full AUC</div>
                 <div className="metric-value" style={{ fontSize: '18px' }}>{full_auc != null ? full_auc.toFixed(4) : '—'}</div>

@@ -515,8 +515,13 @@ def _render_selective_prediction(data: dict) -> str:
 
         lift_str = (f"{'+' if auc_lift >= 0 else ''}{auc_lift:.4f}") if auc_lift is not None else "—"
         thresh_str = f"{threshold:.2f}" if threshold is not None else "—"
+        extra_metric = ""
+        if intent == "only_alert_when_confident" and entry.get("covered_precision") is not None:
+            extra_metric = f"   Covered Precision: {entry['covered_precision']:.4f}"
+        elif intent in ("catch_everything", "catch_everything_aggressive") and entry.get("covered_recall") is not None:
+            extra_metric = f"   Covered Recall: {entry['covered_recall']:.4f}"
         out.append(
-            f"    Covered AUC: {_fmt_auc(entry.get('covered_auc'))}   "
+            f"    Covered AUC: {_fmt_auc(entry.get('covered_auc'))}{extra_metric}   "
             f"Full AUC: {_fmt_auc(entry.get('full_auc'))}   "
             f"AUC Lift: {lift_str}   "
             f"Coverage: {_fmt_pct(coverage)}   Threshold: {thresh_str}"

@@ -249,18 +249,60 @@
         }
       }
 
+      // For ES models: show architecture cards instead of AUC cards
+      var ma = data.model_architecture || {};
+      var es = data.embedding_space || {};
+      var td = data.training_dataset || {};
+      var dModel = es.d_model || ma.d_model || (data.training_configuration && data.training_configuration.d_model) || null;
+      var numCols = es.num_columns || td.total_features || null;
+      var numParams = es.num_parameters || ma.total_parameters || null;
+      var numRows = es.num_rows || td.total_rows || null;
+
+      // Best ranking AUC from ranking_metrics_history
+      var rmh = data.ranking_metrics_history;
+      var bestRankAuc = null;
+      var bestRecallAt1 = null;
+      if (rmh && rmh.entries && rmh.entries.length > 0) {
+        rmh.entries.forEach(function(e) {
+          if (e.val_auc != null && (bestRankAuc === null || e.val_auc > bestRankAuc)) bestRankAuc = e.val_auc;
+          if (e.val_recall_at_1 != null && (bestRecallAt1 === null || e.val_recall_at_1 > bestRecallAt1)) bestRecallAt1 = e.val_recall_at_1;
+        });
+      }
+
       // AUC hero cards (hidden during ES training)
       var aucCards = '';
       if (!hideAucCards) {
-        aucCards = `
+        if (phase === 'es') {
+          // ES model: show architecture + quality metrics instead of classification AUC
+          var rankQualityColor = bestRankAuc !== null ? (bestRankAuc >= 0.999 ? '#28a745' : bestRankAuc >= 0.99 ? '#e6940a' : '#dc3545') : '#6c757d';
+          aucCards =
+            '<div class="metric">' +
+              '<div class="metric-label">Ports (input columns)</div>' +
+              '<div class="metric-value" style="font-size:28px;">' + (numCols !== null ? numCols.toLocaleString() : 'N/A') + '</div>' +
+            '</div>' +
+            '<div class="metric">' +
+              '<div class="metric-label">Dimensions</div>' +
+              '<div class="metric-value" style="font-size:28px;">' + (dModel !== null ? dModel : 'N/A') + '</div>' +
+            '</div>' +
+            '<div class="metric" style="background:#e8f5e9;border-color:#a5d6a7;" title="Contrastive ranking AUC — how well the model distinguishes similar from dissimilar records">' +
+              '<div class="metric-label" style="color:#388e3c;">Best Ranking AUC</div>' +
+              '<div class="metric-value" style="font-size:28px;color:' + rankQualityColor + ';">' + (bestRankAuc !== null ? (bestRankAuc * 100).toFixed(2) + '%' : 'N/A') + '</div>' +
+            '</div>' +
+            '<div class="metric" style="background:#e8f5e9;border-color:#a5d6a7;" title="Recall@1 — fraction of queries where the top-1 nearest neighbor is the correct match">' +
+              '<div class="metric-label" style="color:#388e3c;">Best Recall@1</div>' +
+              '<div class="metric-value" style="font-size:28px;color:' + rankQualityColor + ';">' + (bestRecallAt1 !== null ? (bestRecallAt1 * 100).toFixed(1) + '%' : 'N/A') + '</div>' +
+            '</div>';
+        } else {
+          aucCards = `
                 <div class="metric" style="background: #e3f2fd; border-color: #90caf9;">
                     <div class="metric-label" style="color: #1976d2;">Best ROC-AUC</div>
-                    <div class="metric-value" style="font-size: 28px; color: #1565c0;">${bestRocAuc !== null ? bestRocAuc.toFixed(4) : 'N/A'}</div>
+                    <div class="metric-value" style="font-size: 28px; color: #1565c0;">${bestRocAuc !== null ? (bestRocAuc * 100).toFixed(2) + '%' : 'N/A'}</div>
                 </div>
                 <div class="metric" style="background: #e8f5e9; border-color: #a5d6a7;"${prevalence !== null ? ' title="Random baseline: ' + (prevalence * 100).toFixed(1) + '% (class prevalence)"' : ''}>
                     <div class="metric-label" style="color: #388e3c;">Best PR-AUC</div>
-                    <div class="metric-value" style="font-size: 28px; color: #2e7d32;">${bestPrAuc !== null ? bestPrAuc.toFixed(4) : 'N/A'}${prAucLift !== null ? ' <span style="font-size: 14px; font-weight: normal;">[' + prAucLift.toFixed(1) + 'x]</span>' : ''}</div>
+                    <div class="metric-value" style="font-size: 28px; color: #2e7d32;">${bestPrAuc !== null ? (bestPrAuc * 100).toFixed(2) + '%' : 'N/A'}${prAucLift !== null ? ' <span style="font-size: 14px; font-weight: normal;">[' + prAucLift.toFixed(1) + 'x]</span>' : ''}</div>
                 </div>`;
+        }
       }
 
       return `
@@ -285,7 +327,7 @@
                 &nbsp;&nbsp;${mi.training_date || 'N/A'}
                 &nbsp;&nbsp;•&nbsp;&nbsp;<strong>Model:</strong> <code style="font-size: 11px;">${modelIdDisplay}</code>
                 &nbsp;&nbsp;•&nbsp;&nbsp;<strong>Cluster:</strong> ${(mi.compute_cluster || 'N/A').toUpperCase()}
-                &nbsp;&nbsp;•&nbsp;&nbsp;<strong>Dims:</strong> ${(data.embedding_space && data.embedding_space.d_model) || 'N/A'}
+                &nbsp;&nbsp;•&nbsp;&nbsp;<strong>Dims:</strong> ${dModel || 'N/A'}
                 ${mi.encoding_intent ? '&nbsp;&nbsp;•&nbsp;&nbsp;<strong>Encoding:</strong> ' + mi.encoding_intent : ''}
                 ${epochProgress}
             </div>${sphereSessionId ? `
@@ -315,61 +357,94 @@
      * Render model stack section
      */
     renderEmbeddingSpace: function(data) {
-      var es = data.embedding_space;
+      var es = data.embedding_space || {};
       var sp = data.single_predictor || data.predictor || {};
       var ma = data.model_architecture || {};
       var ms = (data.model_stack && data.model_stack[0]) || {};
       var ci = data.class_imbalance || {};
-      if (!es) return '';
+      var td = data.training_dataset || {};
+      var phase = this.getTrainingPhase(data);
 
-      var spRows = ci.total_samples || ms.rows || sp.num_rows || 0;
-      var spLayers = ms.layers || ma.predictor_layers || sp.num_layers || 0;
-      var spParams = ms.parameters || ma.predictor_parameters || sp.num_parameters || 0;
+      // Need at least embedding_space or model_architecture to render
+      var hasEs = !!data.embedding_space;
+      var hasMa = !!(ma.transformer_layers || ma.d_model || ma.attention_heads || ma.total_parameters);
+      if (!hasEs && !hasMa) return '';
 
-      var html = `
-    <details class="section" open>
-        <summary>MODEL STACK</summary>
-        <div class="section-content">
-            <table>
-                <tr>
-                    <th style="width: 150px;"></th>
-                    <th>Labeled?</th>
-                    <th>Rows</th>
-                    <th>Layers</th>
-                    <th>Parameters</th>
-                </tr>
-                <tr>
-                    <td style="font-weight: bold; white-space: nowrap;">Predictor</td>
-                    <td style="color: #388e3c; font-weight: bold; white-space: nowrap;">Yes</td>
-                    <td style="font-size: 18px; font-weight: bold;">${spRows.toLocaleString()}</td>
-                    <td style="font-size: 18px; font-weight: bold;">${spLayers ? this.formatLargeNumber(spLayers) : 'N/A'}</td>
-                    <td style="font-size: 18px; font-weight: bold;">${spParams ? this.formatLargeNumber(spParams) : 'N/A'}</td>
-                </tr>
-                <tr>
-                    <td style="font-weight: bold; white-space: nowrap;">Foundation</td>
-                    <td style="color: #666; white-space: nowrap;">No</td>
-                    <td style="font-size: 18px; font-weight: bold;">${(es.num_rows || 0).toLocaleString()}</td>
-                    <td style="font-size: 18px; font-weight: bold;">${this.formatLargeNumber(es.num_layers)}</td>
-                    <td style="font-size: 18px; font-weight: bold;">${this.formatLargeNumber(es.num_parameters)}</td>
-                </tr>
-            </table>
-      `;
+      // Resolve values preferring embedding_space, falling back to model_architecture
+      var dModel = es.d_model || ma.d_model || null;
+      var numLayers = es.num_layers || ma.transformer_layers || null;
+      var numParams = es.num_parameters || ma.total_parameters || null;
+      var numRows = es.num_rows || td.total_rows || null;
+      var numCols = es.num_columns || td.total_features || null;
+      var attentionHeads = ma.attention_heads || null;
+      var lossFunction = (data.technical_details && data.technical_details.loss_function) || ma.loss_function || null;
+      var normalization = (data.technical_details && data.technical_details.normalization) || null;
 
-      // Top relationships - commented out for SP cards, use for ES cards only
-      // if (es.top_relationships && es.top_relationships.length > 0) {
-      //   html += '<h3 style="margin: 25px 0 15px 0; font-size: 14px; text-transform: uppercase; color: #666;">Top Relationships</h3>';
-      //   html += '<table><tr><th>Direction</th><th>Type</th><th>Lift Score</th><th>Samples</th></tr>';
-      //   for (var i = 0; i < es.top_relationships.length; i++) {
-      //     var rel = es.top_relationships[i];
-      //     html += '<tr>';
-      //     html += '<td style="font-family: monospace;">' + (rel.direction || (rel.source_col + ' → ' + rel.target_col)) + '</td>';
-      //     html += '<td>' + (rel.relationship_type || 'N/A') + '</td>';
-      //     html += '<td>' + (typeof rel.lift_score === 'number' ? rel.lift_score.toFixed(4) : 'N/A') + '</td>';
-      //     html += '<td>' + (rel.sample_count || 'N/A') + '</td>';
-      //     html += '</tr>';
-      //   }
-      //   html += '</table>';
-      // }
+      var html = '<details class="section" open><summary>EMBEDDING SPACE</summary><div class="section-content">';
+
+      if (phase === 'sp' && hasEs) {
+        // SP card with full ES + predictor stack
+        var spRows = ci.total_samples || ms.rows || sp.num_rows || 0;
+        var spLayers = ms.layers || ma.predictor_layers || sp.num_layers || 0;
+        var spParams = ms.parameters || ma.predictor_parameters || sp.num_parameters || 0;
+        html += '<table>' +
+          '<tr><th style="width:150px;"></th><th>Labeled?</th><th>Rows</th><th>Layers</th><th>Parameters</th></tr>' +
+          '<tr>' +
+            '<td style="font-weight:bold;white-space:nowrap;">Predictor</td>' +
+            '<td style="color:#388e3c;font-weight:bold;">Yes</td>' +
+            '<td style="font-size:18px;font-weight:bold;">' + spRows.toLocaleString() + '</td>' +
+            '<td style="font-size:18px;font-weight:bold;">' + (spLayers ? this.formatLargeNumber(spLayers) : 'N/A') + '</td>' +
+            '<td style="font-size:18px;font-weight:bold;">' + (spParams ? this.formatLargeNumber(spParams) : 'N/A') + '</td>' +
+          '</tr>' +
+          '<tr>' +
+            '<td style="font-weight:bold;white-space:nowrap;">Foundation</td>' +
+            '<td style="color:#666;">No</td>' +
+            '<td style="font-size:18px;font-weight:bold;">' + (es.num_rows || 0).toLocaleString() + '</td>' +
+            '<td style="font-size:18px;font-weight:bold;">' + this.formatLargeNumber(es.num_layers) + '</td>' +
+            '<td style="font-size:18px;font-weight:bold;">' + this.formatLargeNumber(es.num_parameters) + '</td>' +
+          '</tr>' +
+          '</table>';
+      } else {
+        // Pure ES card — show architecture details
+        var cells = [
+          numCols !== null    ? ['Ports (input columns)', numCols.toLocaleString()] : null,
+          dModel !== null     ? ['Dimensions', dModel.toLocaleString()] : null,
+          numLayers !== null  ? ['Transformer layers', numLayers.toLocaleString()] : null,
+          attentionHeads      ? ['Attention heads', attentionHeads.toLocaleString()] : null,
+          numParams !== null  ? ['Parameters', this.formatLargeNumber(numParams)] : null,
+          numRows !== null    ? ['Training rows', numRows.toLocaleString()] : null,
+        ].filter(Boolean);
+
+        html += '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:15px;margin-bottom:20px;">';
+        cells.forEach(function(c) {
+          html += '<div class="metric"><div class="metric-label">' + c[0] + '</div>' +
+            '<div class="metric-value" style="font-size:24px;">' + c[1] + '</div></div>';
+        });
+        html += '</div>';
+
+        // Technical details strip
+        var techParts = [];
+        if (lossFunction) techParts.push('<strong>Loss:</strong> ' + lossFunction);
+        if (normalization) techParts.push('<strong>Normalization:</strong> ' + normalization);
+        if (data.technical_details && data.technical_details.device) techParts.push('<strong>Device:</strong> ' + data.technical_details.device);
+        if (data.technical_details && data.technical_details.pytorch_version) techParts.push('<strong>PyTorch:</strong> ' + data.technical_details.pytorch_version);
+        if (techParts.length > 0) {
+          html += '<div style="font-size:12px;color:#666;border-top:1px solid #eee;padding-top:12px;line-height:2;">' + techParts.join('&nbsp;&nbsp;•&nbsp;&nbsp;') + '</div>';
+        }
+
+        // Feature list (collapsed)
+        var featureNames = (data.training_dataset && data.training_dataset.feature_names) || [];
+        if (featureNames.length > 0) {
+          html += '<details style="margin-top:14px;border:none!important;background:none!important;">' +
+            '<summary style="font-size:12px;color:#1976d2;cursor:pointer;padding:4px 0;font-weight:normal;text-transform:none;">' +
+            'Show ' + featureNames.length + ' input columns</summary>' +
+            '<div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:4px;">';
+          featureNames.forEach(function(f) {
+            html += '<span style="font-size:11px;font-family:monospace;background:#f0f0f0;padding:2px 7px;border-radius:2px;">' + f + '</span>';
+          });
+          html += '</div></details>';
+        }
+      }
 
       html += '</div></details>';
       return html;
@@ -398,7 +473,7 @@
         <div class="section-content">
       `;
 
-      // Class distribution table
+      // Class distribution table (SP models with class_imbalance)
       if (ci.class_distribution || ci.train_distribution) {
         html += `
             <table>
@@ -431,9 +506,146 @@
                 Imbalance ratio: <strong>${ci.imbalance_ratio || 'N/A'}:1</strong> (minority class is ${((ci.minority_class_count || 0) / totalSamples * 100).toFixed(1)}% of data)
             </div>
         `;
+      } else if (td.train_rows || td.total_rows) {
+        // ES model or SP without class_imbalance — show row counts from training_dataset
+        var rows = [
+          td.train_rows != null ? ['Train', td.train_rows] : null,
+          td.val_rows != null ? ['Validation', td.val_rows] : null,
+          td.test_rows != null ? ['Test (held out)', td.test_rows] : null,
+          td.total_rows != null ? ['Total', td.total_rows] : null,
+        ].filter(Boolean);
+        html += '<table style="width:auto;">';
+        rows.forEach(function(r) {
+          var isTotalRow = r[0] === 'Total';
+          html += '<tr>' +
+            '<td style="' + (isTotalRow ? 'border-top:2px solid #333;' : '') + '"><strong>' + r[0] + '</strong></td>' +
+            '<td style="text-align:right;padding-left:30px;font-size:18px;font-weight:bold;' + (isTotalRow ? 'border-top:2px solid #333;' : '') + '">' + r[1].toLocaleString() + '</td>' +
+            '</tr>';
+        });
+        html += '</table>';
+        if (td.total_features) {
+          html += '<div style="margin-top:12px;color:#666;font-size:13px;">Features: <strong>' + td.total_features + '</strong></div>';
+        }
+      }
+
+      // validation_notes
+      if (td.validation_notes && td.validation_notes.length > 0) {
+        html += '<div style="margin-top:14px;">';
+        td.validation_notes.forEach(function(note) {
+          html += '<div style="font-size:12px;color:#666;margin-top:4px;">• ' + note + '</div>';
+        });
+        html += '</div>';
       }
 
       html += '</div></details>';
+      return html;
+    },
+
+    /**
+     * Render ranking quality metrics for ES models
+     * (ranking_metrics_history + test_set_monitoring)
+     */
+    renderRankingMetrics: function(data) {
+      var rmh = data.ranking_metrics_history;
+      var tsm = data.test_set_monitoring;
+      if (!rmh && !tsm) return '';
+
+      var entries = (rmh && rmh.entries) || [];
+      var testEntries = (tsm && tsm.entries) || [];
+
+      // Find best epoch
+      var bestAuc = null, bestRecall = null, bestEpoch = null;
+      entries.forEach(function(e) {
+        if (bestAuc === null || e.val_auc > bestAuc) {
+          bestAuc = e.val_auc; bestRecall = e.val_recall_at_1; bestEpoch = e.epoch;
+        }
+      });
+
+      var html = '<details class="section" open><summary>EMBEDDING QUALITY</summary><div class="section-content">';
+
+      // Hero metrics
+      var aucColor = bestAuc !== null ? (bestAuc >= 0.999 ? '#28a745' : bestAuc >= 0.99 ? '#e6940a' : '#dc3545') : '#6c757d';
+      html += '<div style="margin-bottom:20px;">' +
+        '<p style="font-size:13px;color:#555;margin-bottom:14px;">These metrics measure how well the embedding space organises records — ' +
+        'whether similar records land near each other. They are <em>not</em> classification metrics; ' +
+        'they reflect the quality of the foundation for any predictor built on top.</p>' +
+        '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:15px;">';
+
+      if (bestAuc !== null) {
+        html += '<div class="metric" style="border-color:' + aucColor + ';">' +
+          '<div class="metric-label">Best Val AUC <span style="font-weight:normal;text-transform:none;">(epoch ' + bestEpoch + ')</span></div>' +
+          '<div class="metric-value" style="font-size:28px;color:' + aucColor + ';">' + (bestAuc * 100).toFixed(3) + '%</div>' +
+          '</div>';
+        html += '<div class="metric" style="border-color:' + aucColor + ';">' +
+          '<div class="metric-label">Best Recall@1</div>' +
+          '<div class="metric-value" style="font-size:28px;color:' + aucColor + ';">' + (bestRecall !== null ? (bestRecall * 100).toFixed(1) + '%' : 'N/A') + '</div>' +
+          '</div>';
+      }
+      if (testEntries.length > 0) {
+        var te = testEntries[testEntries.length - 1];
+        var testColor = te.test_auc >= 0.999 ? '#28a745' : te.test_auc >= 0.99 ? '#e6940a' : '#dc3545';
+        html += '<div class="metric" style="border-color:' + testColor + ';" title="Held-out test set — never used during training">' +
+          '<div class="metric-label">Test AUC <span style="font-weight:normal;text-transform:none;">(epoch ' + te.epoch + ')</span></div>' +
+          '<div class="metric-value" style="font-size:28px;color:' + testColor + ';">' + (te.test_auc * 100).toFixed(3) + '%</div>' +
+          '</div>';
+        if (te.test_recall_at_1 != null) {
+          html += '<div class="metric" style="border-color:' + testColor + ';">' +
+            '<div class="metric-label">Test Recall@1</div>' +
+            '<div class="metric-value" style="font-size:28px;color:' + testColor + ';">' + (te.test_recall_at_1 * 100).toFixed(1) + '%</div>' +
+            '</div>';
+        }
+      }
+      html += '</div></div>';
+
+      // Epoch history table (collapsed)
+      if (entries.length > 0) {
+        html += '<details style="border:none!important;background:none!important;">' +
+          '<summary style="font-size:12px;color:#1976d2;cursor:pointer;padding:4px 0;font-weight:normal;text-transform:none;">Training history (' + entries.length + ' epochs)</summary>' +
+          '<table style="margin-top:10px;width:auto;">' +
+          '<tr><th>Epoch</th><th style="text-align:right;">Val AUC</th><th style="text-align:right;">Recall@1</th></tr>';
+        entries.forEach(function(e) {
+          var isBest = e.epoch === bestEpoch;
+          html += '<tr' + (isBest ? ' style="background:#e8f5e9;"' : '') + '>' +
+            '<td>' + e.epoch + (isBest ? ' ★' : '') + '</td>' +
+            '<td style="text-align:right;font-family:monospace;">' + (e.val_auc != null ? (e.val_auc * 100).toFixed(3) + '%' : '—') + '</td>' +
+            '<td style="text-align:right;font-family:monospace;">' + (e.val_recall_at_1 != null ? (e.val_recall_at_1 * 100).toFixed(1) + '%' : '—') + '</td>' +
+            '</tr>';
+        });
+        html += '</table></details>';
+      }
+
+      html += '</div></details>';
+      return html;
+    },
+
+    /**
+     * Render probes table — predictors built on this embedding space
+     * Populated via options.probes: [{name, target_column, auc, model_card_url, status}]
+     */
+    renderProbes: function(data, probes) {
+      var phase = this.getTrainingPhase(data);
+      if (phase !== 'es') return '';
+      if (!probes || probes.length === 0) {
+        return '<details class="section" open><summary>BUILT-IN PROBES</summary>' +
+          '<div class="section-content" style="color:#888;font-size:13px;">No probes registered for this embedding space.</div></details>';
+      }
+      var html = '<details class="section" open><summary>BUILT-IN PROBES</summary><div class="section-content">' +
+        '<p style="font-size:13px;color:#555;margin-bottom:14px;">Predictors trained on top of this embedding space. Each probe is a binary classifier targeting a specific column.</p>' +
+        '<table><tr><th>Target column</th><th style="text-align:right;">ROC-AUC</th><th style="text-align:right;">PR-AUC</th><th>Status</th><th></th></tr>';
+      probes.forEach(function(p) {
+        var aucStr = p.auc != null ? (p.auc * 100).toFixed(2) + '%' : '—';
+        var prStr = p.pr_auc != null ? (p.pr_auc * 100).toFixed(2) + '%' : '—';
+        var statusColor = p.status === 'done' || p.status === 'ready' ? '#28a745' : p.status === 'training' ? '#ffc107' : '#6c757d';
+        var linkHtml = p.model_card_url ? '<a href="' + p.model_card_url + '" style="font-size:12px;color:#1976d2;">View card →</a>' : '';
+        html += '<tr>' +
+          '<td style="font-family:monospace;">' + (p.target_column || p.name || '—') + '</td>' +
+          '<td style="text-align:right;font-weight:bold;">' + aucStr + '</td>' +
+          '<td style="text-align:right;">' + prStr + '</td>' +
+          '<td><span style="background:' + statusColor + ';color:#fff;font-size:10px;padding:2px 7px;font-weight:bold;">' + (p.status || 'unknown').toUpperCase() + '</span></td>' +
+          '<td>' + linkHtml + '</td>' +
+          '</tr>';
+      });
+      html += '</table></div></details>';
       return html;
     },
 
@@ -1035,6 +1247,210 @@
     },
 
     /**
+     * Render model fit section
+     */
+    renderModelFit: function(data) {
+      var mf = data.model_fit;
+      if (!mf) return '';
+
+      var INTENT_LABELS = {
+        'balanced': 'Balanced',
+        'only_alert_when_confident': 'Only alert when confident',
+        'catch_everything': 'Catch everything',
+        'catch_everything_aggressive': 'Catch everything (aggressive)',
+        'minimize_cost': 'Minimize cost',
+        'rank': 'Ranking',
+        'predict_probabilities': 'Calibrated probabilities'
+      };
+
+      function scoreColor(s) {
+        return s >= 0.80 ? '#28a745' : s >= 0.50 ? '#e6940a' : '#6c757d';
+      }
+
+      function scoreBar(score) {
+        var color = scoreColor(score);
+        var pct = Math.round(score * 100);
+        return '<div style="display:flex;align-items:center;gap:8px;margin:3px 0;">' +
+          '<div style="flex:1;max-width:200px;background:#e0e0e0;height:8px;border-radius:4px;">' +
+          '<div style="width:' + pct + '%;height:100%;background:' + color + ';border-radius:4px;"></div></div>' +
+          '<span style="font-size:12px;font-weight:bold;color:' + color + ';min-width:34px;">' + pct + '%</span>' +
+          '</div>';
+      }
+
+      function renderShapeScoreList(scores) {
+        if (!scores || scores.length === 0) return '';
+        var top3 = scores.slice(0, 3);
+        var rest = scores.slice(3);
+        var html = '';
+        top3.forEach(function(s) {
+          html += '<div style="margin:8px 0;">' +
+            '<div style="font-size:13px;color:#333;">' + s.label + '</div>' +
+            scoreBar(s.score) + '</div>';
+        });
+        if (rest.length > 0) {
+          html += '<details style="margin-top:6px;border:none!important;background:none!important;">' +
+            '<summary style="font-size:12px;color:#1976d2;cursor:pointer;padding:4px 0;background:none;border:none;font-weight:normal;text-transform:none;">Show ' + rest.length + ' more</summary>';
+          rest.forEach(function(s) {
+            html += '<div style="margin:8px 0;">' +
+              '<div style="font-size:13px;color:#888;">' + s.label + '</div>' +
+              scoreBar(s.score) + '</div>';
+          });
+          html += '</details>';
+        }
+        return html;
+      }
+
+      function renderTopFitDetail(tf) {
+        if (!tf) return '';
+        var html = '';
+        if (tf.summary) {
+          html += '<div style="font-size:13px;color:#555;margin:8px 0;">' + tf.summary + '</div>';
+        }
+        if (tf.good_fit && tf.good_fit.length > 0) {
+          html += '<div style="font-size:12px;font-weight:bold;color:#2e7d32;margin:6px 0 3px 0;">Good for</div>';
+          html += '<ul style="margin:0 0 8px 18px;padding:0;list-style:disc;">';
+          tf.good_fit.forEach(function(g) {
+            html += '<li style="font-size:12px;color:#333;margin:2px 0;">' + g + '</li>';
+          });
+          html += '</ul>';
+        }
+        if (tf.poor_fit && tf.poor_fit.length > 0) {
+          html += '<div style="font-size:12px;font-weight:bold;color:#c62828;margin:6px 0 3px 0;">Watch out</div>';
+          html += '<ul style="margin:0 0 8px 18px;padding:0;list-style:disc;">';
+          tf.poor_fit.forEach(function(p) {
+            html += '<li style="font-size:12px;color:#666;margin:2px 0;">' + p + '</li>';
+          });
+          html += '</ul>';
+        }
+        if (tf.target_framing) {
+          html += '<div style="font-size:11px;color:#888;margin-top:6px;font-style:italic;">Positive class framing: ' + tf.target_framing + '</div>';
+        }
+        return html;
+      }
+
+      var html = '<details class="section" open><summary>MODEL FIT</summary><div class="section-content">';
+
+      // ── Primary block ──────────────────────────────────────────────────────
+      var primary = mf.primary;
+      if (primary && primary.top_fit) {
+        var tf = primary.top_fit;
+        var score = tf.score != null ? tf.score : 0;
+        var color = scoreColor(score);
+        var pct = Math.round(score * 100);
+        var intentLabel = INTENT_LABELS[primary.intent || ''] || (primary.intent || '');
+
+        if (score >= 0.50) {
+          html += '<div style="padding:20px;background:#f8f9fa;border-left:4px solid ' + color + ';margin-bottom:20px;">' +
+            '<div style="display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:10px;">' +
+            '<span style="font-size:20px;font-weight:bold;color:#000;text-transform:uppercase;">' + tf.label + '</span>' +
+            '<span style="font-size:16px;font-weight:bold;color:' + color + ';">' + pct + '%</span>' +
+            '<span style="font-size:11px;color:#999;">under ' + intentLabel + ' intent</span>' +
+            '</div>' +
+            renderTopFitDetail(tf);
+
+          // Other shapes scored — pull from per_intent entry matching primary.intent
+          var primaryEntry = null;
+          (mf.per_intent || []).forEach(function(e) {
+            if (e.intent === primary.intent) primaryEntry = e;
+          });
+          if (primaryEntry && primaryEntry.shape_scores && primaryEntry.shape_scores.length > 1) {
+            html += '<details style="margin-top:14px;border:none!important;background:none!important;">' +
+              '<summary style="font-size:12px;color:#1976d2;cursor:pointer;padding:4px 0;background:none;border:none;font-weight:normal;text-transform:none;">Other shapes scored</summary>' +
+              '<div style="margin-top:8px;">' + renderShapeScoreList(primaryEntry.shape_scores.slice(1)) + '</div>' +
+              '</details>';
+          }
+          html += '</div>';
+        } else {
+          // Low confidence — "no clear fit", show top 3
+          var primaryEntry2 = null;
+          (mf.per_intent || []).forEach(function(e) {
+            if (e.intent === primary.intent) primaryEntry2 = e;
+          });
+          var topScores = primaryEntry2 && primaryEntry2.shape_scores ? primaryEntry2.shape_scores.slice(0, 3) : [tf];
+          html += '<div style="padding:20px;background:#f8f9fa;border-left:4px solid #6c757d;margin-bottom:20px;">' +
+            '<div style="font-size:16px;font-weight:bold;color:#555;margin-bottom:12px;">No single clear use-case fit</div>' +
+            renderShapeScoreList(topScores) + '</div>';
+        }
+      }
+
+      // ── Per-intent fits ────────────────────────────────────────────────────
+      if (mf.per_intent && mf.per_intent.length > 0) {
+        html += '<h3 class="epoch-title" style="margin-top:10px;">Per-intent fits</h3>';
+        html += '<div style="border:1px solid #ddd;">';
+        mf.per_intent.forEach(function(entry, i) {
+          var tf2 = entry.top_fit || {};
+          var s2 = tf2.score != null ? tf2.score : 0;
+          var c2 = scoreColor(s2);
+          var p2 = Math.round(s2 * 100);
+          var iLabel = INTENT_LABELS[entry.intent || ''] || entry.intent || '—';
+          var borderStyle = i < mf.per_intent.length - 1 ? 'border-bottom:1px solid #eee;' : '';
+
+          html += '<details style="margin:0;border:none;' + borderStyle + '">' +
+            '<summary style="padding:12px 16px;cursor:pointer;background:#fff;display:flex;align-items:center;gap:10px;border:none;font-weight:normal;text-transform:none;font-size:13px;user-select:none;">' +
+            '<span style="flex:1;color:#333;">' + iLabel + '</span>' +
+            '<span style="color:#555;font-size:13px;">' + (tf2.label || '—') + '</span>' +
+            '<span style="font-size:12px;font-weight:bold;color:' + c2 + ';min-width:38px;text-align:right;">' + p2 + '%</span>' +
+            '</summary>' +
+            '<div style="padding:16px 20px;background:#fafafa;border-top:1px solid #eee;">' +
+            renderTopFitDetail(tf2) +
+            (entry.shape_scores && entry.shape_scores.length > 0
+              ? '<div style="margin-top:12px;"><div style="font-size:11px;text-transform:uppercase;color:#666;font-weight:bold;margin-bottom:8px;">All shapes</div>' + renderShapeScoreList(entry.shape_scores) + '</div>'
+              : '') +
+            '</div></details>';
+        });
+        html += '</div>';
+      }
+
+      // ── Reference table ────────────────────────────────────────────────────
+      if (mf.reference_table && mf.reference_table.length > 0) {
+        html += '<details style="margin-top:20px;border:1px solid #ddd!important;background:#fff!important;">' +
+          '<summary style="padding:12px 16px;cursor:pointer;font-size:13px;font-weight:bold;background:#f5f5f5;border:none;text-transform:none;color:#333;user-select:none;">What do these shapes mean?</summary>' +
+          '<div style="padding:16px 20px;">';
+        mf.reference_table.forEach(function(shape, i) {
+          if (i > 0) html += '<hr style="margin:16px 0;border:none;border-top:1px solid #eee;">';
+          html += '<div>' +
+            '<div style="font-size:14px;font-weight:bold;color:#000;margin-bottom:4px;">' + (shape.label || shape.id) + '</div>';
+          if (shape.summary) {
+            html += '<div style="font-size:13px;color:#555;margin-bottom:8px;">' + shape.summary + '</div>';
+          }
+          if (shape.good_fit && shape.good_fit.length > 0) {
+            html += '<div style="font-size:12px;font-weight:bold;color:#2e7d32;margin-bottom:3px;">Good for</div>' +
+              '<ul style="margin:0 0 8px 18px;padding:0;list-style:disc;">';
+            shape.good_fit.forEach(function(g) {
+              html += '<li style="font-size:12px;color:#333;margin:2px 0;">' + g + '</li>';
+            });
+            html += '</ul>';
+          }
+          if (shape.poor_fit && shape.poor_fit.length > 0) {
+            html += '<div style="font-size:12px;font-weight:bold;color:#c62828;margin-bottom:3px;">Watch out</div>' +
+              '<ul style="margin:0 0 8px 18px;padding:0;list-style:disc;">';
+            shape.poor_fit.forEach(function(p) {
+              html += '<li style="font-size:12px;color:#666;margin:2px 0;">' + p + '</li>';
+            });
+            html += '</ul>';
+          }
+          if (shape.criteria && shape.criteria.length > 0) {
+            html += '<details style="margin-top:6px;border:none!important;background:none!important;">' +
+              '<summary style="font-size:11px;color:#1976d2;cursor:pointer;padding:4px 0;background:none;border:none;font-weight:normal;text-transform:none;">Why this shape? (engineer view)</summary>' +
+              '<table style="width:auto;margin-top:8px;font-size:11px;">' +
+              '<tr><th>Metric</th><th>Op</th><th>Target</th><th>Tol</th><th>Weight</th></tr>';
+            shape.criteria.forEach(function(c) {
+              html += '<tr><td style="font-family:monospace;">' + (c.metric || '') + '</td>' +
+                '<td>' + (c.op || '') + '</td><td>' + (c.target != null ? c.target : '') + '</td>' +
+                '<td>' + (c.tol != null ? c.tol : '') + '</td><td>' + (c.weight != null ? c.weight : '') + '</td></tr>';
+            });
+            html += '</table></details>';
+          }
+          html += '</div>';
+        });
+        html += '</div></details>';
+      }
+
+      html += '</div></details>';
+      return html;
+    },
+
+    /**
      * Load an external script if not already present
      */
     _loadScript: function(src, checkGlobal) {
@@ -1318,6 +1734,115 @@
 </div>`;
     },
 
+    renderBadInput: function(modelCardJson) {
+      var EXPECTED_KEYS = [
+        'model_identification', 'best_epochs', 'class_imbalance', 'embedding_space',
+        'coverage', 'selective_prediction', 'training_optimization', 'data_processing_notes',
+        'model_fit', 'disk_usage', 'training_dataset', 'model_architecture'
+      ];
+      var OLD_SCHEMA_KEYS = ['training_metrics', 'model_quality', 'feature_inventory', 'column_statistics'];
+
+      var foundKeys = modelCardJson ? Object.keys(modelCardJson) : [];
+
+      // Case 1: model card buried inside a wrapper object
+      var buriedKey = null;
+      var buriedCard = null;
+      for (var i = 0; i < foundKeys.length; i++) {
+        var val = modelCardJson[foundKeys[i]];
+        if (val && typeof val === 'object' && !Array.isArray(val) && val.model_identification) {
+          buriedKey = foundKeys[i];
+          buriedCard = val;
+          break;
+        }
+      }
+
+      // Case 2: looks like old/wrong backend schema
+      var oldSchemaMatches = foundKeys.filter(function(k) { return OLD_SCHEMA_KEYS.indexOf(k) >= 0; });
+      var expectedMatches = foundKeys.filter(function(k) { return EXPECTED_KEYS.indexOf(k) >= 0; });
+
+      var css = '<style>' +
+        '.featrix-mc-err { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; padding: 32px 40px; max-width: 900px; margin: 0 auto; }' +
+        '.featrix-mc-err h2 { font-size: 18px; font-weight: 700; margin: 0 0 8px 0; }' +
+        '.featrix-mc-err p { font-size: 14px; color: #444; margin: 6px 0; }' +
+        '.featrix-mc-err code { background: #f0f0f0; padding: 2px 6px; font-size: 12px; border-radius: 2px; }' +
+        '.featrix-mc-err .banner { padding: 16px 20px; border-left: 4px solid #e65100; background: #fff3e0; margin-bottom: 20px; }' +
+        '.featrix-mc-err .banner.buried { border-color: #1565c0; background: #e3f2fd; }' +
+        '.featrix-mc-err .key-list { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0; }' +
+        '.featrix-mc-err .key { padding: 3px 8px; font-size: 12px; border-radius: 3px; font-family: monospace; }' +
+        '.featrix-mc-err .key.known { background: #e8f5e9; color: #1b5e20; }' +
+        '.featrix-mc-err .key.unknown { background: #fce4ec; color: #880e4f; }' +
+        '.featrix-mc-err .key.old { background: #fff3e0; color: #e65100; }' +
+        '.featrix-mc-err .schema { margin-top: 20px; border: 1px solid #ddd; padding: 16px 20px; background: #fafafa; }' +
+        '.featrix-mc-err .schema h3 { font-size: 13px; font-weight: bold; margin: 0 0 10px 0; text-transform: uppercase; color: #555; }' +
+        '.featrix-mc-err table { border-collapse: collapse; font-size: 13px; width: 100%; }' +
+        '.featrix-mc-err th { text-align: left; padding: 6px 10px; border-bottom: 2px solid #000; font-size: 12px; text-transform: uppercase; }' +
+        '.featrix-mc-err td { padding: 6px 10px; border-bottom: 1px solid #eee; vertical-align: top; }' +
+        '.featrix-mc-err td:first-child { font-family: monospace; font-size: 12px; white-space: nowrap; }' +
+        '.featrix-mc-err .try-btn { margin-top: 16px; padding: 8px 16px; background: #1565c0; color: #fff; border: none; cursor: pointer; font-size: 13px; font-family: inherit; }' +
+        '.featrix-mc-err .try-btn:hover { background: #0d47a1; }' +
+        '</style>';
+
+      var html = '<div class="featrix-model-card">' + css + '<div class="featrix-mc-err">';
+
+      if (buriedCard) {
+        // Case 1: found it buried — offer to render it
+        html += '<div class="banner buried">' +
+          '<h2>&#128269; Found a model card buried inside <code>' + buriedKey + '</code></h2>' +
+          '<p>The top-level object isn\'t a model card, but <code>' + buriedKey + '.model_identification</code> exists. ' +
+          'Pass <code>data.' + buriedKey + '</code> to <code>FeatrixModelCard.renderHTML()</code> instead.</p>' +
+          '</div>';
+        html += '<p>Rendering the buried card now:</p>';
+        html += '</div></div>';
+        // Actually render the buried card
+        return html + this.renderHTML(buriedCard, {});
+      }
+
+      if (oldSchemaMatches.length >= 2 && expectedMatches.length <= 1) {
+        // Case 2: old/different backend schema
+        html += '<div class="banner">' +
+          '<h2>&#9888;&#65039; Wrong JSON schema — this looks like raw backend model data, not a rendered model card</h2>' +
+          '<p>Found old/internal keys: ' + oldSchemaMatches.map(function(k) { return '<code>' + k + '</code>'; }).join(', ') + '</p>' +
+          '<p>The renderer expects a model card JSON produced by <code>_create_model_card_json()</code> in <code>single_predictor.py</code>. ' +
+          'This looks like a different (possibly older) format.</p>' +
+          '</div>';
+      } else {
+        html += '<div class="banner">' +
+          '<h2>&#9888;&#65039; Unrecognized JSON — cannot render model card</h2>' +
+          '<p>No <code>model_identification</code> key found at the top level.</p>' +
+          '</div>';
+      }
+
+      // Show what keys were found vs expected
+      html += '<p><strong>Keys found in your JSON:</strong></p><div class="key-list">';
+      foundKeys.forEach(function(k) {
+        var cls = EXPECTED_KEYS.indexOf(k) >= 0 ? 'known' : (OLD_SCHEMA_KEYS.indexOf(k) >= 0 ? 'old' : 'unknown');
+        html += '<span class="key ' + cls + '">' + k + '</span>';
+      });
+      html += '</div>';
+      html += '<p style="font-size:12px;color:#666;margin-top:4px;">' +
+        '<span style="background:#e8f5e9;padding:1px 5px;font-size:11px;">green</span> = recognized &nbsp; ' +
+        '<span style="background:#fff3e0;padding:1px 5px;font-size:11px;">orange</span> = old/wrong schema &nbsp; ' +
+        '<span style="background:#fce4ec;padding:1px 5px;font-size:11px;">red</span> = unknown' +
+        '</p>';
+
+      // Schema reference table
+      html += '<div class="schema"><h3>Expected top-level keys</h3><table>' +
+        '<tr><th>Key</th><th>Required?</th><th>What it contains</th></tr>' +
+        '<tr><td>model_identification</td><td>Yes</td><td>name, status, target_column, training_date, model_type, session_id</td></tr>' +
+        '<tr><td>best_epochs</td><td>Recommended</td><td>best_roc_auc / best_pr_auc — each with classification_display_metadata.classification_metrics</td></tr>' +
+        '<tr><td>class_imbalance</td><td>Recommended</td><td>total_samples, minority_class_count, imbalance_ratio, train/val_distribution</td></tr>' +
+        '<tr><td>embedding_space</td><td>If ES model</td><td>num_parameters, num_layers, d_model, num_rows</td></tr>' +
+        '<tr><td>coverage <em>or</em> selective_prediction</td><td>If SP model</td><td>strategies dict, summary, history</td></tr>' +
+        '<tr><td>training_optimization</td><td>Optional</td><td>loss_function, focal_gamma, class_weights, optimization_priority</td></tr>' +
+        '<tr><td>data_processing_notes</td><td>Optional</td><td>Array of {severity, category, message, columns, rows_affected}</td></tr>' +
+        '<tr><td>model_fit</td><td>Optional</td><td>primary, per_intent, reference_table — model shape scores</td></tr>' +
+        '<tr><td>disk_usage</td><td>Optional</td><td>best_model_path (used to extract session ID)</td></tr>' +
+        '</table></div>';
+
+      html += '</div></div>';
+      return html;
+    },
+
     renderHTML: function(modelCardJson, options) {
       options = options || {};
 
@@ -1325,6 +1850,11 @@
       if (modelCardJson && !modelCardJson.model_identification &&
           (modelCardJson.status === 'generating' || modelCardJson.message)) {
         return this.renderGenerating(modelCardJson);
+      }
+
+      // Detect bad/wrong/buried input and show a helpful diagnostic
+      if (modelCardJson && !modelCardJson.model_identification) {
+        return this.renderBadInput(modelCardJson);
       }
 
       var _mi = modelCardJson.model_identification || {};
@@ -1377,9 +1907,56 @@
         console.warn('[FeatrixModelCard] Missing/null fields in model card JSON (paste to backend for debugging):\n' + missing.join('\n'));
       }
 
+      // Warn if there are unrecognized top-level keys alongside suspiciously missing sections
+      var KNOWN_KEYS = [
+        'model_identification', 'best_epochs', 'class_imbalance', 'embedding_space',
+        'coverage', 'selective_prediction', 'training_optimization', 'data_processing_notes',
+        'model_fit', 'disk_usage', 'training_dataset', 'model_architecture', 'model_stack',
+        'single_predictor', 'training_configuration', 'provenance', 'technical_details'
+      ];
+      var OLD_SCHEMA_SIGNAL_KEYS = ['training_metrics', 'model_quality', 'feature_inventory', 'column_statistics'];
+      var topKeys = Object.keys(modelCardJson);
+      var unknownKeys = topKeys.filter(function(k) { return KNOWN_KEYS.indexOf(k) < 0; });
+      var oldSignalKeys = topKeys.filter(function(k) { return OLD_SCHEMA_SIGNAL_KEYS.indexOf(k) >= 0; });
+      var schemaWarning = '';
+      if (oldSignalKeys.length >= 1) {
+        // Check if a better model card is buried inside one of the top-level keys
+        var CARD_SIGNAL_KEYS = ['best_epochs', 'embedding_space', 'coverage', 'selective_prediction', 'class_imbalance'];
+        var buriedKey = null;
+        var buriedCard = null;
+        for (var bk = 0; bk < topKeys.length; bk++) {
+          var bval = modelCardJson[topKeys[bk]];
+          if (bval && typeof bval === 'object' && !Array.isArray(bval) && bval.model_identification) {
+            var bMatches = CARD_SIGNAL_KEYS.filter(function(k) { return bval[k] != null; });
+            if (bMatches.length > 0) { buriedKey = topKeys[bk]; buriedCard = bval; break; }
+          }
+        }
+        if (buriedCard) {
+          var buriedBanner = '<div style="margin:0 0 20px 0;padding:14px 18px;background:#e3f2fd;border-left:4px solid #1565c0;font-size:13px;">' +
+            '<strong style="color:#1565c0;">ℹ Found a more complete model card inside <code style="font-size:12px;">' + buriedKey + '</code></strong> — ' +
+            'rendering that instead. Pass <code style="font-size:12px;">data.' + buriedKey + '</code> directly to avoid this.' +
+            '</div>';
+          var buriedRendered = this.renderHTML(buriedCard, options);
+          // Inject banner right after the opening <div class="page"> so it appears at the top
+          return buriedRendered.replace('<div class="page">', '<div class="page">' + buriedBanner);
+        }
+        var warnKeys = oldSignalKeys.length ? oldSignalKeys : unknownKeys.slice(0, 6);
+        schemaWarning = '<div style="margin:0 0 20px 0;padding:14px 18px;background:#fff8e1;border-left:4px solid #f9a825;font-size:13px;">' +
+          '<strong style="color:#e65100;">⚠ Unexpected JSON shape</strong> — ' +
+          (oldSignalKeys.length
+            ? 'This looks like raw backend model data rather than a model card. Found internal keys: <code style="font-size:12px;">' + oldSignalKeys.join('</code>, <code style="font-size:12px;">') + '</code>. '
+            : 'Found ' + unknownKeys.length + ' unrecognized top-level keys: <code style="font-size:12px;">' + warnKeys.join('</code>, <code style="font-size:12px;">') + (unknownKeys.length > 6 ? '…' : '') + '</code>. ') +
+          'Expected keys like <code style="font-size:12px;">model_identification</code>, <code style="font-size:12px;">best_epochs</code>, <code style="font-size:12px;">class_imbalance</code>. ' +
+          'You may be passing the full model object instead of the model card JSON.' +
+          '</div>';
+      }
+
       var sections = [
         this.renderModelIdentification(modelCardJson, sphereSessionId),
+        this.renderModelFit(modelCardJson),
         this.renderEmbeddingSpace(modelCardJson),
+        this.renderRankingMetrics(modelCardJson),
+        this.renderProbes(modelCardJson, options.probes || null),
         this.renderBestEpochs(modelCardJson),
         this.renderSelectivePrediction(modelCardJson),
         this.renderTrainingOptimization(modelCardJson),
@@ -1627,7 +2204,7 @@
             <pre style="margin: 0; white-space: pre-wrap; word-wrap: break-word; font-size: 12px;">${JSON.stringify(modelCardJson, null, 2)}</pre>
         </div>
 
-        ${sections}
+        ${schemaWarning}${sections}
         <div class="sphere-modal-backdrop">
             <div class="sphere-modal">
                 <button class="sphere-modal-close">&times;</button>

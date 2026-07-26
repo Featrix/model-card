@@ -181,6 +181,7 @@ export interface ModelCardData {
   data_processing_notes?: DataProcessingNote[];
   coverage?: SelectivePrediction;
   selective_prediction?: SelectivePrediction;
+  model_fit?: ModelFit;
 }
 
 export interface DataProcessingNote {
@@ -190,6 +191,54 @@ export interface DataProcessingNote {
   columns?: string[];
   rows_affected?: number;
   details?: Record<string, unknown>;
+}
+
+export interface ModelFitTopFit {
+  id?: string;
+  label: string;
+  score: number;
+  summary?: string;
+  good_fit?: string[];
+  poor_fit?: string[];
+  target_framing?: string;
+}
+
+export interface ModelFitShapeScore {
+  id?: string;
+  label: string;
+  score: number;
+}
+
+export interface ModelFitEntry {
+  intent: string;
+  metrics?: Record<string, number>;
+  shape_scores?: ModelFitShapeScore[];
+  top_fit?: ModelFitTopFit;
+}
+
+export interface ModelFitReferenceShape {
+  id: string;
+  label: string;
+  summary?: string;
+  good_fit?: string[];
+  poor_fit?: string[];
+  target_framing?: string;
+  criteria?: Array<{
+    metric: string;
+    op: string;
+    target: number;
+    tol?: number;
+    weight?: number;
+  }>;
+}
+
+export interface ModelFit {
+  primary?: {
+    intent: string;
+    top_fit?: ModelFitTopFit;
+  };
+  per_intent?: ModelFitEntry[];
+  reference_table?: ModelFitReferenceShape[];
 }
 
 interface ModelCardProps {
@@ -928,6 +977,228 @@ export const ModelCard: React.FC<ModelCardProps> = ({ data, className = '', onRe
             </div>
           </div>
         </details>
+
+        {/* MODEL FIT */}
+        {data.model_fit && (() => {
+          const mf = data.model_fit!;
+          const MF_INTENT_LABELS: Record<string, string> = {
+            balanced: 'Balanced',
+            only_alert_when_confident: 'Only alert when confident',
+            catch_everything: 'Catch everything',
+            catch_everything_aggressive: 'Catch everything (aggressive)',
+            minimize_cost: 'Minimize cost',
+            rank: 'Ranking',
+            predict_probabilities: 'Calibrated probabilities',
+          };
+          const mfScoreColor = (s: number) =>
+            s >= 0.80 ? '#28a745' : s >= 0.50 ? '#e6940a' : '#6c757d';
+          const ScoreBar = ({ score }: { score: number }) => {
+            const color = mfScoreColor(score);
+            const pct = Math.round(score * 100);
+            return (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '3px 0' }}>
+                <div style={{ flex: 1, maxWidth: 200, background: '#e0e0e0', height: 8, borderRadius: 4 }}>
+                  <div style={{ width: `${pct}%`, height: '100%', background: color, borderRadius: 4 }} />
+                </div>
+                <span style={{ fontSize: 12, fontWeight: 'bold', color, minWidth: 34 }}>{pct}%</span>
+              </div>
+            );
+          };
+          const ShapeScoreList = ({ scores }: { scores: ModelFitShapeScore[] }) => {
+            if (!scores || scores.length === 0) return null;
+            const top3 = scores.slice(0, 3);
+            const rest = scores.slice(3);
+            return (
+              <>
+                {top3.map((s, i) => (
+                  <div key={i} style={{ margin: '8px 0' }}>
+                    <div style={{ fontSize: 13, color: '#333' }}>{s.label}</div>
+                    <ScoreBar score={s.score} />
+                  </div>
+                ))}
+                {rest.length > 0 && (
+                  <details style={{ marginTop: 6, border: 'none' }}>
+                    <summary style={{ fontSize: 12, color: '#1976d2', cursor: 'pointer', padding: '4px 0', fontWeight: 'normal', textTransform: 'none' }}>
+                      Show {rest.length} more
+                    </summary>
+                    {rest.map((s, i) => (
+                      <div key={i} style={{ margin: '8px 0' }}>
+                        <div style={{ fontSize: 13, color: '#888' }}>{s.label}</div>
+                        <ScoreBar score={s.score} />
+                      </div>
+                    ))}
+                  </details>
+                )}
+              </>
+            );
+          };
+          const TopFitDetail = ({ tf }: { tf: ModelFitTopFit }) => (
+            <>
+              {tf.summary && <div style={{ fontSize: 13, color: '#555', margin: '8px 0' }}>{tf.summary}</div>}
+              {tf.good_fit && tf.good_fit.length > 0 && (
+                <>
+                  <div style={{ fontSize: 12, fontWeight: 'bold', color: '#2e7d32', margin: '6px 0 3px' }}>Good for</div>
+                  <ul style={{ margin: '0 0 8px 18px', padding: 0, listStyle: 'disc' }}>
+                    {tf.good_fit.map((g, i) => <li key={i} style={{ fontSize: 12, color: '#333', margin: '2px 0' }}>{g}</li>)}
+                  </ul>
+                </>
+              )}
+              {tf.poor_fit && tf.poor_fit.length > 0 && (
+                <>
+                  <div style={{ fontSize: 12, fontWeight: 'bold', color: '#c62828', margin: '6px 0 3px' }}>Watch out</div>
+                  <ul style={{ margin: '0 0 8px 18px', padding: 0, listStyle: 'disc' }}>
+                    {tf.poor_fit.map((p, i) => <li key={i} style={{ fontSize: 12, color: '#666', margin: '2px 0' }}>{p}</li>)}
+                  </ul>
+                </>
+              )}
+              {tf.target_framing && (
+                <div style={{ fontSize: 11, color: '#888', marginTop: 6, fontStyle: 'italic' }}>
+                  Positive class framing: {tf.target_framing}
+                </div>
+              )}
+            </>
+          );
+
+          return (
+            <details className="section" open>
+              <summary>MODEL FIT</summary>
+              <div className="section-content">
+
+                {/* Primary block */}
+                {mf.primary?.top_fit && (() => {
+                  const tf = mf.primary!.top_fit!;
+                  const score = tf.score ?? 0;
+                  const pct = Math.round(score * 100);
+                  const color = mfScoreColor(score);
+                  const intentLabel = MF_INTENT_LABELS[mf.primary!.intent || ''] || mf.primary!.intent || '';
+                  const primaryEntry = (mf.per_intent || []).find(e => e.intent === mf.primary!.intent);
+                  if (score >= 0.50) {
+                    return (
+                      <div style={{ padding: 20, background: '#f8f9fa', borderLeft: `4px solid ${color}`, marginBottom: 20 }}>
+                        <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, flexWrap: 'wrap', marginBottom: 10 }}>
+                          <span style={{ fontSize: 20, fontWeight: 'bold', color: '#000', textTransform: 'uppercase' }}>{tf.label}</span>
+                          <span style={{ fontSize: 16, fontWeight: 'bold', color }}>{pct}%</span>
+                          <span style={{ fontSize: 11, color: '#999' }}>under {intentLabel} intent</span>
+                        </div>
+                        <TopFitDetail tf={tf} />
+                        {primaryEntry && primaryEntry.shape_scores && primaryEntry.shape_scores.length > 1 && (
+                          <details style={{ marginTop: 14, border: 'none' }}>
+                            <summary style={{ fontSize: 12, color: '#1976d2', cursor: 'pointer', padding: '4px 0', fontWeight: 'normal', textTransform: 'none' }}>
+                              Other shapes scored
+                            </summary>
+                            <div style={{ marginTop: 8 }}>
+                              <ShapeScoreList scores={primaryEntry.shape_scores.slice(1)} />
+                            </div>
+                          </details>
+                        )}
+                      </div>
+                    );
+                  } else {
+                    const topScores = primaryEntry?.shape_scores?.slice(0, 3) ?? [tf];
+                    return (
+                      <div style={{ padding: 20, background: '#f8f9fa', borderLeft: '4px solid #6c757d', marginBottom: 20 }}>
+                        <div style={{ fontSize: 16, fontWeight: 'bold', color: '#555', marginBottom: 12 }}>No single clear use-case fit</div>
+                        <ShapeScoreList scores={topScores} />
+                      </div>
+                    );
+                  }
+                })()}
+
+                {/* Per-intent fits */}
+                {mf.per_intent && mf.per_intent.length > 0 && (
+                  <>
+                    <h3 className="epoch-title" style={{ marginTop: 10 }}>Per-intent fits</h3>
+                    <div style={{ border: '1px solid #ddd' }}>
+                      {mf.per_intent.map((entry, i) => {
+                        const tf2 = entry.top_fit || {} as ModelFitTopFit;
+                        const s2 = tf2.score ?? 0;
+                        const c2 = mfScoreColor(s2);
+                        const p2 = Math.round(s2 * 100);
+                        const iLabel = MF_INTENT_LABELS[entry.intent || ''] || entry.intent || '—';
+                        return (
+                          <details key={i} style={{ margin: 0, border: 'none', borderBottom: i < mf.per_intent!.length - 1 ? '1px solid #eee' : undefined }}>
+                            <summary style={{ padding: '12px 16px', cursor: 'pointer', background: '#fff', display: 'flex', alignItems: 'center', gap: 10, fontWeight: 'normal', textTransform: 'none', fontSize: 13, userSelect: 'none' }}>
+                              <span style={{ flex: 1, color: '#333' }}>{iLabel}</span>
+                              <span style={{ color: '#555', fontSize: 13 }}>{tf2.label || '—'}</span>
+                              <span style={{ fontSize: 12, fontWeight: 'bold', color: c2, minWidth: 38, textAlign: 'right' }}>{p2}%</span>
+                            </summary>
+                            <div style={{ padding: '16px 20px', background: '#fafafa', borderTop: '1px solid #eee' }}>
+                              {tf2.label && <TopFitDetail tf={tf2} />}
+                              {entry.shape_scores && entry.shape_scores.length > 0 && (
+                                <div style={{ marginTop: 12 }}>
+                                  <div style={{ fontSize: 11, textTransform: 'uppercase', color: '#666', fontWeight: 'bold', marginBottom: 8 }}>All shapes</div>
+                                  <ShapeScoreList scores={entry.shape_scores} />
+                                </div>
+                              )}
+                            </div>
+                          </details>
+                        );
+                      })}
+                    </div>
+                  </>
+                )}
+
+                {/* Reference table */}
+                {mf.reference_table && mf.reference_table.length > 0 && (
+                  <details style={{ marginTop: 20, border: '1px solid #ddd' }}>
+                    <summary style={{ padding: '12px 16px', cursor: 'pointer', fontSize: 13, fontWeight: 'bold', background: '#f5f5f5', textTransform: 'none', color: '#333', userSelect: 'none' }}>
+                      What do these shapes mean?
+                    </summary>
+                    <div style={{ padding: '16px 20px' }}>
+                      {mf.reference_table.map((shape, i) => (
+                        <div key={i}>
+                          {i > 0 && <hr style={{ margin: '16px 0', border: 'none', borderTop: '1px solid #eee' }} />}
+                          <div style={{ fontSize: 14, fontWeight: 'bold', color: '#000', marginBottom: 4 }}>{shape.label || shape.id}</div>
+                          {shape.summary && <div style={{ fontSize: 13, color: '#555', marginBottom: 8 }}>{shape.summary}</div>}
+                          {shape.good_fit && shape.good_fit.length > 0 && (
+                            <>
+                              <div style={{ fontSize: 12, fontWeight: 'bold', color: '#2e7d32', marginBottom: 3 }}>Good for</div>
+                              <ul style={{ margin: '0 0 8px 18px', padding: 0, listStyle: 'disc' }}>
+                                {shape.good_fit.map((g, j) => <li key={j} style={{ fontSize: 12, color: '#333', margin: '2px 0' }}>{g}</li>)}
+                              </ul>
+                            </>
+                          )}
+                          {shape.poor_fit && shape.poor_fit.length > 0 && (
+                            <>
+                              <div style={{ fontSize: 12, fontWeight: 'bold', color: '#c62828', marginBottom: 3 }}>Watch out</div>
+                              <ul style={{ margin: '0 0 8px 18px', padding: 0, listStyle: 'disc' }}>
+                                {shape.poor_fit.map((p, j) => <li key={j} style={{ fontSize: 12, color: '#666', margin: '2px 0' }}>{p}</li>)}
+                              </ul>
+                            </>
+                          )}
+                          {shape.criteria && shape.criteria.length > 0 && (
+                            <details style={{ marginTop: 6, border: 'none' }}>
+                              <summary style={{ fontSize: 11, color: '#1976d2', cursor: 'pointer', padding: '4px 0', fontWeight: 'normal', textTransform: 'none' }}>
+                                Why this shape? (engineer view)
+                              </summary>
+                              <table style={{ width: 'auto', marginTop: 8, fontSize: 11 }}>
+                                <thead>
+                                  <tr><th>Metric</th><th>Op</th><th>Target</th><th>Tol</th><th>Weight</th></tr>
+                                </thead>
+                                <tbody>
+                                  {shape.criteria.map((c, j) => (
+                                    <tr key={j}>
+                                      <td style={{ fontFamily: 'monospace' }}>{c.metric}</td>
+                                      <td>{c.op}</td>
+                                      <td>{c.target}</td>
+                                      <td>{c.tol ?? ''}</td>
+                                      <td>{c.weight ?? ''}</td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </details>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </details>
+                )}
+
+              </div>
+            </details>
+          );
+        })()}
 
         {/* MODEL STACK */}
         {es && (

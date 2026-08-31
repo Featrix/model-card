@@ -408,7 +408,8 @@ const humanizeObjective = (objective: string): string =>
 
 const EPOCH_METRIC_LABELS: Record<string, string> = {
   roc_auc: 'ROC-AUC', pr_auc: 'PR-AUC', macro_f1: 'Macro-F1', weighted_f1: 'Weighted-F1',
-  macro_auc_ovr: 'Macro-AUC (OvR)', log_loss: 'Log-Loss', accuracy: 'Accuracy', f1: 'F1', r2: 'R²',
+  macro_auc_ovr: 'Macro-AUC (OvR)', log_loss: 'Log-Loss', cross_entropy: 'Cross-Entropy',
+  accuracy: 'Accuracy', f1: 'F1', r2: 'R²',
 };
 
 const REGRESSION_METRIC_ORDER = ['r2', 'nrmse', 'rmse', 'mae', 'spearman', 'smape', 'median_ae', 'max_error'] as const;
@@ -584,15 +585,20 @@ export const ModelCard: React.FC<ModelCardProps> = ({ data, className = '', onRe
   }
   const isRegression = bestR2 !== null || bestRmse !== null;
 
-  // Multiclass hero metrics — for >2-class targets, best_epochs has no best_roc_auc/
-  // best_pr_auc (those are binary-only), it's keyed by whatever metric was actually
-  // optimized (best_accuracy, best_macro_f1, best_log_loss, ...). Without this, the hero
-  // cards fall through to the binary branch below and show a permanent N/A/N/A.
+  // Multiclass hero metrics. num_classes/class_labels (once the backend emits them) is the
+  // authoritative multiclass signal — a multiclass target still gets a real "auc" (macro
+  // one-vs-rest), so "both roc_auc and pr_auc are null" is NOT reliable by itself; it's only
+  // the fallback for old cards that predate num_classes. Whatever best_epochs entry is
+  // available (best_roc_auc included — its classification_metrics carries accuracy/macro_f1
+  // too, not just auc) is fair game as the metrics source.
+  const numClasses = mi.num_classes ?? (Array.isArray(mi.class_labels) ? mi.class_labels.length : null);
   let mcAccuracy: number | null = null;
   let mcHeadlineKey: string | null = null;
   let mcHeadlineVal: number | null = null;
   let isMulticlass = false;
-  if (!isRegression && bestRocAuc === null && bestPrAuc === null && be) {
+  const wantMulticlass = !isRegression && (numClasses != null ? numClasses > 2 : (bestRocAuc === null && bestPrAuc === null));
+  if (wantMulticlass && be) {
+    const MC_HEADLINE_PREFERENCE = ['macro_f1', 'weighted_f1', 'cross_entropy', 'log_loss', 'macro_auc_ovr'];
     const checkpointMetricMc = to?.checkpoint_metric ?? null;
     let mcEpochKey = checkpointMetricMc && be[`best_${checkpointMetricMc}`] ? `best_${checkpointMetricMc}` : null;
     if (!mcEpochKey) {
@@ -600,10 +606,14 @@ export const ModelCard: React.FC<ModelCardProps> = ({ data, className = '', onRe
     }
     const mcMetrics = mcEpochKey ? be[mcEpochKey]?.classification_display_metadata?.classification_metrics : undefined;
     if (mcMetrics) {
+      const mcMetricsRec = mcMetrics as Record<string, ClassificationMetric | undefined>;
       mcAccuracy = mcMetrics.accuracy?.value ?? null;
-      mcHeadlineKey = (checkpointMetricMc && `best_${checkpointMetricMc}` === mcEpochKey) ? checkpointMetricMc : mcEpochKey!.substring(5);
-      if (mcHeadlineKey === 'accuracy') mcHeadlineKey = 'macro_f1';
-      mcHeadlineVal = (mcMetrics as Record<string, ClassificationMetric | undefined>)[mcHeadlineKey]?.value ?? null;
+      if (checkpointMetricMc && mcMetricsRec[checkpointMetricMc] && checkpointMetricMc !== 'accuracy') {
+        mcHeadlineKey = checkpointMetricMc;
+      } else {
+        mcHeadlineKey = MC_HEADLINE_PREFERENCE.find(k => mcMetricsRec[k]) ?? null;
+      }
+      mcHeadlineVal = mcHeadlineKey ? mcMetricsRec[mcHeadlineKey]?.value ?? null : null;
       isMulticlass = mcAccuracy !== null || mcHeadlineVal !== null;
     }
   }
@@ -1377,7 +1387,7 @@ export const ModelCard: React.FC<ModelCardProps> = ({ data, className = '', onRe
               <div className="metric">
                 <div className="metric-label">Model Type</div>
                 <div className="metric-value" style={{ fontSize: '20px' }}>
-                  {getModelTypeDisplay(mi.model_type, mi.target_column_type, mi.num_classes ?? (mi.class_labels ? mi.class_labels.length : null), isMulticlass)}
+                  {getModelTypeDisplay(mi.model_type, mi.target_column_type, numClasses, isMulticlass)}
                 </div>
               </div>
               {!hideAucCards && isRegression && (

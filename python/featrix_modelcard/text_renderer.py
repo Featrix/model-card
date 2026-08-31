@@ -105,6 +105,10 @@ def render_brief_text(data: Dict[str, Any]) -> str:
 
     # Best metrics — prefer best_roc_auc/best_pr_auc if present (binary cards); otherwise fall
     # back to whichever best_epochs entry matches the checkpoint metric (multiclass cards).
+    # num_classes/class_labels (once the backend emits them) is the authoritative multiclass
+    # signal — a multiclass target still gets a real "auc" (macro one-vs-rest), so "both
+    # roc_auc and pr_auc are None" is NOT reliable by itself; it's only the fallback for old
+    # cards that predate num_classes.
     roc_auc = _get_metric_value(be, "best_roc_auc", "auc")
     pr_auc = _get_metric_value(be, "best_pr_auc", "pr_auc")
     f1 = _get_metric_value(be, "best_roc_auc", "f1")
@@ -112,8 +116,10 @@ def render_brief_text(data: Dict[str, Any]) -> str:
     r2 = _get_regression_metric_value(be, "best_r2", "r2")
     rmse = _get_regression_metric_value(be, "best_r2", "rmse")
     checkpoint_metric = ((data.get("training_optimization") or {}).get("checkpoint_metric"))
+    num_classes = mi.get("num_classes") or (len(mi["class_labels"]) if mi.get("class_labels") else None)
     is_regression = r2 is not None or rmse is not None
-    multiclass_key = None if (is_regression or roc_auc is not None or pr_auc is not None) else _resolve_multiclass_epoch_key(be, checkpoint_metric)
+    want_multiclass = not is_regression and (num_classes > 2 if num_classes is not None else (roc_auc is None and pr_auc is None))
+    multiclass_key = _resolve_multiclass_epoch_key(be, checkpoint_metric) if want_multiclass else None
 
     model_name = mi.get("name", "Model Card")
     model_type = _map_model_type(mi, is_multiclass_fallback=multiclass_key is not None)
@@ -138,18 +144,23 @@ def render_brief_text(data: Dict[str, Any]) -> str:
         if skill and skill.get("text"):
             line += f"  ({skill['text']})"
         lines.append(line)
-    elif roc_auc is None and pr_auc is None:
-        fallback_key = multiclass_key
-        if fallback_key:
-            acc = _get_metric_value(be, fallback_key, "accuracy")
-            headline_key = checkpoint_metric if (checkpoint_metric and f"best_{checkpoint_metric}" == fallback_key) else fallback_key[len("best_"):]
-            headline_val = _get_metric_value(be, fallback_key, headline_key)
-            lines.append(
-                f"Accuracy: {format_pct(acc)}  "
-                f"{_format_metric_name(headline_key)}: {format_metric(headline_val)}"
-            )
+    elif multiclass_key:
+        acc = _get_metric_value(be, multiclass_key, "accuracy")
+        if checkpoint_metric and checkpoint_metric != "accuracy" and _get_metric_value(be, multiclass_key, checkpoint_metric) is not None:
+            headline_key = checkpoint_metric
         else:
-            lines.append(f"Accuracy: {format_pct(acc)}")
+            headline_key = next(
+                (k for k in ("macro_f1", "weighted_f1", "cross_entropy", "log_loss", "macro_auc_ovr")
+                 if _get_metric_value(be, multiclass_key, k) is not None),
+                None,
+            )
+        headline_val = _get_metric_value(be, multiclass_key, headline_key) if headline_key else None
+        lines.append(
+            f"Accuracy: {format_pct(acc)}  "
+            f"{_format_metric_name(headline_key)}: {format_metric(headline_val)}"
+        )
+    elif want_multiclass:
+        lines.append(f"Accuracy: {format_pct(acc)}")
     else:
         lines.append(
             f"Accuracy: {format_pct(acc)}  "
@@ -236,21 +247,32 @@ def _render_model_identification(data: dict) -> str:
     r2_skill = _get_regression_skill(be, "best_r2")
     is_regression = r2 is not None or rmse is not None
 
-    # Multiclass hero metrics — see _resolve_multiclass_epoch_key for why best_roc_auc/
-    # best_pr_auc don't apply here.
+    # Multiclass hero metrics. num_classes/class_labels (once the backend emits them) is the
+    # authoritative multiclass signal — a multiclass target still gets a real "auc" (macro
+    # one-vs-rest), so "both roc_auc and pr_auc are None" is NOT reliable by itself; it's only
+    # the fallback for old cards that predate num_classes. See _resolve_multiclass_epoch_key
+    # for why best_roc_auc is still a fair epoch source (its classification_metrics carries
+    # accuracy/macro_f1 too, not just auc).
     checkpoint_metric = ((data.get("training_optimization") or {}).get("checkpoint_metric"))
+    num_classes = mi.get("num_classes") or (len(mi["class_labels"]) if mi.get("class_labels") else None)
     is_multiclass = False
     mc_accuracy = None
     mc_headline_key = None
     mc_headline_val = None
-    if not is_regression and roc_auc is None and pr_auc is None:
+    want_multiclass = not is_regression and (num_classes > 2 if num_classes is not None else (roc_auc is None and pr_auc is None))
+    if want_multiclass:
         mc_epoch_key = _resolve_multiclass_epoch_key(be, checkpoint_metric)
         if mc_epoch_key:
             mc_accuracy = _get_metric_value(be, mc_epoch_key, "accuracy")
-            mc_headline_key = checkpoint_metric if (checkpoint_metric and f"best_{checkpoint_metric}" == mc_epoch_key) else mc_epoch_key[len("best_"):]
-            if mc_headline_key == "accuracy":
-                mc_headline_key = "macro_f1"
-            mc_headline_val = _get_metric_value(be, mc_epoch_key, mc_headline_key)
+            if checkpoint_metric and checkpoint_metric != "accuracy" and _get_metric_value(be, mc_epoch_key, checkpoint_metric) is not None:
+                mc_headline_key = checkpoint_metric
+            else:
+                mc_headline_key = next(
+                    (k for k in ("macro_f1", "weighted_f1", "cross_entropy", "log_loss", "macro_auc_ovr")
+                     if _get_metric_value(be, mc_epoch_key, k) is not None),
+                    None,
+                )
+            mc_headline_val = _get_metric_value(be, mc_epoch_key, mc_headline_key) if mc_headline_key else None
             is_multiclass = mc_accuracy is not None or mc_headline_val is not None
 
     model_type = _map_model_type(mi, is_multiclass_fallback=is_multiclass)
@@ -337,7 +359,8 @@ def _render_model_stack(data: dict) -> str:
 
 _EPOCH_METRIC_LABELS = {
     "roc_auc": "ROC-AUC", "pr_auc": "PR-AUC", "macro_f1": "Macro-F1", "weighted_f1": "Weighted-F1",
-    "macro_auc_ovr": "Macro-AUC (OvR)", "log_loss": "Log-Loss", "accuracy": "Accuracy", "f1": "F1", "r2": "R²",
+    "macro_auc_ovr": "Macro-AUC (OvR)", "log_loss": "Log-Loss", "cross_entropy": "Cross-Entropy",
+    "accuracy": "Accuracy", "f1": "F1", "r2": "R²",
 }
 _EPOCH_ORDER_PREFERENCE = ["best_pr_auc", "best_roc_auc"]
 

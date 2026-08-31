@@ -17,7 +17,8 @@
   // get the same human label wherever they show up.
   var EPOCH_METRIC_LABELS = {
     roc_auc: 'ROC-AUC', pr_auc: 'PR-AUC', macro_f1: 'Macro-F1', weighted_f1: 'Weighted-F1',
-    macro_auc_ovr: 'Macro-AUC (OvR)', log_loss: 'Log-Loss', accuracy: 'Accuracy', f1: 'F1', r2: 'R²'
+    macro_auc_ovr: 'Macro-AUC (OvR)', log_loss: 'Log-Loss', cross_entropy: 'Cross-Entropy',
+    accuracy: 'Accuracy', f1: 'F1', r2: 'R²'
   };
   function formatMetricName(key) {
     if (!key) return '';
@@ -75,7 +76,7 @@
   }
 
   const FeatrixModelCard = {
-    VERSION: '1.17',
+    VERSION: '1.17.1',
     BUILD: 'dev',
 
     /**
@@ -252,15 +253,20 @@
       }
       var isRegression = bestR2 !== null || bestRmse !== null;
 
-      // Multiclass hero metrics — for >2-class targets, best_epochs has no best_roc_auc/
-      // best_pr_auc (those are binary-only), it's keyed by whatever metric was actually
-      // optimized (best_accuracy, best_macro_f1, best_log_loss, ...). Without this, the
-      // hero cards fall through to the binary branch below and show a permanent N/A/N/A.
+      // Multiclass hero metrics. num_classes/class_labels (once the backend emits them) is
+      // the authoritative multiclass signal — a multiclass target still gets a real "auc"
+      // (macro one-vs-rest), so "both roc_auc and pr_auc are null" is NOT a reliable test by
+      // itself; it's only the fallback for old cards that predate num_classes. Whatever
+      // best_epochs entry is available (best_roc_auc included — its classification_metrics
+      // carries accuracy/macro_f1 too, not just auc) is fair game as the metrics source.
+      var numClasses = mi.num_classes || (Array.isArray(mi.class_labels) ? mi.class_labels.length : null);
       var mcAccuracy = null;
       var mcHeadlineKey = null;
       var mcHeadlineVal = null;
       var isMulticlass = false;
-      if (!isRegression && bestRocAuc === null && bestPrAuc === null) {
+      var wantMulticlass = !isRegression && (numClasses !== null ? numClasses > 2 : (bestRocAuc === null && bestPrAuc === null));
+      if (wantMulticlass) {
+        var MC_HEADLINE_PREFERENCE = ['macro_f1', 'weighted_f1', 'cross_entropy', 'log_loss', 'macro_auc_ovr'];
         var checkpointMetricMc = (data.training_optimization && data.training_optimization.checkpoint_metric) || null;
         var mcEpochKey = (checkpointMetricMc && be['best_' + checkpointMetricMc]) ? 'best_' + checkpointMetricMc : null;
         if (!mcEpochKey) {
@@ -271,9 +277,14 @@
         if (mcEpochKey && be[mcEpochKey].classification_display_metadata) {
           var mcMetrics = be[mcEpochKey].classification_display_metadata.classification_metrics || {};
           mcAccuracy = mcMetrics.accuracy ? mcMetrics.accuracy.value : null;
-          mcHeadlineKey = (checkpointMetricMc && ('best_' + checkpointMetricMc) === mcEpochKey) ? checkpointMetricMc : mcEpochKey.substring(5);
-          if (mcHeadlineKey === 'accuracy') mcHeadlineKey = 'macro_f1';
-          mcHeadlineVal = mcMetrics[mcHeadlineKey] ? mcMetrics[mcHeadlineKey].value : null;
+          if (checkpointMetricMc && mcMetrics[checkpointMetricMc] && checkpointMetricMc !== 'accuracy') {
+            mcHeadlineKey = checkpointMetricMc;
+          } else {
+            for (var hk = 0; hk < MC_HEADLINE_PREFERENCE.length; hk++) {
+              if (mcMetrics[MC_HEADLINE_PREFERENCE[hk]]) { mcHeadlineKey = MC_HEADLINE_PREFERENCE[hk]; break; }
+            }
+          }
+          mcHeadlineVal = mcHeadlineKey && mcMetrics[mcHeadlineKey] ? mcMetrics[mcHeadlineKey].value : null;
           isMulticlass = mcAccuracy !== null || mcHeadlineVal !== null;
         }
       }
@@ -288,10 +299,9 @@
           modelTypeDisplay = 'Foundational Embedding Space';
         } else if (modelTypeLower === 'single predictor' || modelTypeLower === 'sp') {
           if (targetTypeLower === 'set') {
-            // 'set' covers both binary and multiclass targets — num_classes/class_labels (once
-            // the backend emits them) decide which; until then, fall back to whether the
-            // best_epochs data itself looks multiclass.
-            var numClasses = mi.num_classes || (Array.isArray(mi.class_labels) ? mi.class_labels.length : null);
+            // 'set' covers both binary and multiclass targets — numClasses (hoisted above,
+            // from num_classes/class_labels) decides which; falls back to whether the
+            // best_epochs data itself looks multiclass when numClasses is unknown.
             var modelTypeIsMulticlass = numClasses !== null ? numClasses > 2 : isMulticlass;
             modelTypeDisplay = modelTypeIsMulticlass ? 'Multiclass Classifier' : 'Binary Classifier';
           } else if (targetTypeLower === 'scalar') {

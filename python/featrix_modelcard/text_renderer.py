@@ -198,6 +198,7 @@ def render_detailed_text(data: Dict[str, Any]) -> str:
     """Render a full detailed text model card."""
     sections = [
         _render_model_identification(data),
+        _render_model_fit(data),
         _render_model_stack(data),
         _render_best_epochs(data),
         _render_selective_prediction(data),
@@ -817,6 +818,104 @@ def _render_selective_prediction(data: dict) -> str:
             lines.append(f"  {str(epoch):>6}  {cov:>9}  {cauc:>12}  {dec_str:>14}  {base_str:>10}")
 
     lines.append("")
+    return "\n".join(lines)
+
+
+_INTENT_LABELS = {
+    "balanced": "Balanced",
+    "only_alert_when_confident": "Only alert when confident",
+    "catch_everything": "Catch everything",
+    "catch_everything_aggressive": "Catch everything (aggressive)",
+    "minimize_cost": "Minimize cost",
+    "rank": "Ranking",
+    "predict_probabilities": "Calibrated probabilities",
+}
+
+
+def _render_model_fit(data: dict) -> str:
+    mf = data.get("model_fit")
+    if not mf:
+        return ""
+
+    lines = [
+        "MODEL FIT",
+        "=" * 60,
+        "",
+    ]
+
+    # ── Primary block ──────────────────────────────────────────────────────
+    primary = mf.get("primary")
+    if primary and primary.get("top_fit"):
+        tf = primary["top_fit"]
+        score = tf.get("score") or 0.0
+        pct = round(score * 100)
+        intent = primary.get("intent", "balanced")
+        intent_label = _INTENT_LABELS.get(intent, intent)
+
+        if score >= 0.50:
+            bar_filled = round(score * 20)
+            bar = "█" * bar_filled + "░" * (20 - bar_filled)
+            lines.append(f"  {tf.get('label', '').upper()}  ({pct}%)")
+            lines.append(f"  [{bar}]  under {intent_label} intent")
+            if tf.get("summary"):
+                lines.append(f"  {tf['summary']}")
+            lines.append("")
+            if tf.get("good_fit"):
+                lines.append("  Good for:")
+                for g in tf["good_fit"]:
+                    lines.append(f"    • {g}")
+            if tf.get("poor_fit"):
+                lines.append("  Watch out:")
+                for p in tf["poor_fit"]:
+                    lines.append(f"    • {p}")
+            if tf.get("target_framing"):
+                lines.append(f"  Positive class framing: {tf['target_framing']}")
+        else:
+            lines.append("  No single clear use-case fit")
+            # Show top 3 from per_intent matching primary intent
+            primary_entry = next(
+                (e for e in (mf.get("per_intent") or []) if e.get("intent") == intent),
+                None,
+            )
+            top_scores = (primary_entry or {}).get("shape_scores", [tf])[:3]
+            for s in top_scores:
+                pct2 = round((s.get("score") or 0) * 100)
+                lines.append(f"    {s.get('label', '—')}  {pct2}%")
+        lines.append("")
+
+    # ── Per-intent fits ────────────────────────────────────────────────────
+    per_intent = mf.get("per_intent") or []
+    if per_intent:
+        lines.append("  Per-intent fits")
+        lines.append(f"  {'Intent':<38}  {'Top fit':<28}  Score")
+        lines.append(f"  {'-'*38}  {'-'*28}  -----")
+        for entry in per_intent:
+            tf2 = entry.get("top_fit") or {}
+            s2 = tf2.get("score") or 0.0
+            p2 = round(s2 * 100)
+            intent_key = entry.get("intent", "")
+            ilabel = _INTENT_LABELS.get(intent_key, intent_key or "—")
+            fit_label = tf2.get("label") or "—"
+            lines.append(f"  {ilabel:<38}  {fit_label:<28}  {p2}%")
+        lines.append("")
+
+    # ── Reference table ────────────────────────────────────────────────────
+    reference = mf.get("reference_table") or []
+    if reference:
+        lines.append("  Shape reference")
+        lines.append(f"  {'─' * 56}")
+        for shape in reference:
+            lines.append(f"  {shape.get('label') or shape.get('id', '')}")
+            if shape.get("summary"):
+                lines.append(f"    {shape['summary']}")
+            if shape.get("good_fit"):
+                for g in shape["good_fit"]:
+                    lines.append(f"    + {g}")
+            if shape.get("poor_fit"):
+                for p in shape["poor_fit"]:
+                    lines.append(f"    - {p}")
+            lines.append("")
+
     return "\n".join(lines)
 
 

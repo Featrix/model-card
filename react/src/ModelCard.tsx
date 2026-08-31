@@ -264,6 +264,14 @@ export interface ModelCardData {
   coverage?: SelectivePrediction;
   selective_prediction?: SelectivePrediction;
   model_fit?: ModelFit;
+  training_dataset?: {
+    train_rows?: number;
+    val_rows?: number;
+    total_rows?: number;
+    total_features?: number;
+    feature_names?: string[];
+    validation_notes?: string[];
+  };
 }
 
 export interface DataProcessingNote {
@@ -539,6 +547,7 @@ export const ModelCard: React.FC<ModelCardProps> = ({ data, className = '', onRe
   const mi = data.model_identification;
   const es = data.embedding_space;
   const ci = data.class_imbalance;
+  const td = data.training_dataset;
   const be = data.best_epochs;
   const to = data.training_optimization;
   const dpn = data.data_processing_notes;
@@ -1853,11 +1862,32 @@ export const ModelCard: React.FC<ModelCardProps> = ({ data, className = '', onRe
         )}
 
         {/* TRAINING DATASET */}
-        {ci && (
+        {(ci || td?.total_rows !== undefined) && (
           <details className="section" open>
             <summary>TRAINING DATASET</summary>
             <div className="section-content">
-              {Array.isArray(ci.class_distribution) && ci.class_distribution.length > 0 ? (() => {
+              {/* Base row/feature counts -- always present (ES, SP, regression, multiclass
+                  alike), unlike the class-imbalance breakdown below, which only exists for
+                  classification SP cards. A regression or Embedding Space card has no
+                  class_imbalance at all, so without this the section rendered nothing even
+                  though total_rows/train_rows/etc. were sitting right there in
+                  training_dataset the whole time. */}
+              {td?.total_rows !== undefined && (
+                <>
+                  <div className="grid" style={{ gridTemplateColumns: 'repeat(4, 1fr)', marginBottom: '20px' }}>
+                    <div className="metric"><div className="metric-label">Total Rows</div><div className="metric-value">{(td.total_rows || 0).toLocaleString()}</div></div>
+                    <div className="metric"><div className="metric-label">Train Rows</div><div className="metric-value">{(td.train_rows || 0).toLocaleString()}</div></div>
+                    <div className="metric"><div className="metric-label">Val Rows</div><div className="metric-value">{(td.val_rows || 0).toLocaleString()}</div></div>
+                    <div className="metric"><div className="metric-label">Features</div><div className="metric-value">{td.total_features !== undefined ? td.total_features : 'N/A'}</div></div>
+                  </div>
+                  {td.validation_notes && td.validation_notes.length > 0 && (
+                    <ul style={{ margin: '0 0 15px 0', paddingLeft: '20px', color: 'var(--fmc-slate)', fontSize: '13px' }}>
+                      {td.validation_notes.map((note, i) => <li key={i}>{note}</li>)}
+                    </ul>
+                  )}
+                </>
+              )}
+              {ci && (Array.isArray(ci.class_distribution) && ci.class_distribution.length > 0 ? (() => {
                 // N-class distribution table — one column per class, driven by class_distribution
                 // rather than assuming exactly two (minority/majority). Array shape only: some
                 // existing cards send class_distribution as a legacy {label: count} dict, which
@@ -1968,7 +1998,7 @@ export const ModelCard: React.FC<ModelCardProps> = ({ data, className = '', onRe
                     </div>
                   </>
                 );
-              })() : null}
+              })() : null)}
             </div>
           </details>
         )}

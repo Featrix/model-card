@@ -100,7 +100,7 @@ def render_brief_text(data: Dict[str, Any]) -> str:
     """Render a compact one-screen summary of the model card."""
     mi = data.get("model_identification", {})
     be = data.get("best_epochs", {})
-    ci = data.get("class_imbalance", {})
+    ci = data.get("class_imbalance") or {}
     es = data.get("embedding_space", {})
 
     # Best metrics — prefer best_roc_auc/best_pr_auc if present (binary cards); otherwise fall
@@ -225,7 +225,7 @@ def _render_model_identification(data: dict) -> str:
     du = data.get("disk_usage", {})
     es = data.get("embedding_space", {})
     be = data.get("best_epochs", {})
-    ci = data.get("class_imbalance", {})
+    ci = data.get("class_imbalance") or {}
 
     model_name = mi.get("name", "Model Card")
     status = (mi.get("status") or "N/A").upper()
@@ -581,6 +581,23 @@ def _render_training_dataset(data: dict) -> str:
         "-" * 60,
     ]
 
+    # Base row/feature counts -- always present (ES, SP, regression, multiclass alike),
+    # unlike the class-imbalance breakdown below, which only exists for classification SP
+    # cards. A regression or Embedding Space card has no class_imbalance at all, so without
+    # this the section fell back to a bare "Training rows: N" line even though
+    # val_rows/total_rows/total_features were sitting right there in training_dataset.
+    if td.get("total_rows") is not None:
+        lines.append(f"  {'Total Rows':14s} {td.get('total_rows', 0):>10,}")
+        lines.append(f"  {'Train Rows':14s} {td.get('train_rows', 0):>10,}")
+        lines.append(f"  {'Val Rows':14s} {td.get('val_rows', 0):>10,}")
+        features = td.get("total_features")
+        lines.append(f"  {'Features':14s} {features if features is not None else 'N/A':>10}")
+        lines.append("")
+        for note in td.get("validation_notes") or []:
+            lines.append(f"  - {note}")
+        if td.get("validation_notes"):
+            lines.append("")
+
     class_distribution = ci.get("class_distribution")
     if isinstance(class_distribution, list) and class_distribution:
         # N-class distribution table — one column per class, driven by class_distribution
@@ -641,7 +658,9 @@ def _render_training_dataset(data: dict) -> str:
         if ci.get("imbalance_ratio"):
             minority_pct = (ci.get("minority_class_count", 0) / total * 100) if total else 0
             lines.append(f"  Imbalance ratio: {ci['imbalance_ratio']}:1 (minority is {minority_pct:.1f}% of data)")
-    elif td.get("train_rows"):
+    elif td.get("train_rows") and td.get("total_rows") is None:
+        # Old cards with train_rows but no total_rows -- the block above already covers
+        # anything with total_rows, this is just the pre-total_rows fallback.
         lines.append(f"  Training rows: {td['train_rows']:,}")
 
     lines.append("")

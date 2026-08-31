@@ -16,7 +16,7 @@ from .text_renderer import (
     render_to_file as render_text_to_file,
 )
 
-__version__ = "1.17.1"
+__version__ = "1.17.2"
 
 
 def print_html(model_card_json, file=None, **kwargs):

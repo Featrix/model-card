@@ -52,8 +52,17 @@ def format_large_number(value) -> str:
     return f"{value:,}"
 
 
+_PREDICTOR_KIND_RE = re.compile(r"(Neural|Linear|XGBoost)\s+Predictor", re.IGNORECASE)
+
+
 def _map_model_type(mi: dict, is_multiclass_fallback: bool = False) -> str:
     """Map model_type + target_column_type to display string.
+
+    Keyed off target_column_type (authoritative — present whenever there's a target,
+    regardless of exact model_type wording), not on model_type matching a literal "Single
+    Predictor"/"SP" string: production cards say things like "Foundation + Neural Predictor" /
+    "Foundation + XGBoost Predictor", which used to fall straight through to the raw-string
+    fallback and lose the task-type classification entirely.
 
     'set' covers both binary and multiclass targets — num_classes/class_labels (once the
     backend emits them) decide which; until then, is_multiclass_fallback (derived from
@@ -63,16 +72,20 @@ def _map_model_type(mi: dict, is_multiclass_fallback: bool = False) -> str:
     target_type = (mi.get("target_column_type") or "").lower()
     mt = model_type.lower()
 
-    if mt in ("embedding space", "es"):
+    if not target_type and mt in ("embedding space", "es", "foundation"):
         return "Foundational Embedding Space"
-    if mt in ("single predictor", "sp"):
-        if target_type == "set":
+    if target_type in ("set", "scalar"):
+        # Which predictor head was actually selected (Neural/Linear/XGBoost) is real, useful
+        # info — surface it alongside the task type, not instead of it.
+        predictor_match = _PREDICTOR_KIND_RE.search(model_type)
+        predictor_kind = f"{predictor_match.group(1)} Predictor" if predictor_match else None
+        if target_type == "scalar":
+            task_label = "Regression"
+        else:
             num_classes = mi.get("num_classes") or (len(mi["class_labels"]) if mi.get("class_labels") else None)
             is_multiclass = num_classes > 2 if num_classes is not None else is_multiclass_fallback
-            return "Multiclass Classifier" if is_multiclass else "Binary Classifier"
-        if target_type == "scalar":
-            return "Regression"
-        return "Single Predictor"
+            task_label = "Multiclass Classifier" if is_multiclass else "Binary Classifier"
+        return f"{predictor_kind} • {task_label}" if predictor_kind else task_label
     return model_type or "N/A"
 
 

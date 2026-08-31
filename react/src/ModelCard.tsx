@@ -385,6 +385,11 @@ const formatLargeNumber = (value: number | null | undefined): string => {
   return value.toLocaleString();
 };
 
+// Keyed off target_column_type (authoritative — present whenever there's a target,
+// regardless of exact model_type wording), not on model_type matching a literal "Single
+// Predictor"/"SP" string: production cards say things like "Foundation + Neural Predictor" /
+// "Foundation + XGBoost Predictor", which used to fall straight through to the raw-string
+// fallback and lose the task-type classification entirely.
 const getModelTypeDisplay = (
   modelType: string,
   targetType: string | null,
@@ -395,18 +400,24 @@ const getModelTypeDisplay = (
   const modelTypeLower = modelType.toLowerCase();
   const targetTypeLower = (targetType || '').toLowerCase();
 
-  if (modelTypeLower === 'embedding space' || modelTypeLower === 'es') {
+  if (!targetTypeLower && (modelTypeLower === 'embedding space' || modelTypeLower === 'es' || modelTypeLower === 'foundation')) {
     return 'Foundational Embedding Space';
-  } else if (modelTypeLower === 'single predictor' || modelTypeLower === 'sp') {
-    if (targetTypeLower === 'set') {
+  } else if (targetTypeLower === 'set' || targetTypeLower === 'scalar') {
+    // Which predictor head was actually selected (Neural/Linear/XGBoost) is real, useful
+    // info — surface it alongside the task type, not instead of it.
+    const predictorKindMatch = modelType.match(/(Neural|Linear|XGBoost)\s+Predictor/i);
+    const predictorKind = predictorKindMatch ? `${predictorKindMatch[1]} Predictor` : null;
+    let taskLabel: string;
+    if (targetTypeLower === 'scalar') {
+      taskLabel = 'Regression';
+    } else {
       // 'set' covers both binary and multiclass targets — num_classes/class_labels (once the
       // backend emits them) decide which; until then, fall back to whether the best_epochs
       // data itself looks multiclass (see isMulticlass in the caller).
       const isMulticlass = numClasses != null ? numClasses > 2 : !!isMulticlassFallback;
-      return isMulticlass ? 'Multiclass Classifier' : 'Binary Classifier';
+      taskLabel = isMulticlass ? 'Multiclass Classifier' : 'Binary Classifier';
     }
-    if (targetTypeLower === 'scalar') return 'Regression';
-    return 'Single Predictor';
+    return predictorKind ? `${predictorKind} • ${taskLabel}` : taskLabel;
   }
   return modelType;
 };

@@ -76,7 +76,7 @@
   }
 
   const FeatrixModelCard = {
-    VERSION: '1.17.2',
+    VERSION: '1.17.3',
     BUILD: 'dev',
 
     /**
@@ -289,26 +289,35 @@
         }
       }
 
-      // Map model type to display format
+      // Map model type to display format. Keyed off target_column_type (authoritative —
+      // present whenever there's a target, regardless of exact model_type wording), not on
+      // model_type matching a literal "Single Predictor"/"SP" string: production cards say
+      // things like "Foundation + Neural Predictor" / "Foundation + XGBoost Predictor",
+      // which used to fall straight through to the raw-string fallback below and lose the
+      // task-type classification entirely.
       var modelTypeDisplay = 'N/A';
       if (mi.model_type) {
         var modelTypeLower = mi.model_type.toLowerCase();
         var targetTypeLower = (mi.target_column_type || '').toLowerCase();
 
-        if (modelTypeLower === 'embedding space' || modelTypeLower === 'es') {
+        if (!targetTypeLower && (modelTypeLower === 'embedding space' || modelTypeLower === 'es' || modelTypeLower === 'foundation')) {
           modelTypeDisplay = 'Foundational Embedding Space';
-        } else if (modelTypeLower === 'single predictor' || modelTypeLower === 'sp') {
-          if (targetTypeLower === 'set') {
+        } else if (targetTypeLower === 'set' || targetTypeLower === 'scalar') {
+          // Which predictor head was actually selected (Neural/Linear/XGBoost) is real,
+          // useful info — surface it alongside the task type, not instead of it.
+          var predictorKindMatch = mi.model_type.match(/(Neural|Linear|XGBoost)\s+Predictor/i);
+          var predictorKind = predictorKindMatch ? predictorKindMatch[1] + ' Predictor' : null;
+          var taskLabel;
+          if (targetTypeLower === 'scalar') {
+            taskLabel = 'Regression';
+          } else {
             // 'set' covers both binary and multiclass targets — numClasses (hoisted above,
             // from num_classes/class_labels) decides which; falls back to whether the
             // best_epochs data itself looks multiclass when numClasses is unknown.
             var modelTypeIsMulticlass = numClasses !== null ? numClasses > 2 : isMulticlass;
-            modelTypeDisplay = modelTypeIsMulticlass ? 'Multiclass Classifier' : 'Binary Classifier';
-          } else if (targetTypeLower === 'scalar') {
-            modelTypeDisplay = 'Regression';
-          } else {
-            modelTypeDisplay = 'Single Predictor';
+            taskLabel = modelTypeIsMulticlass ? 'Multiclass Classifier' : 'Binary Classifier';
           }
+          modelTypeDisplay = predictorKind ? (predictorKind + ' • ' + taskLabel) : taskLabel;
         } else {
           modelTypeDisplay = mi.model_type;
         }

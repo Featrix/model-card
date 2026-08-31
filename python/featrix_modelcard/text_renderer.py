@@ -52,8 +52,13 @@ def format_large_number(value) -> str:
     return f"{value:,}"
 
 
-def _map_model_type(mi: dict) -> str:
-    """Map model_type + target_column_type to display string."""
+def _map_model_type(mi: dict, is_multiclass_fallback: bool = False) -> str:
+    """Map model_type + target_column_type to display string.
+
+    'set' covers both binary and multiclass targets — num_classes/class_labels (once the
+    backend emits them) decide which; until then, is_multiclass_fallback (derived from
+    whether the best_epochs data itself looks multiclass) is used instead.
+    """
     model_type = mi.get("model_type", "")
     target_type = (mi.get("target_column_type") or "").lower()
     mt = model_type.lower()
@@ -62,7 +67,9 @@ def _map_model_type(mi: dict) -> str:
         return "Foundational Embedding Space"
     if mt in ("single predictor", "sp"):
         if target_type == "set":
-            return "Binary Classifier"
+            num_classes = mi.get("num_classes") or (len(mi["class_labels"]) if mi.get("class_labels") else None)
+            is_multiclass = num_classes > 2 if num_classes is not None else is_multiclass_fallback
+            return "Multiclass Classifier" if is_multiclass else "Binary Classifier"
         if target_type == "scalar":
             return "Regression"
         return "Single Predictor"
@@ -96,8 +103,20 @@ def render_brief_text(data: Dict[str, Any]) -> str:
     ci = data.get("class_imbalance", {})
     es = data.get("embedding_space", {})
 
+    # Best metrics — prefer best_roc_auc/best_pr_auc if present (binary cards); otherwise fall
+    # back to whichever best_epochs entry matches the checkpoint metric (multiclass cards).
+    roc_auc = _get_metric_value(be, "best_roc_auc", "auc")
+    pr_auc = _get_metric_value(be, "best_pr_auc", "pr_auc")
+    f1 = _get_metric_value(be, "best_roc_auc", "f1")
+    acc = _get_metric_value(be, "best_roc_auc", "accuracy")
+    r2 = _get_regression_metric_value(be, "best_r2", "r2")
+    rmse = _get_regression_metric_value(be, "best_r2", "rmse")
+    checkpoint_metric = ((data.get("training_optimization") or {}).get("checkpoint_metric"))
+    is_regression = r2 is not None or rmse is not None
+    multiclass_key = None if (is_regression or roc_auc is not None or pr_auc is not None) else _resolve_multiclass_epoch_key(be, checkpoint_metric)
+
     model_name = mi.get("name", "Model Card")
-    model_type = _map_model_type(mi)
+    model_type = _map_model_type(mi, is_multiclass_fallback=multiclass_key is not None)
     status = (mi.get("status") or "N/A").upper()
     if status == "DONE":
         status = "READY"
@@ -112,26 +131,41 @@ def render_brief_text(data: Dict[str, Any]) -> str:
         f"Trained:    {mi.get('training_date', 'N/A')}",
     ]
 
-    # Best metrics
-    roc_auc = _get_metric_value(be, "best_roc_auc", "auc")
-    pr_auc = _get_metric_value(be, "best_pr_auc", "pr_auc")
-    f1 = _get_metric_value(be, "best_roc_auc", "f1")
-    acc = _get_metric_value(be, "best_roc_auc", "accuracy")
-
     lines.append("")
-    lines.append(
-        f"Accuracy: {format_pct(acc)}  "
-        f"AUC: {format_metric(roc_auc)}  "
-        f"PR-AUC: {format_metric(pr_auc)}  "
-        f"F1: {format_metric(f1)}"
-    )
+    if is_regression:
+        skill = _get_regression_skill(be, "best_r2")
+        line = f"R²: {format_metric(r2)}  RMSE: {format_metric(rmse)}"
+        if skill and skill.get("text"):
+            line += f"  ({skill['text']})"
+        lines.append(line)
+    elif roc_auc is None and pr_auc is None:
+        fallback_key = multiclass_key
+        if fallback_key:
+            acc = _get_metric_value(be, fallback_key, "accuracy")
+            headline_key = checkpoint_metric if (checkpoint_metric and f"best_{checkpoint_metric}" == fallback_key) else fallback_key[len("best_"):]
+            headline_val = _get_metric_value(be, fallback_key, headline_key)
+            lines.append(
+                f"Accuracy: {format_pct(acc)}  "
+                f"{_format_metric_name(headline_key)}: {format_metric(headline_val)}"
+            )
+        else:
+            lines.append(f"Accuracy: {format_pct(acc)}")
+    else:
+        lines.append(
+            f"Accuracy: {format_pct(acc)}  "
+            f"AUC: {format_metric(roc_auc)}  "
+            f"PR-AUC: {format_metric(pr_auc)}  "
+            f"F1: {format_metric(f1)}"
+        )
 
     # Class imbalance summary
     if ci.get("total_samples"):
-        lines.append(
-            f"Samples: {ci['total_samples']:,}  "
-            f"Imbalance: {ci.get('imbalance_ratio', 'N/A')}:1"
-        )
+        if ci.get("imbalance_ratio") is not None:
+            lines.append(f"Samples: {ci['total_samples']:,}  Imbalance: {ci['imbalance_ratio']}:1")
+        elif isinstance(ci.get("class_distribution"), list):
+            lines.append(f"Samples: {ci['total_samples']:,}  Classes: {len(ci['class_distribution'])}")
+        else:
+            lines.append(f"Samples: {ci['total_samples']:,}")
 
     # Model stack summary
     if es:
@@ -182,7 +216,6 @@ def _render_model_identification(data: dict) -> str:
     ci = data.get("class_imbalance", {})
 
     model_name = mi.get("name", "Model Card")
-    model_type = _map_model_type(mi)
     status = (mi.get("status") or "N/A").upper()
     if status == "DONE":
         status = "READY"
@@ -193,9 +226,33 @@ def _render_model_identification(data: dict) -> str:
     framework = mi.get("framework", "N/A")
     framework = re.sub(r"\s+unknown$", "", framework, flags=re.IGNORECASE).strip() or "N/A"
 
-    # Best metrics
+    # Best metrics — regression targets (best_r2) get R²/RMSE instead of ROC/PR-AUC,
+    # which are classification-only and always N/A for a regression target.
     roc_auc = _get_metric_value(be, "best_roc_auc", "auc")
     pr_auc = _get_metric_value(be, "best_pr_auc", "pr_auc")
+    r2 = _get_regression_metric_value(be, "best_r2", "r2")
+    rmse = _get_regression_metric_value(be, "best_r2", "rmse")
+    r2_skill = _get_regression_skill(be, "best_r2")
+    is_regression = r2 is not None or rmse is not None
+
+    # Multiclass hero metrics — see _resolve_multiclass_epoch_key for why best_roc_auc/
+    # best_pr_auc don't apply here.
+    checkpoint_metric = ((data.get("training_optimization") or {}).get("checkpoint_metric"))
+    is_multiclass = False
+    mc_accuracy = None
+    mc_headline_key = None
+    mc_headline_val = None
+    if not is_regression and roc_auc is None and pr_auc is None:
+        mc_epoch_key = _resolve_multiclass_epoch_key(be, checkpoint_metric)
+        if mc_epoch_key:
+            mc_accuracy = _get_metric_value(be, mc_epoch_key, "accuracy")
+            mc_headline_key = checkpoint_metric if (checkpoint_metric and f"best_{checkpoint_metric}" == mc_epoch_key) else mc_epoch_key[len("best_"):]
+            if mc_headline_key == "accuracy":
+                mc_headline_key = "macro_f1"
+            mc_headline_val = _get_metric_value(be, mc_epoch_key, mc_headline_key)
+            is_multiclass = mc_accuracy is not None or mc_headline_val is not None
+
+    model_type = _map_model_type(mi, is_multiclass_fallback=is_multiclass)
 
     # PR-AUC lift
     prevalence = None
@@ -223,9 +280,19 @@ def _render_model_identification(data: dict) -> str:
     lines += [
         f"  Target Column:  {mi.get('target_column', 'N/A')}",
         f"  Model Type:     {model_type}",
-        f"  Best ROC-AUC:   {format_metric(roc_auc)}",
-        f"  Best PR-AUC:    {format_metric(pr_auc)}"
-        + (f"  [{pr_auc_lift:.1f}x lift]" if pr_auc_lift else ""),
+    ]
+    if is_regression:
+        lines.append(f"  Best R²:        {format_metric(r2)}")
+        lines.append(f"  Best RMSE:      {format_metric(rmse)}"
+                     + (f"  [{r2_skill['text']}]" if r2_skill and r2_skill.get("text") else ""))
+    elif is_multiclass:
+        lines.append(f"  {'Best Accuracy:':16s}{format_pct(mc_accuracy)}")
+        lines.append(f"  {('Best ' + _format_metric_name(mc_headline_key) + ':'):16s}{format_metric(mc_headline_val)}")
+    else:
+        lines.append(f"  Best ROC-AUC:   {format_metric(roc_auc)}")
+        lines.append(f"  Best PR-AUC:    {format_metric(pr_auc)}"
+                     + (f"  [{pr_auc_lift:.1f}x lift]" if pr_auc_lift else ""))
+    lines += [
         "",
         f"  Status:         {status}",
         f"  Training Date:  {mi.get('training_date', 'N/A')}",
@@ -267,19 +334,117 @@ def _render_model_stack(data: dict) -> str:
     return "\n".join(lines)
 
 
+_EPOCH_METRIC_LABELS = {
+    "roc_auc": "ROC-AUC", "pr_auc": "PR-AUC", "macro_f1": "Macro-F1", "weighted_f1": "Weighted-F1",
+    "macro_auc_ovr": "Macro-AUC (OvR)", "log_loss": "Log-Loss", "accuracy": "Accuracy", "f1": "F1", "r2": "R²",
+}
+_EPOCH_ORDER_PREFERENCE = ["best_pr_auc", "best_roc_auc"]
+
+_REGRESSION_METRIC_ORDER = ["r2", "nrmse", "rmse", "mae", "spearman", "smape", "median_ae", "max_error"]
+_REGRESSION_METRIC_LABELS = {
+    "r2": "R²", "nrmse": "NRMSE", "rmse": "RMSE", "mae": "MAE",
+    "spearman": "Spearman", "smape": "sMAPE", "median_ae": "Median AE", "max_error": "Max Error",
+}
+
+
+def _format_metric_name(key: Optional[str]) -> str:
+    if not key:
+        return ""
+    return _EPOCH_METRIC_LABELS.get(key, key.replace("_", " ").title())
+
+
+def _render_matrix_ascii(labels: list, matrix: list) -> list:
+    """N×N confusion matrix as ASCII — shared by the main confusion matrix and (in the
+    selective prediction section) the declined-rows breakdown."""
+    row_label_w = 16
+    col_w = max(6, max(len(l) for l in labels) + 2)
+    lines = ["", "    Confusion Matrix (rows=actual, cols=predicted):"]
+    lines.append("      " + "Actual\\Pred".ljust(row_label_w) + "".join(f"{l:>{col_w}}" for l in labels))
+    for i, row_label in enumerate(labels):
+        row = (matrix[i] if i < len(matrix) else []) or []
+        cells = "".join(f"{(row[j] if j < len(row) else 0):>{col_w}}" for j in range(len(labels)))
+        lines.append("      " + row_label.ljust(row_label_w) + cells)
+    return lines
+
+
+def _render_per_class_metrics_ascii(metrics: dict) -> list:
+    per_class = metrics.get("per_class")
+    if not per_class:
+        return []
+    lines = ["", "    Per-Class Metrics:"]
+    lines.append(f"      {'Class':<20} {'Precision':>10} {'Recall':>8} {'F1':>8} {'Support':>10}")
+    for c in per_class:
+        name = f"{c['label']} - {c['display_name']}" if c.get("display_name") else c.get("label", "")
+        lines.append(
+            f"      {name:<20} {c.get('precision', 0):>10.3f} {c.get('recall', 0):>8.3f} "
+            f"{c.get('f1', 0):>8.3f} {c.get('support', 0):>10,}"
+        )
+    avg = metrics.get("averaging") or {}
+    support = avg.get("support")
+    support_str = f"{support:,}" if support is not None else "N/A"
+    if avg.get("macro"):
+        m = avg["macro"]
+        lines.append(f"      {'Macro avg':<20} {m.get('precision', 0):>10.3f} {m.get('recall', 0):>8.3f} {m.get('f1', 0):>8.3f} {support_str:>10}")
+    if avg.get("weighted"):
+        w = avg["weighted"]
+        lines.append(f"      {'Weighted avg':<20} {w.get('precision', 0):>10.3f} {w.get('recall', 0):>8.3f} {w.get('f1', 0):>8.3f} {support_str:>10}")
+    return lines
+
+
 def _render_best_epochs(data: dict) -> str:
     be = data.get("best_epochs")
     if not be:
         return ""
 
+    epoch_keys = [k for k, v in be.items() if not k.startswith("_") and v]
+    if not epoch_keys:
+        return ""
+
+    def _sort_key(k):
+        try:
+            return (0, _EPOCH_ORDER_PREFERENCE.index(k))
+        except ValueError:
+            return (1, epoch_keys.index(k))
+
+    epoch_keys = sorted(epoch_keys, key=_sort_key)
+
+    to = data.get("training_optimization") or {}
+    checkpoint_metric = to.get("checkpoint_metric")
+
     lines = [
         "MODEL DETAILS",
         "-" * 60,
     ]
+    if checkpoint_metric:
+        lines.append(f"  Optimized for: {_format_metric_name(checkpoint_metric).upper()}")
 
-    for label, key in [("Best ROC-AUC", "best_roc_auc"), ("Best PR-AUC", "best_pr_auc")]:
+    for key in epoch_keys:
         epoch_data = be.get(key)
         if not epoch_data:
+            continue
+
+        label = "Best " + _format_metric_name(key[len("best_"):] if key.startswith("best_") else key)
+
+        # Regression (scalar target): R²/RMSE/MAE table + skill verdict — no confusion
+        # matrix, no per-row correct/wrong (that tracking is classification-only today).
+        rdm = epoch_data.get("regression_display_metadata")
+        if rdm:
+            epoch_num = epoch_data.get("epoch") or rdm.get("epoch", "N/A")
+            reg_metrics = rdm.get("regression_metrics") or {}
+            lines.append(f"\n  {label} -- Epoch {epoch_num}")
+            lines.append(f"  {'~' * 40}")
+            for mkey in _REGRESSION_METRIC_ORDER:
+                m = reg_metrics.get(mkey)
+                if not m or not isinstance(m.get("value"), (int, float)):
+                    continue
+                val = f"{m['value']:.2f}%" if mkey == "smape" else format_metric(m["value"])
+                quality = f"  [{m['quality']}]" if m.get("quality") else ""
+                mlabel = _REGRESSION_METRIC_LABELS.get(mkey, mkey).upper()
+                lines.append(f"    {mlabel:16s} {val}{quality}")
+            skill = rdm.get("skill")
+            if skill and skill.get("text"):
+                lines.append(f"\n    {skill['text']}")
+            lines.append("")
             continue
 
         cdm = epoch_data.get("classification_display_metadata") or {}
@@ -289,17 +454,21 @@ def _render_best_epochs(data: dict) -> str:
         lines.append(f"\n  {label} -- Epoch {epoch_num}")
         lines.append(f"  {'~' * 40}")
 
-        # Metrics table (top 4)
-        for mkey in ["accuracy", "auc", "pr_auc", "f1"]:
+        # Metrics table
+        for mkey in ["accuracy", "auc", "pr_auc", "f1", "macro_f1", "weighted_f1", "macro_auc_ovr", "log_loss"]:
             m = metrics.get(mkey)
             if not m:
                 continue
             val = format_pct(m.get("value")) if mkey == "accuracy" else format_metric(m.get("value"))
-            lines.append(f"    {mkey.upper().replace('_', ' '):12s} {val}")
+            mlabel = _EPOCH_METRIC_LABELS.get(mkey, mkey.replace("_", " ")).upper()
+            lines.append(f"    {mlabel:16s} {val}")
 
-        # Confusion matrix
+        # Confusion matrix — N×N when the backend supplies one, else the legacy binary 2×2
         cm = cdm.get("confusion_matrix")
-        if cm:
+        if cm and isinstance(cm.get("matrix"), list) and cm.get("class_labels"):
+            lines.extend(_render_matrix_ascii(cm["class_labels"], cm["matrix"]))
+            lines.extend(_render_per_class_metrics_ascii(metrics))
+        elif cm:
             tp, fn, fp, tn = cm.get("tp", 0), cm.get("fn", 0), cm.get("fp", 0), cm.get("tn", 0)
             total_pos = tp + fn
             total_neg = tn + fp
@@ -388,17 +557,56 @@ def _render_training_dataset(data: dict) -> str:
         "-" * 60,
     ]
 
-    if ci.get("train_distribution") or ci.get("class_distribution"):
-        train0 = (ci.get("train_distribution") or {}).get("0", 0)
-        train1 = (ci.get("train_distribution") or {}).get("1", 0)
-        val0 = (ci.get("val_distribution") or {}).get("0", 0)
-        val1 = (ci.get("val_distribution") or {}).get("1", 0)
+    class_distribution = ci.get("class_distribution")
+    if isinstance(class_distribution, list) and class_distribution:
+        # N-class distribution table — one column per class, driven by class_distribution
+        # rather than assuming exactly two (minority/majority). Array shape only: some existing
+        # cards send class_distribution as a legacy {label: count} dict, handled below unchanged.
+        train_dist = ci.get("train_distribution") or {}
+        val_dist = ci.get("val_distribution") or {}
+        col_w = max(10, max(len(c.get("label", "")) for c in class_distribution) + 2)
+
+        header = "  " + "".ljust(12) + "".join(f"{c['label']:>{col_w}}" for c in class_distribution) + f"{'Total':>10}"
+        lines.append(header)
+
+        total_train = total_val = total_all = 0
+        train_cells = ""
+        val_cells = ""
+        total_cells = ""
+        for c in class_distribution:
+            tv = train_dist.get(c["label"], 0)
+            vv = val_dist.get(c["label"], 0)
+            av = c.get("count", tv + vv)
+            total_train += tv
+            total_val += vv
+            total_all += av
+            train_cells += f"{tv:>{col_w},}"
+            val_cells += f"{vv:>{col_w},}"
+            total_cells += f"{av:>{col_w},}"
+
+        lines.append(f"  {'Train':12s}{train_cells}{total_train:>10,}")
+        lines.append(f"  {'Validation':12s}{val_cells}{total_val:>10,}")
+        lines.append(f"  {'Total':12s}{total_cells}{total_all:>10,}")
+        lines.append("")
+
+        if all(c.get("pct") is not None for c in class_distribution):
+            min_c = min(class_distribution, key=lambda c: c["pct"])
+            max_c = max(class_distribution, key=lambda c: c["pct"])
+            lines.append(
+                f"  Class balance: {min_c['label']} is {min_c['pct']:.1f}% of data, "
+                f"{max_c['label']} is {max_c['pct']:.1f}%"
+            )
+    elif ci.get("train_distribution") or ci.get("class_distribution") or ci.get("minority_class") or ci.get("majority_class"):
+        # Legacy binary distribution table (also covers the legacy dict-shaped class_distribution).
+        minority = ci.get("minority_class", "1")
+        majority = ci.get("majority_class", "0")
+        train0 = (ci.get("train_distribution") or {}).get(majority, (ci.get("train_distribution") or {}).get("0", 0))
+        train1 = (ci.get("train_distribution") or {}).get(minority, (ci.get("train_distribution") or {}).get("1", 0))
+        val0 = (ci.get("val_distribution") or {}).get(majority, (ci.get("val_distribution") or {}).get("0", 0))
+        val1 = (ci.get("val_distribution") or {}).get(minority, (ci.get("val_distribution") or {}).get("1", 0))
         total_train = train0 + train1
         total_val = val0 + val1
         total = ci.get("total_samples") or td.get("train_rows") or (total_train + total_val)
-
-        minority = ci.get("minority_class", "1")
-        majority = ci.get("majority_class", "0")
 
         lines.append(f"  {'':12s} Class \"{minority}\"  Class \"{majority}\"  Total")
         lines.append(f"  {'Train':12s} {train1:>10,}  {train0:>12,}  {total_train:>8,}")
@@ -425,12 +633,33 @@ _INTENT_DISPLAY = {
     "predict_probabilities": "Calibrated probabilities — no operating point",
 }
 
-_STRATEGY_GROUPS: list[tuple[list[str], str]] = [
-    (["everything", "best_always_answers"], "Always answer"),
-    (["only_when_sure", "best_balanced_may_demur"], "Balanced demur"),
-    (["only_on_strong_positives", "best_detects_positives_may_demur"], "Detect positives"),
-    (["only_on_strong_negatives", "best_rules_out_negatives_may_demur"], "Rule out negatives"),
+# Strategies are rendered from whatever keys are actually present under sp["strategies"] — not a
+# fixed set — so per-class strategies (detect_class_P0, ...) show up automatically. Legacy key
+# names get their historical labels and order; anything else falls back to entry["label"] (if the
+# backend supplied one) or a humanized version of the key.
+_LEGACY_STRATEGY_LABELS = {
+    "everything": "Always answer", "best_always_answers": "Always answer",
+    "only_when_sure": "Balanced demur", "best_balanced_may_demur": "Balanced demur",
+    "only_on_strong_positives": "Detect positives", "best_detects_positives_may_demur": "Detect positives",
+    "only_on_strong_negatives": "Rule out negatives", "best_rules_out_negatives_may_demur": "Rule out negatives",
+}
+_LEGACY_STRATEGY_ORDER = [
+    "everything", "best_always_answers",
+    "only_when_sure", "best_balanced_may_demur",
+    "only_on_strong_positives", "best_detects_positives_may_demur",
+    "only_on_strong_negatives", "best_rules_out_negatives_may_demur",
 ]
+
+
+def _pick_primary_metric(entry: dict) -> tuple:
+    """Returns (label, covered, full, lift) — AUC for legacy binary entries, Macro-F1 or
+    per-class recall for the corresponding multiclass strategy shapes."""
+    if entry.get("target_class") and entry.get("covered_recall_target_class") is not None:
+        return (f"Recall ({entry['target_class']})", entry.get("covered_recall_target_class"),
+                entry.get("full_recall_target_class"), None)
+    if entry.get("covered_macro_f1") is not None or entry.get("full_macro_f1") is not None:
+        return ("Macro-F1", entry.get("covered_macro_f1"), entry.get("full_macro_f1"), entry.get("macro_f1_lift"))
+    return ("AUC", entry.get("covered_auc"), entry.get("full_auc"), entry.get("auc_lift"))
 
 
 def _render_selective_prediction(data: dict) -> str:
@@ -465,7 +694,6 @@ def _render_selective_prediction(data: dict) -> str:
         n_covered = entry.get("n_covered", 0)
         n_total = entry.get("n_total", 0)
         n_demurred = entry.get("n_demurred", 0)
-        auc_lift = entry.get("auc_lift")
         threshold = entry.get("confidence_threshold")
         tp = entry.get("n_demurred_true_positives", 0)
         fp = entry.get("n_demurred_false_positives", 0)
@@ -474,13 +702,19 @@ def _render_selective_prediction(data: dict) -> str:
         intent = entry.get("intent")
         source = entry.get("source")
         cal = entry.get("calibration_method")
+        declined_matrix = entry.get("declined_matrix")
 
         intent_label = _INTENT_DISPLAY.get(intent or "", "") or (
             intent.replace("_", " ").title() if intent else "Balanced (default)"
         )
         is_noop = intent in ("rank", "predict_probabilities")
-        is_always_answers = dec is None
-        badge = _demur_badge(dec, baseline)
+        # is_always_answers is really "did this strategy decline anything" — n_demurred is the
+        # ground truth for that. demur_error_capture is a binary-only headline metric on top;
+        # its absence (e.g. per-class "detect X" strategies) doesn't mean nothing was declined.
+        is_always_answers = n_demurred == 0
+        has_demur_badge = dec is not None
+        badge = _demur_badge(dec if has_demur_badge else None, baseline) if (is_always_answers or has_demur_badge) else None
+        label_m, covered, full, lift = _pick_primary_metric(entry)
 
         out = [f"\n  {label}"]
         out.append(f"  {'~' * 40}")
@@ -510,10 +744,12 @@ def _render_selective_prediction(data: dict) -> str:
 
         if is_always_answers:
             out.append(f"    Demur Error Capture: {badge}")
-        else:
+        elif has_demur_badge:
             out.append(f"    Demur Error Capture: {dec:.4f}  [{badge}]  (vs {baseline:.2f} random)")
+        elif lift is not None:
+            out.append(f"    {label_m} lift vs full: {'+' if lift >= 0 else ''}{lift:.4f}")
 
-        lift_str = (f"{'+' if auc_lift >= 0 else ''}{auc_lift:.4f}") if auc_lift is not None else "—"
+        lift_str = (f"{'+' if lift >= 0 else ''}{lift:.4f}") if lift is not None else "—"
         thresh_str = f"{threshold:.2f}" if threshold is not None else "—"
         extra_metric = ""
         if intent == "only_alert_when_confident" and entry.get("covered_precision") is not None:
@@ -521,13 +757,19 @@ def _render_selective_prediction(data: dict) -> str:
         elif intent in ("catch_everything", "catch_everything_aggressive") and entry.get("covered_recall") is not None:
             extra_metric = f"   Covered Recall: {entry['covered_recall']:.4f}"
         out.append(
-            f"    Covered AUC: {_fmt_auc(entry.get('covered_auc'))}{extra_metric}   "
-            f"Full AUC: {_fmt_auc(entry.get('full_auc'))}   "
-            f"AUC Lift: {lift_str}   "
+            f"    Covered {label_m}: {_fmt_auc(covered)}{extra_metric}   "
+            f"Full {label_m}: {_fmt_auc(full)}   "
+            f"{label_m} Lift: {lift_str}   "
             f"Coverage: {_fmt_pct(coverage)}   Threshold: {thresh_str}"
         )
+        if entry.get("confidence_threshold_basis") == "max_softmax_probability":
+            out.append("    (Threshold is on max predicted-class probability — top-1 confidence)")
 
-        if not is_always_answers and n_demurred > 0:
+        if not is_always_answers and declined_matrix and declined_matrix.get("class_labels") and declined_matrix.get("matrix"):
+            out.append("")
+            out.append("    Declined rows — what they would have been:")
+            out.extend("    " + l if l else l for l in _render_matrix_ascii(declined_matrix["class_labels"], declined_matrix["matrix"]))
+        elif not is_always_answers and n_demurred > 0:
             out.append("")
             out.append("    Declined rows — what they would have been:")
             out.append(f"                       Actual +          Actual −")
@@ -544,16 +786,21 @@ def _render_selective_prediction(data: dict) -> str:
         lines.extend(_render_entry("Summary", summary))
 
     strategies = sp.get("strategies") or {}
-    has_strategies = any(
-        any(k in strategies for k in keys)
-        for keys, _ in _STRATEGY_GROUPS
-    )
-    if has_strategies:
+    strategy_keys = [k for k in strategies if not k.startswith("_") and strategies.get(k)]
+
+    def _strategy_sort_key(k):
+        try:
+            return (0, _LEGACY_STRATEGY_ORDER.index(k))
+        except ValueError:
+            return (1, strategy_keys.index(k))
+
+    strategy_keys = sorted(strategy_keys, key=_strategy_sort_key)
+    if strategy_keys:
         lines.append("\n  Strategies")
-        for keys, label in _STRATEGY_GROUPS:
-            entry = next((strategies[k] for k in keys if k in strategies), None)
-            if entry:
-                lines.extend(_render_entry(label, entry))
+        for key in strategy_keys:
+            entry = strategies[key]
+            label = entry.get("label") or _LEGACY_STRATEGY_LABELS.get(key) or key.replace("_", " ").title()
+            lines.extend(_render_entry(label, entry))
 
     history = sp.get("history") or []
     if history:
@@ -621,6 +868,17 @@ def _render_data_processing_notes(data: dict) -> str:
 # ---------------------------------------------------------------------------
 
 
+def _resolve_multiclass_epoch_key(best_epochs: dict, checkpoint_metric: Optional[str]) -> Optional[str]:
+    """Pick which best_epochs entry backs the multiclass headline metrics: the epoch matching
+    training_optimization.checkpoint_metric if present, else the first non-regression key.
+    Multiclass targets have no best_roc_auc/best_pr_auc (those are binary-only) — the epoch
+    is keyed by whatever metric was actually optimized (best_accuracy, best_macro_f1, ...)."""
+    fallback_key = f"best_{checkpoint_metric}" if checkpoint_metric else None
+    if fallback_key and best_epochs.get(fallback_key):
+        return fallback_key
+    return next((k for k in best_epochs if not k.startswith("_") and k != "best_r2" and best_epochs.get(k)), None)
+
+
 def _get_metric_value(best_epochs: dict, epoch_key: str, metric_key: str):
     """Extract a metric value from best_epochs nested structure."""
     epoch = best_epochs.get(epoch_key) or {}
@@ -628,6 +886,22 @@ def _get_metric_value(best_epochs: dict, epoch_key: str, metric_key: str):
     metrics = cdm.get("classification_metrics") or {}
     m = metrics.get(metric_key) or {}
     return m.get("value")
+
+
+def _get_regression_metric_value(best_epochs: dict, epoch_key: str, metric_key: str):
+    """Extract a metric value from best_epochs.<epoch_key>.regression_display_metadata."""
+    epoch = best_epochs.get(epoch_key) or {}
+    rdm = epoch.get("regression_display_metadata") or {}
+    metrics = rdm.get("regression_metrics") or {}
+    m = metrics.get(metric_key) or {}
+    return m.get("value")
+
+
+def _get_regression_skill(best_epochs: dict, epoch_key: str) -> Optional[dict]:
+    """Extract the baseline-relative skill verdict ({tier, text}) for a regression epoch."""
+    epoch = best_epochs.get(epoch_key) or {}
+    rdm = epoch.get("regression_display_metadata") or {}
+    return rdm.get("skill")
 
 
 def render_to_file(

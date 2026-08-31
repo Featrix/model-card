@@ -1,0 +1,614 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Multiclass Model Card — Redesign</title>
+<style>
+  :root {
+    --paper: #ffffff;
+    --mist: #f4f5f7;
+    --mist-2: #eceef1;
+    --ink: #14171c;
+    --ink-soft: #454b56;
+    --slate: #6b7280;
+    --line: #dde0e5;
+    --line-soft: #e8eaed;
+    --brass: #8a5a1e;
+    --brass-strong: #6e480f;
+    --brass-bg: #f7ecd9;
+    --brass-border: #e6cd9e;
+    --good: #1f8a4c;
+    --good-bg: #e5f5ea;
+    --good-border: #b9e2c6;
+    --bad: #b23a32;
+    --bad-bg: #fbe9e7;
+    --bad-border: #f0c3bd;
+    --warn: #a8710c;
+    --warn-bg: #fbf1dc;
+    --warn-border: #edd39a;
+    --neutral-badge-bg: #5c6470;
+    --shadow: none;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --paper: #191c22;
+      --mist: #101216;
+      --mist-2: #21252d;
+      --ink: #e9eaed;
+      --ink-soft: #b7bcc6;
+      --slate: #8891a0;
+      --line: #2c313c;
+      --line-soft: #262b34;
+      --brass: #e0ab5c;
+      --brass-strong: #f0c07f;
+      --brass-bg: #362a13;
+      --brass-border: #5c451f;
+      --good: #4fbf87;
+      --good-bg: #163425;
+      --good-border: #275c3f;
+      --bad: #e2827a;
+      --bad-bg: #3a1e1c;
+      --bad-border: #5c332f;
+      --warn: #e0ac42;
+      --warn-bg: #362a10;
+      --warn-border: #5a441c;
+      --neutral-badge-bg: #4a5160;
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper: #191c22; --mist: #101216; --mist-2: #21252d; --ink: #e9eaed; --ink-soft: #b7bcc6;
+    --slate: #8891a0; --line: #2c313c; --line-soft: #262b34; --brass: #e0ab5c; --brass-strong: #f0c07f;
+    --brass-bg: #362a13; --brass-border: #5c451f; --good: #4fbf87; --good-bg: #163425; --good-border: #275c3f;
+    --bad: #e2827a; --bad-bg: #3a1e1c; --bad-border: #5c332f; --warn: #e0ac42; --warn-bg: #362a10;
+    --warn-border: #5a441c; --neutral-badge-bg: #4a5160;
+  }
+  :root[data-theme="light"] {
+    --paper: #ffffff; --mist: #f4f5f7; --mist-2: #eceef1; --ink: #14171c; --ink-soft: #454b56;
+    --slate: #6b7280; --line: #dde0e5; --line-soft: #e8eaed; --brass: #8a5a1e; --brass-strong: #6e480f;
+    --brass-bg: #f7ecd9; --brass-border: #e6cd9e; --good: #1f8a4c; --good-bg: #e5f5ea; --good-border: #b9e2c6;
+    --bad: #b23a32; --bad-bg: #fbe9e7; --bad-border: #f0c3bd; --warn: #a8710c; --warn-bg: #fbf1dc;
+    --warn-border: #edd39a; --neutral-badge-bg: #5c6470;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--mist);
+    color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    font-size: 14px;
+    line-height: 1.55;
+    padding: 32px 20px 80px;
+  }
+  .mono {
+    font-family: ui-monospace, "SF Mono", "Cascadia Code", "Roboto Mono", Menlo, Consolas, monospace;
+    font-variant-numeric: tabular-nums;
+  }
+  .page { max-width: 1040px; margin: 0 auto; }
+
+  /* ---------- masthead ---------- */
+  .kicker {
+    font-family: ui-monospace, "SF Mono", "Cascadia Code", monospace;
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--brass);
+    font-weight: 600;
+    margin: 0 0 10px;
+  }
+  h1 {
+    font-size: 26px;
+    letter-spacing: -0.01em;
+    margin: 0 0 8px;
+    text-wrap: balance;
+    font-weight: 700;
+  }
+  .dek {
+    color: var(--ink-soft);
+    max-width: 66ch;
+    font-size: 14.5px;
+    margin: 0 0 28px;
+  }
+  .dek code {
+    font-family: ui-monospace, monospace;
+    background: var(--mist-2);
+    border: 1px solid var(--line-soft);
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-size: 12.5px;
+  }
+
+  /* ---------- reference callout (today) ---------- */
+  .ref-callout {
+    display: flex;
+    gap: 18px;
+    align-items: flex-start;
+    background: var(--mist-2);
+    border: 1px dashed var(--line);
+    border-radius: 6px;
+    padding: 16px 18px;
+    margin-bottom: 36px;
+  }
+  .ref-callout .ref-label {
+    flex: 0 0 auto;
+    font-family: ui-monospace, monospace;
+    font-size: 10.5px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--bad);
+    font-weight: 700;
+    background: var(--bad-bg);
+    border: 1px solid var(--bad-border);
+    padding: 3px 8px;
+    border-radius: 3px;
+    white-space: nowrap;
+    margin-top: 2px;
+  }
+  .ref-callout p { margin: 0 0 8px; color: var(--ink-soft); font-size: 13px; }
+  .ref-callout p:last-child { margin-bottom: 0; }
+  .ref-mini-matrix {
+    display: inline-flex;
+    gap: 1px;
+    margin-top: 6px;
+    border: 1px solid var(--line);
+    background: var(--line);
+  }
+  .ref-mini-matrix div {
+    background: var(--paper);
+    width: 46px;
+    height: 34px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: ui-monospace, monospace;
+    font-size: 12px;
+    color: var(--slate);
+  }
+  .ref-mini-matrix .lump { color: var(--ink); font-weight: 700; }
+
+  /* ---------- section shell (matches existing convention) ---------- */
+  section.panel {
+    background: var(--paper);
+    border: 1px solid var(--line);
+    border-radius: 5px;
+    margin-bottom: 28px;
+    overflow: hidden;
+  }
+  .panel-bar {
+    background: var(--mist-2);
+    border-bottom: 1px solid var(--line);
+    padding: 10px 18px;
+    font-family: ui-monospace, monospace;
+    font-size: 11.5px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .panel-bar .car { color: var(--slate); font-size: 10px; }
+  .panel-body { padding: 22px 22px 26px; }
+
+  /* ---------- optimized-for strip ---------- */
+  .opt-strip {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 18px;
+  }
+  .opt-label { font-size: 12.5px; color: var(--slate); }
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-family: ui-monospace, monospace;
+    font-size: 11.5px;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    padding: 4px 10px;
+    border-radius: 3px;
+  }
+  .badge.brass { background: var(--brass-bg); color: var(--brass-strong); border: 1px solid var(--brass-border); }
+  .badge.good { background: var(--good-bg); color: var(--good); border: 1px solid var(--good-border); }
+  .badge.warn { background: var(--warn-bg); color: var(--warn); border: 1px solid var(--warn-border); }
+  .badge.neutral { background: var(--neutral-badge-bg); color: #fff; }
+  .tag {
+    font-size: 11px;
+    color: var(--slate);
+    border: 1px solid var(--line);
+    background: var(--mist);
+    padding: 2px 7px;
+    border-radius: 3px;
+  }
+
+  /* ---------- tabs (epoch + strategy) ---------- */
+  .tabrow {
+    display: flex;
+    gap: 6px;
+    border-bottom: 1px solid var(--line);
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+  }
+  .tabrow button {
+    font-family: ui-monospace, monospace;
+    font-size: 12px;
+    background: none;
+    border: 1px solid var(--line);
+    border-bottom: none;
+    color: var(--slate);
+    padding: 8px 14px;
+    border-radius: 4px 4px 0 0;
+    cursor: pointer;
+    margin-bottom: -1px;
+    transition: color .12s ease;
+  }
+  .tabrow button:hover { color: var(--ink); }
+  .tabrow button.active {
+    color: var(--ink);
+    font-weight: 700;
+    background: var(--paper);
+    border-color: var(--line);
+    border-bottom: 1px solid var(--paper);
+  }
+  .tabrow.chips { border-bottom: none; gap: 8px; }
+  .tabrow.chips button {
+    border-radius: 999px;
+    border: 1px solid var(--line);
+    padding: 6px 13px;
+    margin-bottom: 0;
+  }
+  .tabrow.chips button.active {
+    background: var(--brass-bg);
+    color: var(--brass-strong);
+    border-color: var(--brass-border);
+    border-bottom: 1px solid var(--brass-border);
+  }
+
+  .epoch-title { font-size: 13.5px; font-weight: 700; margin: 0 0 20px; color: var(--ink); }
+  .epoch-title .car { color: var(--slate); font-weight: 400; }
+
+  /* ---------- confusion matrix ---------- */
+  .cm-layout { display: flex; gap: 40px; flex-wrap: wrap; align-items: flex-start; }
+  .cm-block { flex: 0 0 auto; }
+  .cm-caption { font-size: 12px; font-weight: 700; color: var(--ink-soft); margin: 0 0 12px; text-transform: uppercase; letter-spacing: .04em; font-family: ui-monospace, monospace; }
+  .cm-grid-wrap { display: inline-block; }
+  .cm-axis-top { text-align: center; font-size: 11px; color: var(--slate); margin-bottom: 4px; font-family: ui-monospace, monospace; }
+  .cm-row { display: flex; align-items: center; }
+  .cm-ylabel {
+    width: 16px; font-size: 10px; color: var(--slate); text-align: center;
+    writing-mode: vertical-lr; transform: rotate(180deg); font-family: ui-monospace, monospace;
+  }
+  .cm-rowhead {
+    width: 42px; font-size: 11px; color: var(--ink-soft); text-align: right; padding-right: 8px;
+    font-family: ui-monospace, monospace; font-weight: 600;
+  }
+  .cm-colheads { display: flex; margin-left: 58px; margin-bottom: 3px; }
+  .cm-colhead {
+    width: 56px; text-align: center; font-size: 11px; color: var(--ink-soft); font-weight: 600;
+    font-family: ui-monospace, monospace;
+  }
+  .cm-cell {
+    width: 56px; height: 46px; display: flex; align-items: center; justify-content: center;
+    font-family: ui-monospace, monospace; font-size: 13px; font-weight: 700;
+    border: 1px solid var(--paper); outline: 1px solid var(--line-soft);
+  }
+  .cm-legend { display: flex; gap: 16px; margin-top: 14px; font-size: 11px; color: var(--slate); }
+  .cm-legend .sw { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; }
+
+  table.data-table { border-collapse: collapse; width: 100%; }
+  table.data-table th {
+    text-align: right; font-size: 10.5px; text-transform: uppercase; letter-spacing: .04em;
+    color: var(--slate); font-weight: 600; padding: 0 10px 8px; border-bottom: 1px solid var(--line);
+    font-family: ui-monospace, monospace;
+  }
+  table.data-table th:first-child { text-align: left; }
+  table.data-table td {
+    text-align: right; padding: 7px 10px; font-family: ui-monospace, monospace; font-size: 13px;
+    border-bottom: 1px solid var(--line-soft);
+  }
+  table.data-table td:first-child { text-align: left; font-weight: 600; color: var(--ink); font-family: -apple-system, sans-serif; font-size: 13px; }
+  table.data-table tr.agg td { border-top: 1px solid var(--line); font-weight: 700; padding-top: 9px; }
+  table.data-table tr.agg td:first-child { color: var(--ink-soft); }
+
+  details.expand { margin-top: 18px; }
+  details.expand summary {
+    cursor: pointer; font-size: 12px; color: var(--brass); font-weight: 600;
+    list-style: none; display: inline-flex; align-items: center; gap: 5px;
+  }
+  details.expand summary::-webkit-details-marker { display: none; }
+  details.expand summary::before { content: "▸"; font-size: 10px; }
+  details.expand[open] summary::before { content: "▾"; }
+  details.expand .expand-body { margin-top: 12px; max-width: 420px; }
+
+  /* ---------- metric tiles ---------- */
+  .tiles { display: grid; grid-template-columns: repeat(5, 1fr); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 4px; overflow: hidden; margin-bottom: 22px; }
+  .tile { background: var(--paper); padding: 12px 14px; }
+  .tile-label { font-size: 10px; text-transform: uppercase; letter-spacing: .05em; color: var(--slate); margin-bottom: 6px; font-family: ui-monospace, monospace; }
+  .tile-value { font-size: 19px; font-weight: 700; font-family: ui-monospace, monospace; color: var(--ink); }
+  .tile-value.lift { color: var(--good); }
+
+  .intent-line { font-size: 12.5px; color: var(--slate); margin-bottom: 14px; }
+  .intent-line strong { color: var(--ink); font-weight: 600; }
+  .answered-line { font-size: 12.5px; color: var(--ink-soft); margin-top: 16px; }
+
+  footer.notes {
+    border-top: 1px solid var(--line);
+    padding-top: 20px;
+    margin-top: 36px;
+    font-size: 12.5px;
+    color: var(--slate);
+  }
+  footer.notes h2 {
+    font-family: ui-monospace, monospace;
+    font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-soft);
+    margin: 0 0 10px;
+  }
+  footer.notes ul { margin: 0; padding-left: 18px; }
+  footer.notes li { margin-bottom: 6px; }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <p class="kicker">Featrix Model Card — Design Proposal</p>
+  <h1>Model Details &amp; Selective Prediction, redesigned for N classes</h1>
+  <p class="dek">
+    Mocked against a real shape of problem: a 4-class support-ticket priority classifier
+    (<code>P0</code>–<code>P3</code>, 2,400 held-out rows). Same panel conventions as the
+    current renderer — this is about the data model, not a re-skin.
+  </p>
+
+  <div class="ref-callout">
+    <span class="ref-label">Today</span>
+    <div>
+      <p>The current renderer only understands <code>{tp, fp, fn, tn}</code>. Point it at a 4-class
+      target and it collapses every row into an arbitrary 2-bucket split — it cannot render this
+      problem correctly at all, only guess at a fake binary framing of it.</p>
+      <div class="ref-mini-matrix">
+        <div>0</div><div>0</div>
+        <div>0</div><div>0</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ MODEL DETAILS ============ -->
+  <section class="panel">
+    <div class="panel-bar"><span class="car">▾</span> Model Details</div>
+    <div class="panel-body">
+
+      <div class="opt-strip">
+        <span class="opt-label">Optimized for</span>
+        <span class="badge brass">MACRO F1</span>
+        <span class="tag">checkpoint_metric: macro_f1</span>
+      </div>
+
+      <div class="tabrow" id="epochTabs">
+        <button class="active" data-epoch="f1">Best Macro-F1</button>
+        <button data-epoch="ll">Best Log-Loss</button>
+        <button data-epoch="acc">Best Accuracy</button>
+      </div>
+
+      <h3 class="epoch-title" id="epochTitle">Best Macro-F1 <span class="car">— Epoch 34</span></h3>
+
+      <div class="cm-layout">
+        <div class="cm-block">
+          <p class="cm-caption">Confusion Matrix</p>
+          <div class="cm-grid-wrap">
+            <div class="cm-axis-top" style="margin-left:58px;">Predicted</div>
+            <div class="cm-colheads">
+              <div class="cm-colhead">P0</div><div class="cm-colhead">P1</div>
+              <div class="cm-colhead">P2</div><div class="cm-colhead">P3</div>
+            </div>
+
+            <div class="cm-row">
+              <div class="cm-ylabel">Actual</div>
+              <div class="cm-rowhead">P0</div>
+              <div class="cm-cell" style="background:rgba(31,138,76,.82);color:#fff;">162</div>
+              <div class="cm-cell" style="background:rgba(178,58,50,.22);">14</div>
+              <div class="cm-cell" style="background:rgba(178,58,50,.06);">3</div>
+              <div class="cm-cell" style="background:rgba(178,58,50,.03);">1</div>
+            </div>
+            <div class="cm-row">
+              <div class="cm-ylabel"></div>
+              <div class="cm-rowhead">P1</div>
+              <div class="cm-cell" style="background:rgba(178,58,50,.14);">21</div>
+              <div class="cm-cell" style="background:rgba(31,138,76,.72);color:#fff;">468</div>
+              <div class="cm-cell" style="background:rgba(178,58,50,.28);">44</div>
+              <div class="cm-cell" style="background:rgba(178,58,50,.06);">7</div>
+            </div>
+            <div class="cm-row">
+              <div class="cm-ylabel"></div>
+              <div class="cm-rowhead">P2</div>
+              <div class="cm-cell" style="background:rgba(178,58,50,.02);">2</div>
+              <div class="cm-cell" style="background:rgba(178,58,50,.32);">51</div>
+              <div class="cm-cell" style="background:rgba(31,138,76,.80);color:#fff;">812</div>
+              <div class="cm-cell" style="background:rgba(178,58,50,.34);">55</div>
+            </div>
+            <div class="cm-row">
+              <div class="cm-ylabel"></div>
+              <div class="cm-rowhead">P3</div>
+              <div class="cm-cell" style="background:rgba(178,58,50,0);">0</div>
+              <div class="cm-cell" style="background:rgba(178,58,50,.04);">6</div>
+              <div class="cm-cell" style="background:rgba(178,58,50,.36);">61</div>
+              <div class="cm-cell" style="background:rgba(31,138,76,.86);color:#fff;">693</div>
+            </div>
+          </div>
+          <div class="cm-legend">
+            <span><span class="sw" style="background:rgba(31,138,76,.82);"></span>correct (diagonal)</span>
+            <span><span class="sw" style="background:rgba(178,58,50,.34);"></span>error, shaded by count</span>
+          </div>
+        </div>
+
+        <div style="flex:1; min-width:320px;">
+          <p class="cm-caption">Per-Class Metrics</p>
+          <table class="data-table">
+            <tr><th>Class</th><th>Precision</th><th>Recall</th><th>F1</th><th>Support</th></tr>
+            <tr><td>P0 — Critical</td><td>0.876</td><td>0.900</td><td>0.888</td><td>180</td></tr>
+            <tr><td>P1 — High</td><td>0.868</td><td>0.867</td><td>0.867</td><td>540</td></tr>
+            <tr><td>P2 — Medium</td><td>0.883</td><td>0.883</td><td>0.883</td><td>920</td></tr>
+            <tr><td>P3 — Low</td><td>0.917</td><td>0.912</td><td>0.914</td><td>760</td></tr>
+            <tr class="agg"><td>Macro avg</td><td>0.886</td><td>0.891</td><td>0.888</td><td>2,400</td></tr>
+            <tr class="agg"><td>Weighted avg</td><td>0.890</td><td>0.890</td><td>0.890</td><td>2,400</td></tr>
+          </table>
+
+          <details class="expand">
+            <summary>Show per-class AUC (one-vs-rest)</summary>
+            <div class="expand-body">
+              <table class="data-table">
+                <tr><th>Class</th><th>AUC (OvR)</th></tr>
+                <tr><td>P0 — Critical</td><td>0.9840</td></tr>
+                <tr><td>P1 — High</td><td>0.9510</td></tr>
+                <tr><td>P2 — Medium</td><td>0.9605</td></tr>
+                <tr><td>P3 — Low</td><td>0.9528</td></tr>
+                <tr class="agg"><td>Macro AUC</td><td>0.9621</td></tr>
+              </table>
+            </div>
+          </details>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ SELECTIVE PREDICTION ============ -->
+  <section class="panel">
+    <div class="panel-bar"><span class="car">▾</span> Selective Prediction</div>
+    <div class="panel-body">
+
+      <h3 class="epoch-title" style="margin-bottom:14px;">Summary</h3>
+      <div class="opt-strip">
+        <span class="opt-label">Optimized for</span>
+        <span class="badge neutral">BALANCED (DEFAULT)</span>
+        <span class="tag">post calibration · temperature</span>
+      </div>
+
+      <div class="tiles">
+        <div class="tile"><div class="tile-label">Covered Macro-F1</div><div class="tile-value">0.9142</div></div>
+        <div class="tile"><div class="tile-label">Full Macro-F1</div><div class="tile-value">0.8880</div></div>
+        <div class="tile"><div class="tile-label">Macro-F1 Lift</div><div class="tile-value lift">+0.0262</div></div>
+        <div class="tile"><div class="tile-label">Coverage</div><div class="tile-value">96.4%</div></div>
+        <div class="tile"><div class="tile-label">Threshold</div><div class="tile-value">0.42</div></div>
+      </div>
+      <p style="font-size:11.5px;color:var(--slate);margin:-12px 0 22px;">Threshold is on max predicted-class
+      probability (top-1 confidence) — a single "positive-class score" doesn't exist once there are more than two classes.</p>
+
+      <p class="cm-caption">Declined rows — what they would have been</p>
+      <div class="cm-grid-wrap" style="margin-bottom:8px;">
+        <div class="cm-axis-top" style="margin-left:58px;">Would predict</div>
+        <div class="cm-colheads">
+          <div class="cm-colhead">P0</div><div class="cm-colhead">P1</div>
+          <div class="cm-colhead">P2</div><div class="cm-colhead">P3</div>
+        </div>
+        <div class="cm-row">
+          <div class="cm-ylabel">Actual</div>
+          <div class="cm-rowhead">P0</div>
+          <div class="cm-cell" style="background:rgba(168,113,12,.30);">2</div>
+          <div class="cm-cell" style="background:rgba(168,113,12,.30);">2</div>
+          <div class="cm-cell" style="background:rgba(168,113,12,0);">0</div>
+          <div class="cm-cell" style="background:rgba(168,113,12,0);">0</div>
+        </div>
+        <div class="cm-row">
+          <div class="cm-ylabel"></div>
+          <div class="cm-rowhead">P1</div>
+          <div class="cm-cell" style="background:rgba(168,113,12,.14);">3</div>
+          <div class="cm-cell" style="background:rgba(168,113,12,.42);">11</div>
+          <div class="cm-cell" style="background:rgba(168,113,12,.28);">7</div>
+          <div class="cm-cell" style="background:rgba(168,113,12,.05);">1</div>
+        </div>
+        <div class="cm-row">
+          <div class="cm-ylabel"></div>
+          <div class="cm-rowhead">P2</div>
+          <div class="cm-cell" style="background:rgba(168,113,12,0);">0</div>
+          <div class="cm-cell" style="background:rgba(168,113,12,.24);">6</div>
+          <div class="cm-cell" style="background:rgba(168,113,12,.66);">20</div>
+          <div class="cm-cell" style="background:rgba(168,113,12,.42);">12</div>
+        </div>
+        <div class="cm-row">
+          <div class="cm-ylabel"></div>
+          <div class="cm-rowhead">P3</div>
+          <div class="cm-cell" style="background:rgba(168,113,12,0);">0</div>
+          <div class="cm-cell" style="background:rgba(168,113,12,.05);">1</div>
+          <div class="cm-cell" style="background:rgba(168,113,12,.34);">9</div>
+          <div class="cm-cell" style="background:rgba(168,113,12,.42);">12</div>
+        </div>
+      </div>
+      <p class="answered-line">Answered 2,314 / 2,400 (96.4%) — declined 86</p>
+
+      <h3 class="epoch-title" style="margin:28px 0 14px;">Strategies</h3>
+      <div class="tabrow chips" id="stratTabs">
+        <button class="active" data-strat="always">Always answer</button>
+        <button data-strat="balanced">Balanced demur</button>
+        <button data-strat="p0">Detect P0</button>
+        <button data-strat="p1">Detect P1</button>
+        <button data-strat="p2">Detect P2</button>
+        <button data-strat="p3">Detect P3</button>
+      </div>
+
+      <p class="intent-line" id="stratIntent">
+        <strong>N/A</strong> — answers every row, no demur.
+      </p>
+
+      <div class="tiles" id="stratTiles">
+        <div class="tile"><div class="tile-label">Covered Macro-F1</div><div class="tile-value" id="st-v1">0.8880</div></div>
+        <div class="tile"><div class="tile-label">Full Macro-F1</div><div class="tile-value" id="st-v2">0.8880</div></div>
+        <div class="tile"><div class="tile-label">Lift</div><div class="tile-value lift" id="st-v3">+0.0000</div></div>
+        <div class="tile"><div class="tile-label">Coverage</div><div class="tile-value" id="st-v4">100.0%</div></div>
+        <div class="tile"><div class="tile-label">Threshold</div><div class="tile-value" id="st-v5">0.00</div></div>
+      </div>
+      <p class="answered-line" id="stratAnswered">Answered 2,400 / 2,400 (100.0%) — declined 0</p>
+    </div>
+  </section>
+
+  <footer class="notes">
+    <h2>What changed here vs. today</h2>
+    <ul>
+      <li>Confusion matrix is <code>class_labels[] + matrix[][]</code>, not a fixed <code>tp/fp/fn/tn</code> — this component is shared by both the main matrix above and the declined-rows matrix in Selective Prediction.</li>
+      <li>"Optimized for" now appears in Model Details too, and the epoch tabs are generated from whichever <code>best_epochs.*</code> keys the training run actually produced — not hardcoded to PR-AUC / ROC-AUC.</li>
+      <li>Binary derived metrics (Hit Rate, Specificity, FPR) are replaced by a per-class precision / recall / F1 / support table with macro and weighted rollups, once there are more than two classes.</li>
+      <li>Strategy tabs are generated from whatever the backend actually computed — "Detect P0…P3" replaces the hardcoded "Detect positives / Rule out negatives" pair, which only ever made sense for two classes.</li>
+    </ul>
+  </footer>
+
+</div>
+
+<script>
+  var epochData = {
+    f1:  { label: "Best Macro-F1", epoch: 34 },
+    ll:  { label: "Best Log-Loss", epoch: 29 },
+    acc: { label: "Best Accuracy", epoch: 36 }
+  };
+  document.getElementById('epochTabs').addEventListener('click', function(e) {
+    var btn = e.target.closest('button');
+    if (!btn) return;
+    this.querySelectorAll('button').forEach(function(b){ b.classList.remove('active'); });
+    btn.classList.add('active');
+    var d = epochData[btn.dataset.epoch];
+    document.getElementById('epochTitle').innerHTML = d.label + ' <span class="car">— Epoch ' + d.epoch + '</span>';
+  });
+
+  var stratData = {
+    always:   { intent: '<strong>N/A</strong> — answers every row, no demur.', v: ['0.8880','0.8880','+0.0000','100.0%','0.00'], answered: 'Answered 2,400 / 2,400 (100.0%) — declined 0' },
+    balanced: { intent: '<strong>Balanced (default)</strong> — demur on rows where top-1 confidence is weak, regardless of which class it leans toward.', v: ['0.9142','0.8880','+0.0262','96.4%','0.42'], answered: 'Answered 2,314 / 2,400 (96.4%) — declined 86' },
+    p0:       { intent: '<strong>Detect P0</strong> — high recall on Critical tickets; may demur on ambiguous non-P0 rows to protect that recall.', v: ['0.9880','0.9000','+0.0880','91.2%','0.31'], answered: 'Answered 2,189 / 2,400 (91.2%) — declined 211' },
+    p1:       { intent: '<strong>Detect P1</strong> — high recall on High-priority tickets; may demur on rows ambiguous between P1 and its neighbors.', v: ['0.9410','0.8670','+0.0740','89.6%','0.36'], answered: 'Answered 2,150 / 2,400 (89.6%) — declined 250' },
+    p2:       { intent: '<strong>Detect P2</strong> — high recall on Medium tickets; the largest class, so demur volume is highest here.', v: ['0.9260','0.8830','+0.0430','88.1%','0.33'], answered: 'Answered 2,114 / 2,400 (88.1%) — declined 286' },
+    p3:       { intent: '<strong>Detect P3</strong> — high recall on Low-priority tickets; used to safely auto-close a queue.', v: ['0.9550','0.9120','+0.0430','93.0%','0.29'], answered: 'Answered 2,232 / 2,400 (93.0%) — declined 168' }
+  };
+  document.getElementById('stratTabs').addEventListener('click', function(e) {
+    var btn = e.target.closest('button');
+    if (!btn) return;
+    this.querySelectorAll('button').forEach(function(b){ b.classList.remove('active'); });
+    btn.classList.add('active');
+    var d = stratData[btn.dataset.strat];
+    document.getElementById('stratIntent').innerHTML = d.intent;
+    ['st-v1','st-v2','st-v3','st-v4','st-v5'].forEach(function(id, i){
+      document.getElementById(id).textContent = d.v[i];
+    });
+    document.getElementById('stratAnswered').textContent = d.answered;
+  });
+</script>
+</body>
+</html>

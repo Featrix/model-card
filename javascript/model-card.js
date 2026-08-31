@@ -12,8 +12,70 @@
 (function(global) {
   'use strict';
 
+  // Shared metric-key -> display-name lookup, used by the MODEL IDENTIFICATION hero cards
+  // and the MODEL DETAILS epoch tabs so multiclass checkpoint metrics (macro_f1, log_loss, ...)
+  // get the same human label wherever they show up.
+  var EPOCH_METRIC_LABELS = {
+    roc_auc: 'ROC-AUC', pr_auc: 'PR-AUC', macro_f1: 'Macro-F1', weighted_f1: 'Weighted-F1',
+    macro_auc_ovr: 'Macro-AUC (OvR)', log_loss: 'Log-Loss', accuracy: 'Accuracy', f1: 'F1', r2: 'R²'
+  };
+  function formatMetricName(key) {
+    if (!key) return '';
+    return EPOCH_METRIC_LABELS[key] || key.replace(/_/g, ' ').replace(/\b\w/g, function(c) { return c.toUpperCase(); });
+  }
+
+  // Shared by the main confusion matrix (Model Details) and the declined-rows breakdown
+  // (Selective Prediction) — one N×N heatmap component, reused wherever actual-vs-predicted
+  // (or would-have-predicted) class counts need showing.
+  function renderMatrixGrid(labels, matrix) {
+    var n = labels.length;
+    var maxDiag = 0, maxOffDiag = 0;
+    for (var i = 0; i < n; i++) {
+      for (var j = 0; j < n; j++) {
+        var v = (matrix[i] && matrix[i][j]) || 0;
+        if (i === j) { if (v > maxDiag) maxDiag = v; }
+        else if (v > maxOffDiag) { maxOffDiag = v; }
+      }
+    }
+    var cell = n <= 4 ? 56 : (n <= 6 ? 46 : 36);
+    var rowHeadW = 42;
+    var cmLabel = 'font-family: var(--fmc-mono); font-size: 11px; color: var(--fmc-slate);';
+
+    var html = '<div class="cm-block" style="display: flex;">';
+    html += '<div style="width: 16px; display: flex; align-items: center; justify-content: center; writing-mode: vertical-lr; transform: rotate(180deg); ' + cmLabel + '">Actual</div>';
+    html += '<div>';
+    html += '<div style="text-align: center; margin-left: ' + rowHeadW + 'px; margin-bottom: 4px; ' + cmLabel + '">Predicted</div>';
+    html += '<div style="display: flex; margin-left: ' + rowHeadW + 'px; margin-bottom: 3px;">';
+    for (var j0 = 0; j0 < n; j0++) {
+      html += '<div style="width: ' + cell + 'px; text-align: center; font-weight: 600; ' + cmLabel + '">' + labels[j0] + '</div>';
+    }
+    html += '</div>';
+
+    for (var i1 = 0; i1 < n; i1++) {
+      html += '<div style="display: flex; align-items: center; margin-bottom: 1px;">';
+      html += '<div style="width: ' + rowHeadW + 'px; text-align: right; padding-right: 6px; font-weight: 600; ' + cmLabel + '">' + labels[i1] + '</div>';
+      for (var j1 = 0; j1 < n; j1++) {
+        var val = (matrix[i1] && matrix[i1][j1]) || 0;
+        var cellStyle;
+        if (i1 === j1) {
+          var alpha = maxDiag > 0 ? Math.min(0.86, 0.30 + 0.56 * (val / maxDiag)) : 0.3;
+          var textColor = alpha >= 0.45 ? '#fff' : 'var(--fmc-good)';
+          cellStyle = 'background: rgba(31,138,76,' + alpha.toFixed(2) + '); color: ' + textColor + ';';
+        } else {
+          var oAlpha = (val === 0 || maxOffDiag === 0) ? 0 : Math.min(0.5, 0.06 + 0.44 * (val / maxOffDiag));
+          cellStyle = 'background: rgba(178,58,50,' + oAlpha.toFixed(2) + '); color: var(--fmc-bad);';
+        }
+        html += '<div class="cm-cell" style="width: ' + cell + 'px; height: ' + cell + 'px; display: flex; align-items: center; justify-content: center; ' + cellStyle + '">' + val + '</div>';
+      }
+      html += '</div>';
+    }
+    html += '</div>'; // inner column
+    html += '</div>'; // cm-block
+    return html;
+  }
+
   const FeatrixModelCard = {
-    VERSION: '1.16',
+    VERSION: '1.17',
     BUILD: 'dev',
 
     /**
@@ -52,29 +114,26 @@
      */
     getStatusColor: function(status) {
       var statusLower = (status || '').toLowerCase();
-      if (statusLower === 'done' || statusLower === 'ready') return '#28a745';
-      if (statusLower === 'training') return '#ffc107';
-      if (statusLower === 'failed') return '#dc3545';
-      return '#6c757d';
+      if (statusLower === 'done' || statusLower === 'ready') return 'var(--fmc-good)';
+      if (statusLower === 'training') return 'var(--fmc-warn)';
+      if (statusLower === 'failed') return 'var(--fmc-bad)';
+      return 'var(--fmc-slate)';
     },
 
     /**
      * Get color for quality assessment
      */
     getQualityColor: function(assessment) {
-      if (!assessment) return '#6c757d';
+      if (!assessment) return 'var(--fmc-slate)';
       var assessmentLower = assessment.toLowerCase();
-      if (assessmentLower === 'excellent') return '#28a745';
-      if (assessmentLower === 'good') return '#007bff';
-      if (assessmentLower === 'fair') return '#fff';
-      if (assessmentLower === 'poor') return '#fd7e14';
-      return '#6c757d';
+      if (assessmentLower === 'excellent') return 'var(--fmc-good)';
+      if (assessmentLower === 'good') return 'var(--fmc-brass)';
+      if (assessmentLower === 'fair') return 'var(--fmc-warn)';
+      if (assessmentLower === 'poor' || assessmentLower === 'bad') return 'var(--fmc-bad)';
+      return 'var(--fmc-slate)';
     },
 
     getQualityStyle: function(assessment) {
-      if (!assessment) return 'background-color: #6c757d;';
-      var assessmentLower = assessment.toLowerCase();
-      if (assessmentLower === 'fair') return 'background-color: #fff; color: #000; border: 1px solid #000;';
       return 'background-color: ' + this.getQualityColor(assessment) + ';';
     },
 
@@ -83,10 +142,10 @@
      */
     getSeverityColor: function(severity) {
       var severityLower = (severity || '').toLowerCase();
-      if (severityLower === 'high') return '#dc3545';
-      if (severityLower === 'moderate') return '#ffc107';
-      if (severityLower === 'low') return '#007bff';
-      return '#6c757d';
+      if (severityLower === 'high') return 'var(--fmc-bad)';
+      if (severityLower === 'moderate') return 'var(--fmc-warn)';
+      if (severityLower === 'low') return 'var(--fmc-slate)';
+      return 'var(--fmc-slate)';
     },
 
     /**
@@ -178,6 +237,47 @@
         prAucLift = bestPrAuc / prevalence;
       }
 
+      // Regression hero metrics (scalar targets) — best_r2 replaces ROC/PR-AUC entirely,
+      // those are classification-only and are always N/A for a regression target.
+      var bestR2 = null;
+      var bestRmse = null;
+      var bestNrmse = null;
+      var r2Skill = null;
+      if (be.best_r2 && be.best_r2.regression_display_metadata) {
+        var regMetrics = be.best_r2.regression_display_metadata.regression_metrics || {};
+        bestR2 = regMetrics.r2 ? regMetrics.r2.value : null;
+        bestRmse = regMetrics.rmse ? regMetrics.rmse.value : null;
+        bestNrmse = regMetrics.nrmse ? regMetrics.nrmse.value : null;
+        r2Skill = be.best_r2.regression_display_metadata.skill || null;
+      }
+      var isRegression = bestR2 !== null || bestRmse !== null;
+
+      // Multiclass hero metrics — for >2-class targets, best_epochs has no best_roc_auc/
+      // best_pr_auc (those are binary-only), it's keyed by whatever metric was actually
+      // optimized (best_accuracy, best_macro_f1, best_log_loss, ...). Without this, the
+      // hero cards fall through to the binary branch below and show a permanent N/A/N/A.
+      var mcAccuracy = null;
+      var mcHeadlineKey = null;
+      var mcHeadlineVal = null;
+      var isMulticlass = false;
+      if (!isRegression && bestRocAuc === null && bestPrAuc === null) {
+        var checkpointMetricMc = (data.training_optimization && data.training_optimization.checkpoint_metric) || null;
+        var mcEpochKey = (checkpointMetricMc && be['best_' + checkpointMetricMc]) ? 'best_' + checkpointMetricMc : null;
+        if (!mcEpochKey) {
+          mcEpochKey = Object.keys(be).filter(function(k) {
+            return k.charAt(0) !== '_' && k !== 'best_r2' && be[k];
+          })[0] || null;
+        }
+        if (mcEpochKey && be[mcEpochKey].classification_display_metadata) {
+          var mcMetrics = be[mcEpochKey].classification_display_metadata.classification_metrics || {};
+          mcAccuracy = mcMetrics.accuracy ? mcMetrics.accuracy.value : null;
+          mcHeadlineKey = (checkpointMetricMc && ('best_' + checkpointMetricMc) === mcEpochKey) ? checkpointMetricMc : mcEpochKey.substring(5);
+          if (mcHeadlineKey === 'accuracy') mcHeadlineKey = 'macro_f1';
+          mcHeadlineVal = mcMetrics[mcHeadlineKey] ? mcMetrics[mcHeadlineKey].value : null;
+          isMulticlass = mcAccuracy !== null || mcHeadlineVal !== null;
+        }
+      }
+
       // Map model type to display format
       var modelTypeDisplay = 'N/A';
       if (mi.model_type) {
@@ -188,7 +288,12 @@
           modelTypeDisplay = 'Foundational Embedding Space';
         } else if (modelTypeLower === 'single predictor' || modelTypeLower === 'sp') {
           if (targetTypeLower === 'set') {
-            modelTypeDisplay = 'Binary Classifier';
+            // 'set' covers both binary and multiclass targets — num_classes/class_labels (once
+            // the backend emits them) decide which; until then, fall back to whether the
+            // best_epochs data itself looks multiclass.
+            var numClasses = mi.num_classes || (Array.isArray(mi.class_labels) ? mi.class_labels.length : null);
+            var modelTypeIsMulticlass = numClasses !== null ? numClasses > 2 : isMulticlass;
+            modelTypeDisplay = modelTypeIsMulticlass ? 'Multiclass Classifier' : 'Binary Classifier';
           } else if (targetTypeLower === 'scalar') {
             modelTypeDisplay = 'Regression';
           } else {
@@ -212,7 +317,7 @@
       var phaseIndicator = '';
       if (training && phase) {
         var phaseDesc = phase === 'es' ? 'Phase 1/2: Training Foundation Model' : 'Phase 2/2: Training Predictor';
-        phaseIndicator = '<div style="margin-bottom: 15px; padding: 8px 14px; background: #fff8e1; border-left: 3px solid #ffc107; font-size: 13px; color: #6d4c00;">' + phaseDesc + '</div>';
+        phaseIndicator = '<div style="margin-bottom: 15px; padding: 8px 14px; background: var(--fmc-warn-bg); border-left: 3px solid var(--fmc-warn); border-radius: 0 4px 4px 0; font-size: 13px; color: var(--fmc-warn);">' + phaseDesc + '</div>';
       }
 
       // User intent callout
@@ -221,11 +326,11 @@
         var ui = mi.user_intent;
         var objectiveDisplay = (ui.objective || '').replace(/_/g, ' ').replace(/\b\w/g, function(c) { return c.toUpperCase(); });
         var sourceDisplay = ui.source ? ui.source.replace(/_/g, ' ') : '';
-        userIntentHtml = '<div style="margin-bottom:15px;padding:12px 16px;background:#ede7f6;border-left:3px solid #7b1fa2;display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;">' +
-          '<span style="font-size:11px;text-transform:uppercase;color:#7b1fa2;font-weight:bold;white-space:nowrap;">Objective</span>' +
-          '<span style="font-size:18px;font-weight:bold;color:#4a148c;">' + objectiveDisplay + '</span>' +
-          '<span style="font-size:12px;color:#7b1fa2;">' + (ui.task || '') + '</span>' +
-          (sourceDisplay ? '<span style="font-size:11px;color:#9c4dcc;margin-left:auto;">' + sourceDisplay + '</span>' : '') +
+        userIntentHtml = '<div style="margin-bottom:15px;padding:12px 16px;background:var(--fmc-brass-bg);border-left:3px solid var(--fmc-brass);border-radius:0 4px 4px 0;display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;">' +
+          '<span style="font-family:var(--fmc-mono);font-size:11px;text-transform:uppercase;letter-spacing:0.05em;color:var(--fmc-brass);font-weight:bold;white-space:nowrap;">Objective</span>' +
+          '<span style="font-size:18px;font-weight:bold;color:var(--fmc-brass-strong);">' + objectiveDisplay + '</span>' +
+          '<span style="font-size:12px;color:var(--fmc-brass);">' + (ui.task || '') + '</span>' +
+          (sourceDisplay ? '<span style="font-family:var(--fmc-mono);font-size:11px;color:var(--fmc-brass);margin-left:auto;">' + sourceDisplay + '</span>' : '') +
           '</div>';
       }
 
@@ -241,26 +346,58 @@
           if (plannedEpochs) {
             var pct = Math.min(100, Math.round((currentEpoch / plannedEpochs) * 100));
             epochText += ' / ' + plannedEpochs;
-            barHtml = '<div style="display: inline-block; width: 120px; height: 8px; background: #e0e0e0; border-radius: 4px; vertical-align: middle; margin-left: 10px;">' +
-                      '<div style="width: ' + pct + '%; height: 100%; background: #ffc107; border-radius: 4px;"></div></div>' +
-                      ' <span style="font-size: 11px; color: #999;">' + pct + '%</span>';
+            barHtml = '<div style="display: inline-block; width: 120px; height: 8px; background: var(--fmc-line); border-radius: 4px; vertical-align: middle; margin-left: 10px;">' +
+                      '<div style="width: ' + pct + '%; height: 100%; background: var(--fmc-warn); border-radius: 4px;"></div></div>' +
+                      ' <span style="font-family: var(--fmc-mono); font-size: 11px; color: var(--fmc-slate);">' + pct + '%</span>';
           }
-          epochProgress = '<div style="margin-top: 10px; font-size: 13px; color: #555;"><strong>' + epochText + '</strong>' + barHtml + '</div>';
+          epochProgress = '<div style="margin-top: 10px; font-size: 13px; color: var(--fmc-ink-soft);"><strong>' + epochText + '</strong>' + barHtml + '</div>';
         }
       }
 
-      // AUC hero cards (hidden during ES training)
+      // Hero cards (hidden during ES training): R²/RMSE for regression targets,
+      // Accuracy/[checkpoint metric] for multiclass targets, ROC-AUC/PR-AUC for binary
+      // classification targets.
       var aucCards = '';
-      if (!hideAucCards) {
+      if (!hideAucCards && isRegression) {
         aucCards = `
-                <div class="metric" style="background: #e3f2fd; border-color: #90caf9;">
-                    <div class="metric-label" style="color: #1976d2;">Best ROC-AUC</div>
-                    <div class="metric-value" style="font-size: 28px; color: #1565c0;">${bestRocAuc !== null ? bestRocAuc.toFixed(4) : 'N/A'}</div>
+                <div class="metric" style="background: var(--fmc-brass-bg); border-color: var(--fmc-brass-border);">
+                    <div class="metric-label" style="color: var(--fmc-brass-strong);">Best R²</div>
+                    <div class="metric-value" style="font-size: 28px; color: var(--fmc-brass-strong);">${bestR2 !== null ? bestR2.toFixed(4) : 'N/A'}</div>
                 </div>
-                <div class="metric" style="background: #e8f5e9; border-color: #a5d6a7;"${prevalence !== null ? ' title="Random baseline: ' + (prevalence * 100).toFixed(1) + '% (class prevalence)"' : ''}>
-                    <div class="metric-label" style="color: #388e3c;">Best PR-AUC</div>
-                    <div class="metric-value" style="font-size: 28px; color: #2e7d32;">${bestPrAuc !== null ? bestPrAuc.toFixed(4) : 'N/A'}${prAucLift !== null ? ' <span style="font-size: 14px; font-weight: normal;">[' + prAucLift.toFixed(1) + 'x]</span>' : ''}</div>
+                <div class="metric" style="background: var(--fmc-brass-bg); border-color: var(--fmc-brass-border);"${bestNrmse !== null ? ' title="NRMSE (RMSE / target σ): ' + bestNrmse.toFixed(3) + '"' : ''}>
+                    <div class="metric-label" style="color: var(--fmc-brass-strong);">Best RMSE</div>
+                    <div class="metric-value" style="font-size: 28px; color: var(--fmc-brass-strong);">${bestRmse !== null ? bestRmse.toFixed(4) : 'N/A'}</div>
                 </div>`;
+      } else if (!hideAucCards && isMulticlass) {
+        aucCards = `
+                <div class="metric" style="background: var(--fmc-brass-bg); border-color: var(--fmc-brass-border);">
+                    <div class="metric-label" style="color: var(--fmc-brass-strong);">Best Accuracy</div>
+                    <div class="metric-value" style="font-size: 28px; color: var(--fmc-brass-strong);">${mcAccuracy !== null ? (mcAccuracy * 100).toFixed(2) + '%' : 'N/A'}</div>
+                </div>
+                <div class="metric" style="background: var(--fmc-brass-bg); border-color: var(--fmc-brass-border);">
+                    <div class="metric-label" style="color: var(--fmc-brass-strong);">Best ${formatMetricName(mcHeadlineKey)}</div>
+                    <div class="metric-value" style="font-size: 28px; color: var(--fmc-brass-strong);">${mcHeadlineVal !== null ? mcHeadlineVal.toFixed(4) : 'N/A'}</div>
+                </div>`;
+      } else if (!hideAucCards) {
+        aucCards = `
+                <div class="metric" style="background: var(--fmc-brass-bg); border-color: var(--fmc-brass-border);">
+                    <div class="metric-label" style="color: var(--fmc-brass-strong);">Best ROC-AUC</div>
+                    <div class="metric-value" style="font-size: 28px; color: var(--fmc-brass-strong);">${bestRocAuc !== null ? bestRocAuc.toFixed(4) : 'N/A'}</div>
+                </div>
+                <div class="metric" style="background: var(--fmc-brass-bg); border-color: var(--fmc-brass-border);"${prevalence !== null ? ' title="Random baseline: ' + (prevalence * 100).toFixed(1) + '% (class prevalence)"' : ''}>
+                    <div class="metric-label" style="color: var(--fmc-brass-strong);">Best PR-AUC</div>
+                    <div class="metric-value" style="font-size: 28px; color: var(--fmc-brass-strong);">${bestPrAuc !== null ? bestPrAuc.toFixed(4) : 'N/A'}${prAucLift !== null ? ' <span style="font-size: 14px; font-weight: normal;">[' + prAucLift.toFixed(1) + 'x]</span>' : ''}</div>
+                </div>`;
+      }
+
+      // Skill verdict: "Beats raw-XGBoost", "Ties raw-XGBoost", etc. — the headline
+      // baseline-relative read on whether this regression model is actually good.
+      var skillBadgeHtml = '';
+      if (isRegression && r2Skill && r2Skill.text) {
+        var skillColor = r2Skill.tier === 'beats_xgb' ? 'var(--fmc-good)' :
+          (r2Skill.tier === 'ties_xgb' || r2Skill.tier === 'beats_lr') ? 'var(--fmc-brass-strong)' :
+          (r2Skill.tier === 'no_skill' || r2Skill.tier === 'below_baselines') ? 'var(--fmc-bad)' : 'var(--fmc-slate)';
+        skillBadgeHtml = '<div style="margin-top: 12px; font-size: 13px; font-weight: 600; color: ' + skillColor + ';">' + r2Skill.text + '</div>';
       }
 
       return `
@@ -280,7 +417,8 @@
                 </div>
                 ${aucCards}
             </div>
-            <div style="margin-top: 20px; padding-top: 15px; border-top: 1px solid #ddd; font-size: 12px; color: #666; line-height: 2;">
+            ${skillBadgeHtml}
+            <div style="margin-top: 20px; padding-top: 15px; border-top: 1px solid var(--fmc-line); font-family: var(--fmc-mono); font-size: 12px; color: var(--fmc-slate); line-height: 2;">
                 <span class="status-badge${(mi.status || '').toLowerCase() === 'training' ? ' training' : ''}" style="background-color: ${statusColor}; font-size: 11px; padding: 2px 8px;">${((mi.status || 'N/A').toLowerCase() === 'done' ? 'READY' : (mi.status || 'N/A').toUpperCase())}</span>
                 &nbsp;&nbsp;${mi.training_date || 'N/A'}
                 &nbsp;&nbsp;•&nbsp;&nbsp;<strong>Model:</strong> <code style="font-size: 11px;">${modelIdDisplay}</code>
@@ -289,7 +427,7 @@
                 ${mi.encoding_intent ? '&nbsp;&nbsp;•&nbsp;&nbsp;<strong>Encoding:</strong> ' + mi.encoding_intent : ''}
                 ${epochProgress}
             </div>${sphereSessionId ? `
-            <div style="margin-top: 20px; padding-top: 15px; border-top: 1px solid #ddd;">
+            <div style="margin-top: 20px; padding-top: 15px; border-top: 1px solid var(--fmc-line);">
                 <div class="sphere-thumbnail" data-session-id="${sphereSessionId}" title="Click to expand">
                     <div class="sphere-thumbnail-inner" id="featrix-sphere-thumb"></div>
                     <div class="sphere-thumbnail-label">Embedding Space</div>
@@ -340,14 +478,14 @@
                 </tr>
                 <tr>
                     <td style="font-weight: bold; white-space: nowrap;">Predictor</td>
-                    <td style="color: #388e3c; font-weight: bold; white-space: nowrap;">Yes</td>
+                    <td style="color: var(--fmc-good); font-weight: bold; white-space: nowrap;">Yes</td>
                     <td style="font-size: 18px; font-weight: bold;">${spRows.toLocaleString()}</td>
                     <td style="font-size: 18px; font-weight: bold;">${spLayers ? this.formatLargeNumber(spLayers) : 'N/A'}</td>
                     <td style="font-size: 18px; font-weight: bold;">${spParams ? this.formatLargeNumber(spParams) : 'N/A'}</td>
                 </tr>
                 <tr>
                     <td style="font-weight: bold; white-space: nowrap;">Foundation</td>
-                    <td style="color: #666; white-space: nowrap;">No</td>
+                    <td style="color: var(--fmc-slate); white-space: nowrap;">No</td>
                     <td style="font-size: 18px; font-weight: bold;">${(es.num_rows || 0).toLocaleString()}</td>
                     <td style="font-size: 18px; font-weight: bold;">${this.formatLargeNumber(es.num_layers)}</td>
                     <td style="font-size: 18px; font-weight: bold;">${this.formatLargeNumber(es.num_parameters)}</td>
@@ -382,15 +520,7 @@
       var td = data.training_dataset || {};
       var ci = data.class_imbalance || {};
 
-      var minClass = ci.minority_class || '1';
-      var majClass = ci.majority_class || '0';
-      var train0 = (ci.train_distribution && (ci.train_distribution[majClass] || ci.train_distribution['0'])) || 0;
-      var train1 = (ci.train_distribution && (ci.train_distribution[minClass] || ci.train_distribution['1'])) || 0;
-      var val0 = (ci.val_distribution && (ci.val_distribution[majClass] || ci.val_distribution['0'])) || 0;
-      var val1 = (ci.val_distribution && (ci.val_distribution[minClass] || ci.val_distribution['1'])) || 0;
-      var totalTrain = train0 + train1;
-      var totalVal = val0 + val1;
-      var totalSamples = ci.total_samples || td.train_rows || (totalTrain + totalVal) || 0;
+      if (td.total_rows === undefined && !ci.class_distribution && !ci.train_distribution) return '';
 
       var html = `
     <details class="section" open>
@@ -398,8 +528,88 @@
         <div class="section-content">
       `;
 
-      // Class distribution table
-      if (ci.class_distribution || ci.train_distribution) {
+      // Base row/feature counts -- always present (ES, SP, regression,
+      // multiclass alike), unlike the class-imbalance breakdown below,
+      // which only exists for classification SP cards. An Embedding Space
+      // card has no class_imbalance at all, so without this the whole
+      // section used to render nothing even though total_rows/train_rows/
+      // etc. were sitting right there in training_dataset the whole time.
+      if (td.total_rows !== undefined) {
+        html += '<div class="grid" style="grid-template-columns: repeat(4, 1fr); margin-bottom: 20px;">';
+        html += '<div class="metric"><div class="metric-label">Total Rows</div><div class="metric-value">' + (td.total_rows || 0).toLocaleString() + '</div></div>';
+        html += '<div class="metric"><div class="metric-label">Train Rows</div><div class="metric-value">' + (td.train_rows || 0).toLocaleString() + '</div></div>';
+        html += '<div class="metric"><div class="metric-label">Val Rows</div><div class="metric-value">' + (td.val_rows || 0).toLocaleString() + '</div></div>';
+        html += '<div class="metric"><div class="metric-label">Features</div><div class="metric-value">' + (td.total_features !== undefined ? td.total_features : 'N/A') + '</div></div>';
+        html += '</div>';
+        if (td.validation_notes && td.validation_notes.length > 0) {
+          html += '<ul style="margin: 0 0 15px 0; padding-left: 20px; color: var(--fmc-slate); font-size: 13px;">';
+          for (var vni = 0; vni < td.validation_notes.length; vni++) {
+            html += '<li>' + td.validation_notes[vni] + '</li>';
+          }
+          html += '</ul>';
+        }
+      }
+
+      if (Array.isArray(ci.class_distribution) && ci.class_distribution.length > 0) {
+        // N-class distribution table — one column per class, driven by class_distribution
+        // rather than assuming exactly two (minority/majority). Array shape only: some existing
+        // cards already send class_distribution as a legacy {label: count} dict, which the
+        // branch below still handles exactly as before.
+        var classes = ci.class_distribution;
+        var trainDist = ci.train_distribution || {};
+        var valDist = ci.val_distribution || {};
+        var totalTrain = 0, totalVal = 0, totalAll = 0;
+
+        html += '<table><tr><th style="width: 150px;"></th>';
+        classes.forEach(function(c) {
+          var label = c.display_name ? (c.label + ' — ' + c.display_name) : c.label;
+          html += '<th style="text-align: right;">' + label + '</th>';
+        });
+        html += '<th style="text-align: right;">Total</th></tr>';
+
+        html += '<tr><td><strong>Train</strong></td>';
+        classes.forEach(function(c) {
+          var v = trainDist[c.label] || 0;
+          totalTrain += v;
+          html += '<td style="text-align: right;">' + v.toLocaleString() + '</td>';
+        });
+        html += '<td style="text-align: right; font-weight: bold;">' + totalTrain.toLocaleString() + '</td></tr>';
+
+        html += '<tr><td><strong>Validation</strong></td>';
+        classes.forEach(function(c) {
+          var v = valDist[c.label] || 0;
+          totalVal += v;
+          html += '<td style="text-align: right;">' + v.toLocaleString() + '</td>';
+        });
+        html += '<td style="text-align: right; font-weight: bold;">' + totalVal.toLocaleString() + '</td></tr>';
+
+        html += '<tr><td style="border-top: 2px solid var(--fmc-ink);"><strong>Total</strong></td>';
+        classes.forEach(function(c) {
+          var v = c.count != null ? c.count : ((trainDist[c.label] || 0) + (valDist[c.label] || 0));
+          totalAll += v;
+          html += '<td style="text-align: right; font-weight: bold; border-top: 2px solid var(--fmc-ink);">' + v.toLocaleString() + '</td>';
+        });
+        html += '<td style="text-align: right; font-weight: bold; border-top: 2px solid var(--fmc-ink);">' + totalAll.toLocaleString() + '</td></tr></table>';
+
+        var pctKnown = classes.every(function(c) { return c.pct != null; });
+        if (pctKnown && classes.length > 0) {
+          var minC = classes.reduce(function(a, b) { return b.pct < a.pct ? b : a; });
+          var maxC = classes.reduce(function(a, b) { return b.pct > a.pct ? b : a; });
+          html += '<div style="margin-top: 15px; color: var(--fmc-slate); font-size: 13px;">' +
+            'Class balance: <strong>' + minC.label + '</strong> is ' + minC.pct.toFixed(1) + '% of data, <strong>' + maxC.label + '</strong> is ' + maxC.pct.toFixed(1) + '%</div>';
+        }
+      } else if (ci.class_distribution || ci.train_distribution) {
+        // Legacy binary distribution table (also covers the legacy dict-shaped class_distribution).
+        var minClass = ci.minority_class || '1';
+        var majClass = ci.majority_class || '0';
+        var train0 = (ci.train_distribution && (ci.train_distribution[majClass] || ci.train_distribution['0'])) || 0;
+        var train1 = (ci.train_distribution && (ci.train_distribution[minClass] || ci.train_distribution['1'])) || 0;
+        var val0 = (ci.val_distribution && (ci.val_distribution[majClass] || ci.val_distribution['0'])) || 0;
+        var val1 = (ci.val_distribution && (ci.val_distribution[minClass] || ci.val_distribution['1'])) || 0;
+        var totalTrainBin = train0 + train1;
+        var totalValBin = val0 + val1;
+        var totalSamples = ci.total_samples || td.train_rows || (totalTrainBin + totalValBin) || 0;
+
         html += `
             <table>
                 <tr>
@@ -412,25 +622,127 @@
                     <td><strong>Train</strong></td>
                     <td style="text-align: right;">${train1.toLocaleString()}</td>
                     <td style="text-align: right;">${train0.toLocaleString()}</td>
-                    <td style="text-align: right; font-weight: bold;">${totalTrain.toLocaleString()}</td>
+                    <td style="text-align: right; font-weight: bold;">${totalTrainBin.toLocaleString()}</td>
                 </tr>
                 <tr>
                     <td><strong>Validation</strong></td>
                     <td style="text-align: right;">${val1.toLocaleString()}</td>
                     <td style="text-align: right;">${val0.toLocaleString()}</td>
-                    <td style="text-align: right; font-weight: bold;">${totalVal.toLocaleString()}</td>
+                    <td style="text-align: right; font-weight: bold;">${totalValBin.toLocaleString()}</td>
                 </tr>
                 <tr>
-                    <td style="border-top: 2px solid #333;"><strong>Total</strong></td>
-                    <td style="text-align: right; font-weight: bold; border-top: 2px solid #333;">${(ci.minority_class_count || (train1 + val1)).toLocaleString()}</td>
-                    <td style="text-align: right; font-weight: bold; border-top: 2px solid #333;">${(ci.majority_class_count || (train0 + val0)).toLocaleString()}</td>
-                    <td style="text-align: right; font-weight: bold; border-top: 2px solid #333;">${totalSamples.toLocaleString()}</td>
+                    <td style="border-top: 2px solid var(--fmc-ink);"><strong>Total</strong></td>
+                    <td style="text-align: right; font-weight: bold; border-top: 2px solid var(--fmc-ink);">${(ci.minority_class_count || (train1 + val1)).toLocaleString()}</td>
+                    <td style="text-align: right; font-weight: bold; border-top: 2px solid var(--fmc-ink);">${(ci.majority_class_count || (train0 + val0)).toLocaleString()}</td>
+                    <td style="text-align: right; font-weight: bold; border-top: 2px solid var(--fmc-ink);">${totalSamples.toLocaleString()}</td>
                 </tr>
             </table>
-            <div style="margin-top: 15px; color: #666; font-size: 13px;">
+            <div style="margin-top: 15px; color: var(--fmc-slate); font-size: 13px;">
                 Imbalance ratio: <strong>${ci.imbalance_ratio || 'N/A'}:1</strong> (minority class is ${((ci.minority_class_count || 0) / totalSamples * 100).toFixed(1)}% of data)
             </div>
         `;
+      }
+
+      html += '</div></details>';
+      return html;
+    },
+
+    /**
+     * Render per-column feature inventory + statistics. feature_inventory
+     * (name/type/encoder/unique values) and column_statistics
+     * (predictability/mutual information) exist on every card -- ES and
+     * SP alike -- but neither was wired into renderHTML before this, so
+     * this data was computed and written by the backend and then silently
+     * never shown.
+     */
+    renderFeatureInventory: function(data) {
+      var fi = data.feature_inventory;
+      if (!fi || fi.length === 0) return '';
+      var stats = data.column_statistics || {};
+
+      var html = `
+    <details class="section" open>
+        <summary>FEATURES</summary>
+        <div class="section-content">
+            <table>
+                <tr>
+                    <th style="text-align: left;">Column</th>
+                    <th style="text-align: left;">Type</th>
+                    <th style="text-align: left;">Encoder</th>
+                    <th style="text-align: right;">Unique Values</th>
+                    <th style="text-align: right;">Predictability</th>
+                </tr>
+      `;
+
+      for (var i = 0; i < fi.length; i++) {
+        var f = fi[i] || {};
+        var s = stats[f.name] || {};
+        var typeDisplay = (f.type || 'N/A').replace(/^ColumnType\./, '');
+        var predictability = (typeof s.predictability_pct === 'number') ? s.predictability_pct.toFixed(1) + '%' : 'N/A';
+        html += '<tr>';
+        html += '<td style="font-family: var(--fmc-mono);">' + (f.name || 'N/A') + '</td>';
+        html += '<td>' + typeDisplay + '</td>';
+        html += '<td>' + (f.encoder_type || 'N/A') + '</td>';
+        html += '<td style="text-align: right;">' + (f.unique_values !== undefined && f.unique_values !== null ? f.unique_values.toLocaleString() : 'N/A') + '</td>';
+        html += '<td style="text-align: right; font-weight: bold;">' + predictability + '</td>';
+        html += '</tr>';
+      }
+
+      html += '</table></div></details>';
+      return html;
+    },
+
+    /**
+     * Render model architecture + training configuration. Both exist on ES
+     * and SP cards but were never rendered before this -- MODEL STACK only
+     * shows aggregate layer/parameter counts, not the underlying
+     * hyperparameters or the reasoning behind them.
+     */
+    renderModelArchitecture: function(data) {
+      var ma = data.model_architecture;
+      var tc = data.training_configuration;
+      if (!ma && !tc) return '';
+
+      var html = `
+    <details class="section" open>
+        <summary>MODEL ARCHITECTURE</summary>
+        <div class="section-content">
+      `;
+
+      if (ma) {
+        html += '<div class="grid" style="grid-template-columns: repeat(4, 1fr); margin-bottom: 15px;">';
+        html += '<div class="metric"><div class="metric-label">d_model</div><div class="metric-value">' + (ma.d_model !== undefined ? ma.d_model : 'N/A') + '</div></div>';
+        html += '<div class="metric"><div class="metric-label">Transformer Layers</div><div class="metric-value">' + (ma.transformer_layers !== undefined ? ma.transformer_layers : 'N/A') + '</div></div>';
+        html += '<div class="metric"><div class="metric-label">Attention Heads</div><div class="metric-value">' + (ma.attention_heads !== undefined ? ma.attention_heads : 'N/A') + '</div></div>';
+        html += '<div class="metric"><div class="metric-label">FFN Factor</div><div class="metric-value">' + (ma.dim_feedforward_factor !== undefined ? ma.dim_feedforward_factor : 'N/A') + '</div></div>';
+        html += '</div>';
+        if (ma.loss_function) {
+          html += '<div style="margin-bottom: 10px; font-size: 13px;"><strong>Loss Function:</strong> ' + ma.loss_function + '</div>';
+        }
+        if (ma.architecture_reasoning && ma.architecture_reasoning.length > 0) {
+          html += '<details class="show-more"><summary>Architecture reasoning</summary><ul style="margin: 10px 0 0 0; padding-left: 20px; color: var(--fmc-slate); font-size: 13px;">';
+          for (var ari = 0; ari < ma.architecture_reasoning.length; ari++) {
+            html += '<li>' + ma.architecture_reasoning[ari] + '</li>';
+          }
+          html += '</ul></details>';
+        }
+      }
+
+      if (tc) {
+        html += '<table style="margin-top: 15px;">';
+        html += '<tr><td style="width: 200px;"><strong>Epochs</strong></td><td>' + (tc.best_epoch !== undefined ? tc.best_epoch : 'N/A') + ' best of ' + (tc.epochs_total !== undefined ? tc.epochs_total : 'N/A') + '</td></tr>';
+        html += '<tr><td><strong>Optimizer</strong></td><td>' + (tc.optimizer || 'N/A') + '</td></tr>';
+        if (tc.batch_size !== undefined && tc.batch_size !== null) {
+          html += '<tr><td><strong>Batch Size</strong></td><td>' + tc.batch_size + '</td></tr>';
+        }
+        if (tc.learning_rate !== undefined && tc.learning_rate !== null) {
+          html += '<tr><td><strong>Learning Rate</strong></td><td>' + tc.learning_rate + '</td></tr>';
+        }
+        if (tc.dropout_schedule) {
+          var ds = tc.dropout_schedule;
+          html += '<tr><td><strong>Dropout Schedule</strong></td><td>' + (ds.initial !== undefined ? ds.initial : 'N/A') + ' → ' + (ds.final !== undefined ? ds.final : 'N/A') + '</td></tr>';
+        }
+        html += '</table>';
       }
 
       html += '</div></details>';
@@ -544,13 +856,14 @@
         var html = '<table>';
         html += '<tr><th>Metric</th><th>Value</th></tr>';
 
-        var metricOrder = ['accuracy', 'auc', 'pr_auc', 'f1'];
+        var metricOrder = ['accuracy', 'auc', 'pr_auc', 'f1', 'macro_f1', 'weighted_f1', 'macro_auc_ovr', 'log_loss'];
+        var METRIC_LABELS = { macro_f1: 'Macro F1', weighted_f1: 'Weighted F1', macro_auc_ovr: 'Macro AUC (OvR)', log_loss: 'Log Loss' };
         for (var i = 0; i < metricOrder.length; i++) {
           var key = metricOrder[i];
           var m = metrics[key];
           if (!m) continue;
           html += '<tr>';
-          html += '<td style="text-transform: uppercase; font-weight: bold;">' + key.replace('_', ' ') + '</td>';
+          html += '<td style="text-transform: uppercase; font-weight: bold;">' + (METRIC_LABELS[key] || key.replace('_', ' ')) + '</td>';
           var displayVal = 'N/A';
           if (typeof m.value === 'number') {
             displayVal = key === 'accuracy' ? (m.value * 100).toFixed(2) + '%' : m.value.toFixed(4);
@@ -562,8 +875,83 @@
         return html;
       }
 
-      function renderConfusionMatrix(cm) {
+      function fmt3(v) { return (typeof v === 'number') ? v.toFixed(3) : '—'; }
+
+      function renderPerClassMetrics(cmetrics) {
+        if (!cmetrics || !cmetrics.per_class || !cmetrics.per_class.length) return '';
+        var html = '<p class="confusion-title" style="margin-top: 0;">Per-Class Metrics</p>';
+        html += '<table><tr><th>Class</th><th>Precision</th><th>Recall</th><th>F1</th><th>Support</th></tr>';
+        cmetrics.per_class.forEach(function(c) {
+          var name = c.display_name ? (c.label + ' — ' + c.display_name) : c.label;
+          html += '<tr><td>' + name + '</td>' +
+            '<td>' + fmt3(c.precision) + '</td>' +
+            '<td>' + fmt3(c.recall) + '</td>' +
+            '<td>' + fmt3(c.f1) + '</td>' +
+            '<td>' + (c.support != null ? c.support.toLocaleString() : '—') + '</td></tr>';
+        });
+        var avg = cmetrics.averaging;
+        if (avg) {
+          var support = (avg.support != null) ? avg.support.toLocaleString() : '—';
+          if (avg.macro) {
+            html += '<tr style="border-top: 1px solid var(--fmc-line);">' +
+              '<td style="font-weight: bold; color: var(--fmc-ink-soft);">Macro avg</td>' +
+              '<td style="font-weight: bold;">' + fmt3(avg.macro.precision) + '</td>' +
+              '<td style="font-weight: bold;">' + fmt3(avg.macro.recall) + '</td>' +
+              '<td style="font-weight: bold;">' + fmt3(avg.macro.f1) + '</td>' +
+              '<td style="font-weight: bold;">' + support + '</td></tr>';
+          }
+          if (avg.weighted) {
+            html += '<tr><td style="font-weight: bold; color: var(--fmc-ink-soft);">Weighted avg</td>' +
+              '<td style="font-weight: bold;">' + fmt3(avg.weighted.precision) + '</td>' +
+              '<td style="font-weight: bold;">' + fmt3(avg.weighted.recall) + '</td>' +
+              '<td style="font-weight: bold;">' + fmt3(avg.weighted.f1) + '</td>' +
+              '<td style="font-weight: bold;">' + support + '</td></tr>';
+          }
+        }
+        html += '</table>';
+        return html;
+      }
+
+      function renderPerClassAuc(cmetrics) {
+        if (!cmetrics || !cmetrics.per_class_auc_ovr || !cmetrics.per_class_auc_ovr.length) return '';
+        var html = '<details class="show-more" style="margin-top: 14px;">';
+        html += '<summary>Show per-class AUC (one-vs-rest)</summary>';
+        html += '<div style="margin-top: 10px; max-width: 320px;"><table>';
+        html += '<tr><th>Class</th><th>AUC (OvR)</th></tr>';
+        cmetrics.per_class_auc_ovr.forEach(function(c) {
+          html += '<tr><td>' + c.label + '</td><td>' + (c.auc != null ? c.auc.toFixed(4) : '—') + '</td></tr>';
+        });
+        var macroAuc = cmetrics.macro_auc_ovr && typeof cmetrics.macro_auc_ovr.value === 'number' ? cmetrics.macro_auc_ovr.value : null;
+        if (macroAuc != null) {
+          html += '<tr style="border-top: 1px solid var(--fmc-line);">' +
+            '<td style="font-weight: bold; color: var(--fmc-ink-soft);">Macro AUC</td>' +
+            '<td style="font-weight: bold;">' + macroAuc.toFixed(4) + '</td></tr>';
+        }
+        html += '</table></div></details>';
+        return html;
+      }
+
+      function renderConfusionMatrixNxN(labels, matrix, classificationMetrics) {
+        var html = '<div class="confusion-wrapper">';
+        html += '<h4 class="confusion-title">Confusion Matrix</h4>';
+        html += '<div class="confusion-layout">';
+
+        html += renderMatrixGrid(labels, matrix);
+
+        var sideHtml = renderPerClassMetrics(classificationMetrics);
+        if (sideHtml) {
+          html += '<div style="flex: 1; min-width: 300px;">' + sideHtml + renderPerClassAuc(classificationMetrics) + '</div>';
+        }
+
+        html += '</div></div>';
+        return html;
+      }
+
+      function renderConfusionMatrix(cm, classificationMetrics) {
         if (!cm) return '';
+        if (cm.class_labels && cm.matrix) {
+          return renderConfusionMatrixNxN(cm.class_labels, cm.matrix, classificationMetrics);
+        }
         var tn = cm.tn || 0, fp = cm.fp || 0, fn = cm.fn || 0, tp = cm.tp || 0;
         var totalPos = tp + fn;
         var totalNeg = tn + fp;
@@ -578,18 +966,19 @@
         html += '<div class="confusion-layout">';
 
         // Matrix - POS first (standard convention) - pure inline styles, no table
+        var cmLabel = 'font-family: var(--fmc-mono); font-size: 11px; color: var(--fmc-slate);';
         html += '<div style="display: inline-block;">';
-        html += '<div style="text-align: center; font-size: 11px; color: #666; margin-left: 80px; margin-bottom: 2px;">Predicted</div>';
-        html += '<div style="display: flex; margin-left: 80px; margin-bottom: 2px;"><div style="width: 70px; text-align: center; font-size: 11px; color: #666;">Pos</div><div style="width: 70px; text-align: center; font-size: 11px; color: #666;">Neg</div></div>';
+        html += '<div style="text-align: center; margin-left: 80px; margin-bottom: 4px; ' + cmLabel + '">Predicted</div>';
+        html += '<div style="display: flex; margin-left: 80px; margin-bottom: 3px;"><div style="width: 70px; text-align: center; ' + cmLabel + '">Pos</div><div style="width: 70px; text-align: center; ' + cmLabel + '">Neg</div></div>';
         html += '<div style="display: flex; align-items: center; margin-bottom: 2px;">';
-        html += '<div style="width: 40px; font-size: 11px; color: #666; text-align: center; writing-mode: vertical-lr; transform: rotate(180deg);">Actual</div>';
-        html += '<div style="width: 38px; font-size: 11px; color: #666; text-align: right; padding-right: 4px;">Pos</div>';
+        html += '<div style="width: 40px; text-align: center; writing-mode: vertical-lr; transform: rotate(180deg); ' + cmLabel + '">Actual</div>';
+        html += '<div style="width: 38px; text-align: right; padding-right: 4px; font-weight: 600; ' + cmLabel + '">Pos</div>';
         html += '<div class="cm-cell cm-correct" style="width: 70px; height: 55px; display: flex; align-items: center; justify-content: center;">' + tp + '</div>';
         html += '<div class="cm-cell cm-error" style="width: 70px; height: 55px; display: flex; align-items: center; justify-content: center;">' + fn + '</div>';
         html += '</div>';
         html += '<div style="display: flex; align-items: center;">';
         html += '<div style="width: 40px;"></div>';
-        html += '<div style="width: 38px; font-size: 11px; color: #666; text-align: right; padding-right: 4px;">Neg</div>';
+        html += '<div style="width: 38px; text-align: right; padding-right: 4px; font-weight: 600; ' + cmLabel + '">Neg</div>';
         html += '<div class="cm-cell cm-error" style="width: 70px; height: 55px; display: flex; align-items: center; justify-content: center;">' + fp + '</div>';
         html += '<div class="cm-cell cm-correct" style="width: 70px; height: 55px; display: flex; align-items: center; justify-content: center;">' + tn + '</div>';
         html += '</div>';
@@ -608,13 +997,56 @@
         return html;
       }
 
+      var REGRESSION_METRIC_ORDER = ['r2', 'nrmse', 'rmse', 'mae', 'spearman', 'smape', 'median_ae', 'max_error'];
+      var REGRESSION_METRIC_LABELS = {
+        r2: 'R²', nrmse: 'NRMSE (σ-normalized error)', rmse: 'RMSE', mae: 'MAE',
+        spearman: 'Spearman ρ (rank correlation)', smape: 'sMAPE', median_ae: 'Median AE', max_error: 'Max Error'
+      };
+
+      function renderRegressionMetricsTable(regMetrics, skill) {
+        if (!regMetrics) return '';
+        var html = '<table>';
+        html += '<tr><th>Metric</th><th>Value</th><th>Quality</th></tr>';
+        for (var i = 0; i < REGRESSION_METRIC_ORDER.length; i++) {
+          var key = REGRESSION_METRIC_ORDER[i];
+          var m = regMetrics[key];
+          if (!m || typeof m.value !== 'number') continue;
+          var displayVal = key === 'smape' ? m.value.toFixed(2) + '%' : m.value.toFixed(4);
+          html += '<tr>';
+          html += '<td style="font-weight: bold;">' + (REGRESSION_METRIC_LABELS[key] || key) + '</td>';
+          html += '<td style="font-size: 18px; font-weight: bold;">' + displayVal + '</td>';
+          html += '<td>' + (m.quality ? '<span class="quality-badge" style="background-color: ' + self.getQualityColor(m.quality) + '; font-size: 11px; padding: 2px 8px;">' + m.quality + '</span>' : '—') + '</td>';
+          html += '</tr>';
+        }
+        html += '</table>';
+        if (skill && skill.text) {
+          var skillColor = skill.tier === 'beats_xgb' ? 'var(--fmc-good)' :
+            (skill.tier === 'ties_xgb' || skill.tier === 'beats_lr') ? 'var(--fmc-brass-strong)' :
+            (skill.tier === 'no_skill' || skill.tier === 'below_baselines') ? 'var(--fmc-bad)' : 'var(--fmc-slate)';
+          html += '<div style="margin-top: 12px; font-size: 13px; font-weight: 600; color: ' + skillColor + ';">' + skill.text + '</div>';
+        }
+        return html;
+      }
+
       function renderEpochSection(title, epochData) {
         if (!epochData) return '';
+
+        // Regression (scalar target): R²/RMSE/MAE table + skill verdict — no confusion
+        // matrix, no per-row correct/wrong (that tracking is classification-only today).
+        if (epochData.regression_display_metadata) {
+          var rdm = epochData.regression_display_metadata;
+          var rHtml = '<div class="epoch-section">';
+          rHtml += '<h3 class="epoch-title">' + title + ' — Epoch ' + (epochData.epoch || rdm.epoch || 'N/A') + '</h3>';
+          rHtml += renderRegressionMetricsTable(rdm.regression_metrics, rdm.skill);
+          rHtml += '</div>';
+          return rHtml;
+        }
+
         var cdm = epochData.classification_display_metadata || {};
         var html = '<div class="epoch-section">';
         html += '<h3 class="epoch-title">' + title + ' — Epoch ' + (epochData.epoch || cdm.epoch || 'N/A') + '</h3>';
         html += renderMetricsTable(cdm.classification_metrics);
-        html += renderConfusionMatrix(cdm.confusion_matrix);
+        html += renderConfusionMatrix(cdm.confusion_matrix, cdm.classification_metrics);
 
         // Per-row tracking summary
         var prt = cdm.per_row_tracking;
@@ -622,26 +1054,26 @@
           html += '<details class="show-more">';
           html += '<summary>Show per-row tracking</summary>';
           if (prt.this_epoch) {
-            html += '<h4 style="margin: 15px 0 10px 0; font-size: 13px; font-weight: bold; color: #333;">This Epoch</h4>';
+            html += '<h4 style="margin: 15px 0 10px 0; font-family: var(--fmc-mono); font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; font-weight: bold; color: var(--fmc-ink-soft);">This Epoch</h4>';
             html += '<table style="width: auto;">';
             html += '<tr><th>Correct</th><th>Wrong</th><th>Accuracy</th></tr>';
-            html += '<tr><td style="font-size: 18px; font-weight: bold; color: #388e3c;">' + prt.this_epoch.correct + '</td>';
-            html += '<td style="font-size: 18px; font-weight: bold; color: #d32f2f;">' + prt.this_epoch.wrong + '</td>';
-            html += '<td style="font-size: 18px; font-weight: bold;">' + prt.this_epoch.accuracy_pct.toFixed(1) + '%</td></tr>';
+            html += '<tr><td style="font-family: var(--fmc-mono); font-variant-numeric: tabular-nums; font-size: 18px; font-weight: bold; color: var(--fmc-good);">' + prt.this_epoch.correct + '</td>';
+            html += '<td style="font-family: var(--fmc-mono); font-variant-numeric: tabular-nums; font-size: 18px; font-weight: bold; color: var(--fmc-bad);">' + prt.this_epoch.wrong + '</td>';
+            html += '<td style="font-family: var(--fmc-mono); font-variant-numeric: tabular-nums; font-size: 18px; font-weight: bold;">' + prt.this_epoch.accuracy_pct.toFixed(1) + '%</td></tr>';
             html += '</table>';
           }
         }
         if (prt && prt.cumulative_categories) {
           var cc = prt.cumulative_categories;
-          html += '<h4 style="margin: 15px 0 10px 0; font-size: 13px; font-weight: bold; color: #333;">Cumulative</h4>';
+          html += '<h4 style="margin: 15px 0 10px 0; font-family: var(--fmc-mono); font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; font-weight: bold; color: var(--fmc-ink-soft);">Cumulative</h4>';
           html += '<table style="width: auto;">';
           html += '<tr><th>Never Wrong</th><th>Rarely</th><th>Sometimes</th><th>Frequently</th><th>Always Wrong</th></tr>';
           html += '<tr>';
-          html += '<td style="font-weight: bold; color: #388e3c;">' + cc.never_wrong + '</td>';
-          html += '<td style="font-weight: bold; color: #689f38;">' + cc.rarely_wrong + '</td>';
-          html += '<td style="font-weight: bold; color: #ffa000;">' + cc.sometimes_wrong + '</td>';
-          html += '<td style="font-weight: bold; color: #f57c00;">' + cc.frequently_wrong + '</td>';
-          html += '<td style="font-weight: bold; color: #d32f2f;">' + cc.always_wrong + '</td>';
+          html += '<td style="font-family: var(--fmc-mono); font-variant-numeric: tabular-nums; font-weight: bold; color: var(--fmc-good);">' + cc.never_wrong + '</td>';
+          html += '<td style="font-family: var(--fmc-mono); font-variant-numeric: tabular-nums; font-weight: bold; color: #6b8f2e;">' + cc.rarely_wrong + '</td>';
+          html += '<td style="font-family: var(--fmc-mono); font-variant-numeric: tabular-nums; font-weight: bold; color: var(--fmc-warn);">' + cc.sometimes_wrong + '</td>';
+          html += '<td style="font-family: var(--fmc-mono); font-variant-numeric: tabular-nums; font-weight: bold; color: #c2660c;">' + cc.frequently_wrong + '</td>';
+          html += '<td style="font-family: var(--fmc-mono); font-variant-numeric: tabular-nums; font-weight: bold; color: var(--fmc-bad);">' + cc.always_wrong + '</td>';
           html += '</tr></table>';
         }
         if (prt && (prt.this_epoch || prt.cumulative_categories)) {
@@ -651,27 +1083,49 @@
         return html;
       }
 
-      var html = `
-    <details class="section" open>
-        <summary>MODEL DETAILS</summary>
-        <div class="section-content">
-            <div class="epoch-tabs">
-                <button class="epoch-tab" data-tab="pr-auc">Best PR-AUC</button>
-                <button class="epoch-tab active" data-tab="roc-auc">Best ROC-AUC</button>
-            </div>
-            <div class="epoch-tab-content" data-tab="pr-auc">
-      `;
+      // Epoch tabs are generated from whatever best_epochs.* keys are actually present —
+      // not hardcoded to PR-AUC/ROC-AUC — so multiclass models (best_macro_f1, best_log_loss, ...)
+      // get their own tabs automatically. training_optimization.checkpoint_metric decides which
+      // tab opens by default; PR-AUC/ROC-AUC keep their historical left-to-right order for old cards.
+      var epochKeys = Object.keys(be).filter(function(k) {
+        return k.charAt(0) !== '_' && be[k] && typeof be[k] === 'object';
+      });
+      if (epochKeys.length === 0) return '';
 
-      html += renderEpochSection('Best PR-AUC', be.best_pr_auc);
+      var ORDER_PREFERENCE = ['best_pr_auc', 'best_roc_auc'];
+      epochKeys.sort(function(a, b) {
+        var ia = ORDER_PREFERENCE.indexOf(a), ib = ORDER_PREFERENCE.indexOf(b);
+        if (ia === -1 && ib === -1) return 0;
+        if (ia === -1) return 1;
+        if (ib === -1) return -1;
+        return ia - ib;
+      });
 
-      html += `
-            </div>
-            <div class="epoch-tab-content active" data-tab="roc-auc">
-      `;
+      var checkpointMetric = (data.training_optimization && data.training_optimization.checkpoint_metric) || null;
+      var preferredKey = checkpointMetric ? ('best_' + checkpointMetric) : null;
+      var activeKey = (preferredKey && be[preferredKey]) ? preferredKey : (be.best_roc_auc ? 'best_roc_auc' : epochKeys[0]);
 
-      html += renderEpochSection('Best ROC-AUC', be.best_roc_auc);
+      var html = '<details class="section" open><summary>MODEL DETAILS</summary><div class="section-content">';
 
-      html += '</div></div></details>';
+      if (checkpointMetric) {
+        html += '<div class="opt-strip"><span class="opt-label">Optimized for</span> <span class="fmc-badge-brass">' + formatMetricName(checkpointMetric).toUpperCase() + '</span></div>';
+      }
+
+      html += '<div class="epoch-tabs">';
+      epochKeys.forEach(function(key) {
+        var label = 'Best ' + formatMetricName(key.replace(/^best_/, ''));
+        html += '<button class="epoch-tab' + (key === activeKey ? ' active' : '') + '" data-tab="' + key + '">' + label + '</button>';
+      });
+      html += '</div>';
+
+      epochKeys.forEach(function(key) {
+        var label = 'Best ' + formatMetricName(key.replace(/^best_/, ''));
+        html += '<div class="epoch-tab-content' + (key === activeKey ? ' active' : '') + '" data-tab="' + key + '">';
+        html += renderEpochSection(label, be[key]);
+        html += '</div>';
+      });
+
+      html += '</div></details>';
       return html;
     },
 
@@ -690,7 +1144,7 @@
 
       // Main description if available
       if (to.optimization_description) {
-        html += '<div style="margin-bottom: 20px; padding: 12px 15px; background: #e3f2fd; border-left: 3px solid #1976d2; font-size: 14px;">';
+        html += '<div style="margin-bottom: 20px; padding: 12px 15px; background: var(--fmc-brass-bg); border-left: 3px solid var(--fmc-brass); border-radius: 0 4px 4px 0; font-size: 14px;">';
         html += '<strong>Strategy:</strong> ' + to.optimization_description;
         html += '</div>';
       }
@@ -769,9 +1223,9 @@
       var notes = data.data_processing_notes;
       if (!notes || notes.length === 0) return '';
 
-      var severityColor = { info: '#1976d2', warning: '#f57c00', critical: '#c62828' };
-      var severityBg   = { info: '#e3f2fd', warning: '#fff3e0', critical: '#ffebee' };
-      var severityBorder = { info: '#90caf9', warning: '#ffcc02', critical: '#ef9a9a' };
+      var severityColor = { info: 'var(--fmc-brass)', warning: 'var(--fmc-warn)', critical: 'var(--fmc-bad)' };
+      var severityBg   = { info: 'var(--fmc-brass-bg)', warning: 'var(--fmc-warn-bg)', critical: 'var(--fmc-bad-bg)' };
+      var severityBorder = { info: 'var(--fmc-brass-border)', warning: 'var(--fmc-warn-border)', critical: 'var(--fmc-bad-border)' };
 
       var categoryLabel = {
         column_dropped:   'Column Dropped',
@@ -784,7 +1238,7 @@
 
       var html = '<details class="section" open><summary>DATA PROCESSING NOTES</summary><div class="section-content">';
       html += '<table style="width:100%; border-collapse:collapse; font-size:13px;">';
-      html += '<thead><tr style="border-bottom:2px solid #000;">';
+      html += '<thead><tr style="border-bottom:2px solid var(--fmc-ink);">';
       html += '<th style="text-align:left; padding:6px 10px; width:110px;">Severity</th>';
       html += '<th style="text-align:left; padding:6px 10px; width:140px;">Category</th>';
       html += '<th style="text-align:left; padding:6px 10px;">Message</th>';
@@ -794,26 +1248,26 @@
       notes.forEach(function(note) {
         var sev = (note.severity || 'info').toLowerCase();
         var cat = (note.category || '').toLowerCase();
-        var color  = severityColor[sev]  || '#555';
-        var bg     = severityBg[sev]     || '#f5f5f5';
-        var border = severityBorder[sev] || '#ccc';
+        var color  = severityColor[sev]  || 'var(--fmc-slate)';
+        var bg     = severityBg[sev]     || 'var(--fmc-mist-2)';
+        var border = severityBorder[sev] || 'var(--fmc-line)';
         var catText = categoryLabel[cat] || note.category || 'Note';
 
         var affected = [];
         if (note.columns && note.columns.length > 0) {
           affected.push(note.columns.map(function(c) {
-            return '<code style="font-size:11px; background:#eee; padding:1px 4px; border-radius:3px;">' + c + '</code>';
+            return '<code style="font-size:11px; background:var(--fmc-mist-2); padding:1px 4px; border-radius:3px;">' + c + '</code>';
           }).join(' '));
         }
         if (note.rows_affected != null) {
           affected.push(note.rows_affected.toLocaleString() + ' rows');
         }
 
-        html += '<tr style="border-bottom:1px solid #eee; background:' + bg + ';">';
+        html += '<tr style="border-bottom:1px solid var(--fmc-line-soft); background:' + bg + ';">';
         html += '<td style="padding:8px 10px; vertical-align:top;">';
-        html += '<span style="background:' + color + '; color:#fff; font-size:10px; font-weight:bold; padding:2px 7px; border-radius:3px; text-transform:uppercase;">' + sev + '</span>';
+        html += '<span style="background:' + color + '; color:#fff; font-family:var(--fmc-mono); font-size:10px; font-weight:bold; padding:2px 7px; border-radius:3px; text-transform:uppercase; letter-spacing:0.03em;">' + sev + '</span>';
         html += '</td>';
-        html += '<td style="padding:8px 10px; vertical-align:top; color:#444; font-size:12px;">' + catText + '</td>';
+        html += '<td style="padding:8px 10px; vertical-align:top; color:var(--fmc-ink-soft); font-size:12px;">' + catText + '</td>';
         html += '<td style="padding:8px 10px; vertical-align:top;">' + (note.message || '') + '</td>';
         html += '<td style="padding:8px 10px; vertical-align:top; font-size:12px;">' + (affected.join('<br>') || '—') + '</td>';
         html += '</tr>';
@@ -840,20 +1294,42 @@
         'predict_probabilities': 'Calibrated probabilities \u2014 no operating point'
       };
 
-      // Strategy groups: each group tries new name then legacy name
-      var STRATEGY_GROUPS = [
-        { keys: ['everything', 'best_always_answers'], label: 'Always answer' },
-        { keys: ['only_when_sure', 'best_balanced_may_demur'], label: 'Balanced demur' },
-        { keys: ['only_on_strong_positives', 'best_detects_positives_may_demur'], label: 'Detect positives' },
-        { keys: ['only_on_strong_negatives', 'best_rules_out_negatives_may_demur'], label: 'Rule out negatives' }
+      // Strategy tabs are generated from whatever keys are actually present under sp.strategies —
+      // not a fixed set — so per-class strategies (detect_class_P0, ...) show up automatically.
+      // Legacy key names get their historical labels and left-to-right order; anything else falls
+      // back to entry.label (if the backend supplied one) or a humanized version of the key.
+      var LEGACY_STRATEGY_LABELS = {
+        everything: 'Always answer', best_always_answers: 'Always answer',
+        only_when_sure: 'Balanced demur', best_balanced_may_demur: 'Balanced demur',
+        only_on_strong_positives: 'Detect positives', best_detects_positives_may_demur: 'Detect positives',
+        only_on_strong_negatives: 'Rule out negatives', best_rules_out_negatives_may_demur: 'Rule out negatives'
+      };
+      var LEGACY_STRATEGY_ORDER = [
+        'everything', 'best_always_answers',
+        'only_when_sure', 'best_balanced_may_demur',
+        'only_on_strong_positives', 'best_detects_positives_may_demur',
+        'only_on_strong_negatives', 'best_rules_out_negatives_may_demur'
       ];
+      function humanizeKey(key) {
+        return key.replace(/_/g, ' ').replace(/\b\w/g, function(c) { return c.toUpperCase(); });
+      }
+
+      function pickPrimaryMetric(entry) {
+        if (entry.target_class && entry.covered_recall_target_class != null) {
+          return { label: 'Recall (' + entry.target_class + ')', covered: entry.covered_recall_target_class, full: entry.full_recall_target_class, lift: null };
+        }
+        if (entry.covered_macro_f1 != null || entry.full_macro_f1 != null) {
+          return { label: 'Macro-F1', covered: entry.covered_macro_f1, full: entry.full_macro_f1, lift: entry.macro_f1_lift };
+        }
+        return { label: 'AUC', covered: entry.covered_auc, full: entry.full_auc, lift: entry.auc_lift };
+      }
 
       function getDemurBadge(value, baseline) {
-        if (value === null || value === undefined) return { text: 'N/A \u2014 answers everything', bg: '#6c757d', fg: 'white' };
-        if (value === 1.0) return { text: 'PERFECT \u2713', bg: '#28a745', fg: 'white' };
-        if (value > baseline + 0.05) return { text: 'BETTER THAN RANDOM', bg: '#28a745', fg: 'white' };
-        if (Math.abs(value - baseline) <= 0.05) return { text: '\u2248 RANDOM', bg: '#ffc107', fg: '#000' };
-        return { text: 'ANTI-ALIGNED \u26a0', bg: '#dc3545', fg: 'white' };
+        if (value === null || value === undefined) return { text: 'N/A \u2014 answers everything', bg: 'var(--fmc-slate)', fg: 'white' };
+        if (value === 1.0) return { text: 'PERFECT \u2713', bg: 'var(--fmc-good)', fg: 'white' };
+        if (value > baseline + 0.05) return { text: 'BETTER THAN RANDOM', bg: 'var(--fmc-good)', fg: 'white' };
+        if (Math.abs(value - baseline) <= 0.05) return { text: '\u2248 RANDOM', bg: 'var(--fmc-warn)', fg: 'white' };
+        return { text: 'ANTI-ALIGNED \u26a0', bg: 'var(--fmc-bad)', fg: 'white' };
       }
 
       function fmtAuc(v) { return (v != null) ? v.toFixed(4) : '\u2014'; }
@@ -870,8 +1346,6 @@
         var source = entry.source || null;
         var calMethod = entry.calibration_method || null;
         var isNoop = intent === 'rank' || intent === 'predict_probabilities';
-        var isAlwaysAnswers = dec === null || dec === undefined;
-        var badge = getDemurBadge(dec, baseline);
 
         var n_covered = entry.n_covered || 0;
         var n_total = entry.n_total || 0;
@@ -881,8 +1355,16 @@
         var fp = entry.n_demurred_false_positives || 0;
         var fn = entry.n_demurred_false_negatives || 0;
         var tn = entry.n_demurred_true_negatives || 0;
-        var auc_lift = entry.auc_lift;
-        var liftColor = (auc_lift == null || auc_lift >= 0) ? '#28a745' : '#dc3545';
+
+        // isAlwaysAnswers is really "did this strategy decline anything" — n_demurred is the
+        // ground truth for that. demur_error_capture is a binary-only headline metric on top;
+        // its absence (e.g. per-class "detect X" strategies) doesn't mean nothing was declined.
+        var isAlwaysAnswers = n_demurred === 0;
+        var hasDemurBadge = dec !== null && dec !== undefined;
+        var badge = (isAlwaysAnswers || hasDemurBadge) ? getDemurBadge(hasDemurBadge ? dec : null, baseline) : null;
+
+        var pm = pickPrimaryMetric(entry);
+        var liftColor = (pm.lift == null || pm.lift >= 0) ? 'var(--fmc-good)' : 'var(--fmc-bad)';
 
         var covered_precision = entry.covered_precision != null ? entry.covered_precision : null;
         var covered_recall = entry.covered_recall != null ? entry.covered_recall : null;
@@ -901,83 +1383,99 @@
         var showFallbackBanner = entry.intent_feasible === false && CONTRACT_INTENTS.indexOf(intent || '') !== -1;
         var sourceTag = '';
         if (source) {
-          var sourceColor = source === 'per_epoch' ? '#e65100' : '#2e7d32';
-          var sourceBg = source === 'per_epoch' ? '#fff3e0' : '#e8f5e9';
-          var sourceBorder = source === 'per_epoch' ? '#ffcc02' : '#a5d6a7';
-          sourceTag = ' <span style="padding:2px 6px;background:' + sourceBg + ';border:1px solid ' + sourceBorder + ';font-size:11px;color:' + sourceColor + ';">' +
+          var sourceColor = source === 'per_epoch' ? 'var(--fmc-warn)' : 'var(--fmc-good)';
+          var sourceBg = source === 'per_epoch' ? 'var(--fmc-warn-bg)' : 'var(--fmc-good-bg)';
+          var sourceBorder = source === 'per_epoch' ? 'var(--fmc-warn-border)' : 'var(--fmc-good-border)';
+          sourceTag = ' <span style="padding:2px 6px;background:' + sourceBg + ';border:1px solid ' + sourceBorder + ';border-radius:3px;font-family:var(--fmc-mono);font-size:11px;color:' + sourceColor + ';">' +
             source.replace(/_/g, ' ') + (calMethod ? ' \u00b7 ' + calMethod : '') + '</span>';
         }
 
-        var html = '<div style="margin-bottom:12px;font-size:12px;color:#555;">' +
-          '<strong>Optimized for:</strong> ' + intentLabel + sourceTag + '</div>';
+        var html = '<div class="opt-strip"><span class="opt-label">Optimized for</span> <strong>' + intentLabel + '</strong>' + sourceTag + '</div>';
 
         if (showFallbackBanner) {
-          html += '<div style="margin-bottom:15px;padding:12px 16px;background:#fff8e1;border-left:4px solid #ffc107;font-size:13px;">' +
-            '<div style="font-weight:bold;margin-bottom:6px;color:#5d4037;">\u26a0 Operating point fell back to max-AUC</div>' +
-            '<div style="margin-bottom:8px;color:#5d4037;">This model was trained with intent=<strong>' + (intent || '') + '</strong>, but no operating point in the validation sweep could meet that floor. The framework returned the highest-AUC fallback instead.</div>' +
-            '<div style="margin-bottom:8px;color:#5d4037;"><strong>What this means for production:</strong><ul style="margin:4px 0 0 18px;padding:0;">' +
+          html += '<div style="margin-bottom:15px;padding:12px 16px;background:var(--fmc-warn-bg);border-left:4px solid var(--fmc-warn);border-radius:0 4px 4px 0;font-size:13px;">' +
+            '<div style="font-weight:bold;margin-bottom:6px;color:var(--fmc-ink-soft);">\u26a0 Operating point fell back to max-AUC</div>' +
+            '<div style="margin-bottom:8px;color:var(--fmc-ink-soft);">This model was trained with intent=<strong>' + (intent || '') + '</strong>, but no operating point in the validation sweep could meet that floor. The framework returned the highest-AUC fallback instead.</div>' +
+            '<div style="margin-bottom:8px;color:var(--fmc-ink-soft);"><strong>What this means for production:</strong><ul style="margin:4px 0 0 18px;padding:0;">' +
             '<li>The headline metrics describe the fallback point, not the contract you asked for.</li>' +
             '<li>Deploying this model will not deliver the requested floor.</li>' +
             '<li>To honor your contract: lower your floor, retrain, or accept that the data does not support it.</li>' +
             '</ul></div>' +
-            (entry.intent_feasibility_reason ? '<div style="color:#5d4037;font-style:italic;">' + entry.intent_feasibility_reason + '</div>' : '') +
+            (entry.intent_feasibility_reason ? '<div style="color:var(--fmc-ink-soft);font-style:italic;">' + entry.intent_feasibility_reason + '</div>' : '') +
             '</div>';
         }
 
         if (source === 'per_epoch') {
-          html += '<div style="margin-bottom:12px;padding:8px 12px;background:#fff3e0;border-left:3px solid #ff9800;font-size:12px;color:#e65100;">' +
+          html += '<div style="margin-bottom:12px;padding:8px 12px;background:var(--fmc-warn-bg);border-left:3px solid var(--fmc-warn);border-radius:0 4px 4px 0;font-size:12px;color:var(--fmc-warn);">' +
             'Operating point computed on uncalibrated probabilities \u2014 calibration did not run.</div>';
         }
 
         if (isNoop) {
-          return html + '<div style="padding:15px;background:#f5f5f5;border:1px solid #ddd;font-size:13px;color:#555;">' +
+          return html + '<div style="padding:15px;background:var(--fmc-mist-2);border:1px solid var(--fmc-line);border-radius:4px;font-size:13px;color:var(--fmc-ink-soft);">' +
             'This model is meant for scoring, not operating-point decisions \u2014 use raw <code>predict_proba()</code> output.</div>';
         }
 
         // Demur headline
-        var headlineHtml;
+        var headlineHtml = '';
         if (isAlwaysAnswers) {
-          headlineHtml = '<span class="quality-badge" style="background-color:#6c757d;color:white;">' + badge.text + '</span>';
-        } else {
-          headlineHtml = '<span style="font-size:22px;font-weight:bold;">' + dec.toFixed(4) + '</span>' +
+          headlineHtml = '<span class="quality-badge" style="background-color:' + badge.bg + ';color:' + badge.fg + ';">' + badge.text + '</span>';
+        } else if (hasDemurBadge) {
+          headlineHtml = '<span style="font-family:var(--fmc-mono);font-variant-numeric:tabular-nums;font-size:22px;font-weight:bold;">' + dec.toFixed(4) + '</span>' +
             ' <span class="quality-badge" style="background-color:' + badge.bg + ';color:' + badge.fg + ';">' + badge.text + '</span>' +
-            ' <span style="color:#666;font-size:12px;">vs ' + baseline.toFixed(2) + ' random</span>';
+            ' <span style="color:var(--fmc-slate);font-family:var(--fmc-mono);font-size:12px;">vs ' + baseline.toFixed(2) + ' random</span>';
+        } else if (pm.lift != null) {
+          headlineHtml = '<span style="font-family:var(--fmc-mono);font-variant-numeric:tabular-nums;font-size:22px;font-weight:bold;color:' + liftColor + ';">' +
+            (pm.lift >= 0 ? '+' : '') + pm.lift.toFixed(4) + '</span>' +
+            ' <span style="color:var(--fmc-slate);font-size:12px;">' + pm.label + ' lift vs full</span>';
         }
-        html += '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:15px;">' + headlineHtml + '</div>';
+        if (headlineHtml) {
+          html += '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:15px;">' + headlineHtml + '</div>';
+        }
 
         // Metrics grid
         var gridCols = extraMetricLabel ? 6 : 5;
-        html += '<div class="grid" style="grid-template-columns:repeat(' + gridCols + ',1fr);margin-bottom:15px;">' +
-          '<div class="metric"><div class="metric-label">Covered AUC</div><div class="metric-value" style="font-size:18px;">' + fmtAuc(entry.covered_auc) + '</div></div>' +
+        var liftDisplay = pm.lift != null ? ((pm.lift >= 0 ? '+' : '') + pm.lift.toFixed(4)) : '\u2014';
+        html += '<div class="grid" style="grid-template-columns:repeat(' + gridCols + ',1fr);margin-bottom:' + (entry.confidence_threshold_basis ? '4px' : '15px') + ';">' +
+          '<div class="metric"><div class="metric-label">Covered ' + pm.label + '</div><div class="metric-value" style="font-size:18px;">' + fmtAuc(pm.covered) + '</div></div>' +
           (extraMetricLabel ? '<div class="metric"><div class="metric-label">' + extraMetricLabel + '</div><div class="metric-value" style="font-size:18px;">' + extraMetricValue + '</div></div>' : '') +
-          '<div class="metric"><div class="metric-label">Full AUC</div><div class="metric-value" style="font-size:18px;">' + fmtAuc(entry.full_auc) + '</div></div>' +
-          '<div class="metric"><div class="metric-label">AUC Lift</div><div class="metric-value" style="font-size:18px;color:' + liftColor + ';">' + (auc_lift != null ? (auc_lift >= 0 ? '+' : '') + auc_lift.toFixed(4) : '\u2014') + '</div></div>' +
+          '<div class="metric"><div class="metric-label">Full ' + pm.label + '</div><div class="metric-value" style="font-size:18px;">' + fmtAuc(pm.full) + '</div></div>' +
+          '<div class="metric"><div class="metric-label">' + pm.label + ' Lift</div><div class="metric-value" style="font-size:18px;color:' + liftColor + ';">' + liftDisplay + '</div></div>' +
           '<div class="metric"><div class="metric-label">Coverage</div><div class="metric-value" style="font-size:18px;">' + fmtPct(coverage) + '</div></div>' +
           '<div class="metric"><div class="metric-label">Threshold</div><div class="metric-value" style="font-size:18px;">' + fmtThreshold(entry.confidence_threshold) + '</div></div>' +
           '</div>';
 
-        // 2×2 declined rows
-        if (!isAlwaysAnswers && n_demurred > 0) {
-          var colH = 'style="color:#666;font-weight:normal;font-size:11px;text-transform:uppercase;padding:4px 12px;text-align:center;"';
-          var rowL = 'style="color:#666;font-size:11px;text-transform:uppercase;padding:4px 12px;white-space:nowrap;"';
-          var cellNorm = 'style="border:1px solid #ddd;background:#f5f5f5;padding:10px 18px;text-align:center;font-weight:bold;font-size:16px;min-width:80px;"';
-          var cellHl = 'style="border:1px solid #c8e6c9;background:#e8f5e9;padding:10px 18px;text-align:center;font-weight:bold;font-size:16px;color:#2e7d32;min-width:80px;"';
+        if (entry.confidence_threshold_basis === 'max_softmax_probability') {
+          html += '<p style="font-size:11.5px;color:var(--fmc-slate);margin:0 0 15px;">Threshold is on max predicted-class probability (top-1 confidence) \u2014 a single &ldquo;positive-class score&rdquo; doesn\u2019t exist once there are more than two classes.</p>';
+        }
+
+        // Declined rows — reuse the shared N×N matrix when the backend supplies one; otherwise
+        // fall back to the legacy binary 2×2.
+        if (!isAlwaysAnswers && entry.declined_matrix && entry.declined_matrix.class_labels && entry.declined_matrix.matrix) {
           html += '<div style="margin-bottom:15px;">' +
-            '<h4 style="margin:0 0 10px 0;font-size:13px;font-weight:bold;color:#333;">Declined rows \u2014 what they would have been</h4>' +
+            '<h4 style="margin:0 0 10px 0;font-family:var(--fmc-mono);font-size:12px;font-weight:bold;text-transform:uppercase;letter-spacing:0.04em;color:var(--fmc-ink-soft);">Declined rows — what they would have been</h4>' +
+            renderMatrixGrid(entry.declined_matrix.class_labels, entry.declined_matrix.matrix) +
+            '</div>';
+        } else if (!isAlwaysAnswers && n_demurred > 0) {
+          var colH = 'style="color:var(--fmc-slate);font-family:var(--fmc-mono);font-weight:600;font-size:10.5px;text-transform:uppercase;letter-spacing:0.04em;padding:4px 12px;text-align:center;"';
+          var rowL = 'style="color:var(--fmc-slate);font-family:var(--fmc-mono);font-size:10.5px;text-transform:uppercase;letter-spacing:0.04em;padding:4px 12px;white-space:nowrap;"';
+          var cellNorm = 'style="border:1px solid var(--fmc-line);background:var(--fmc-mist-2);padding:10px 18px;text-align:center;font-family:var(--fmc-mono);font-variant-numeric:tabular-nums;font-weight:bold;font-size:16px;min-width:80px;"';
+          var cellHl = 'style="border:1px solid var(--fmc-good-border);background:var(--fmc-good-bg);padding:10px 18px;text-align:center;font-family:var(--fmc-mono);font-variant-numeric:tabular-nums;font-weight:bold;font-size:16px;color:var(--fmc-good);min-width:80px;"';
+          html += '<div style="margin-bottom:15px;">' +
+            '<h4 style="margin:0 0 10px 0;font-family:var(--fmc-mono);font-size:12px;font-weight:bold;text-transform:uppercase;letter-spacing:0.04em;color:var(--fmc-ink-soft);">Declined rows \u2014 what they would have been</h4>' +
             '<table style="width:auto;">' +
             '<tr><th></th><th ' + colH + '>Actual +</th><th ' + colH + '>Actual \u2212</th></tr>' +
             '<tr><td ' + rowL + '>Would predict +</td>' +
-            '<td ' + cellNorm + '>' + tp + '<br><span style="font-size:10px;font-weight:normal;color:#888;">thrown away</span></td>' +
-            '<td ' + cellHl + '>' + fp + '<br><span style="font-size:10px;font-weight:normal;color:#388e3c;">error hidden \u2713</span></td></tr>' +
+            '<td ' + cellNorm + '>' + tp + '<br><span style="font-family:var(--fmc-sans);font-size:10px;font-weight:normal;color:var(--fmc-slate);">thrown away</span></td>' +
+            '<td ' + cellHl + '>' + fp + '<br><span style="font-family:var(--fmc-sans);font-size:10px;font-weight:normal;color:var(--fmc-good);">error hidden \u2713</span></td></tr>' +
             '<tr><td ' + rowL + '>Would predict \u2212</td>' +
-            '<td ' + cellHl + '>' + fn + '<br><span style="font-size:10px;font-weight:normal;color:#388e3c;">error hidden \u2713</span></td>' +
-            '<td ' + cellNorm + '>' + tn + '<br><span style="font-size:10px;font-weight:normal;color:#888;">thrown away</span></td></tr>' +
+            '<td ' + cellHl + '>' + fn + '<br><span style="font-family:var(--fmc-sans);font-size:10px;font-weight:normal;color:var(--fmc-good);">error hidden \u2713</span></td>' +
+            '<td ' + cellNorm + '>' + tn + '<br><span style="font-family:var(--fmc-sans);font-size:10px;font-weight:normal;color:var(--fmc-slate);">thrown away</span></td></tr>' +
             '</table></div>';
         }
 
-        html += '<div style="color:#555;font-size:13px;">Answered ' +
-          n_covered.toLocaleString() + '/' + n_total.toLocaleString() +
-          ' (' + fmtPct(coverage) + ') \u2014 declined ' + n_demurred.toLocaleString() + '</div>';
+        html += '<div style="color:var(--fmc-ink-soft);font-size:13px;">Answered ' +
+          '<span style="font-family:var(--fmc-mono);font-variant-numeric:tabular-nums;">' + n_covered.toLocaleString() + '/' + n_total.toLocaleString() +
+          ' (' + fmtPct(coverage) + ')</span> \u2014 declined <span style="font-family:var(--fmc-mono);font-variant-numeric:tabular-nums;">' + n_demurred.toLocaleString() + '</span></div>';
 
         return html;
       }
@@ -988,15 +1486,22 @@
         html += '<h3 class="epoch-title">Summary</h3>' + renderSPEntry(sp.summary);
       }
 
-      // Strategy tabs
+      // Strategy tabs — generated from whatever keys are actually present under sp.strategies.
       if (sp.strategies) {
-        var availableGroups = STRATEGY_GROUPS.map(function(g) {
-          var foundKey = null;
-          for (var i = 0; i < g.keys.length; i++) {
-            if (sp.strategies[g.keys[i]]) { foundKey = g.keys[i]; break; }
-          }
-          return foundKey ? { label: g.label, key: foundKey } : null;
-        }).filter(function(g) { return g !== null; });
+        var stratKeys = Object.keys(sp.strategies).filter(function(k) {
+          return k.charAt(0) !== '_' && sp.strategies[k];
+        });
+        stratKeys.sort(function(a, b) {
+          var ia = LEGACY_STRATEGY_ORDER.indexOf(a), ib = LEGACY_STRATEGY_ORDER.indexOf(b);
+          if (ia === -1 && ib === -1) return 0;
+          if (ia === -1) return 1;
+          if (ib === -1) return -1;
+          return ia - ib;
+        });
+        var availableGroups = stratKeys.map(function(key) {
+          var label = sp.strategies[key].label || LEGACY_STRATEGY_LABELS[key] || humanizeKey(key);
+          return { label: label, key: key };
+        });
 
         if (availableGroups.length > 0) {
           if (sp.summary) html += '<div style="margin-top:25px;">';
@@ -1024,7 +1529,7 @@
             '<td>' + (h.coverage != null ? (h.coverage * 100).toFixed(1) + '%' : '\u2014') + '</td>' +
             '<td>' + (h.covered_auc != null ? h.covered_auc.toFixed(4) : '\u2014') + '</td>' +
             '<td>' + (h.demur_error_capture != null ? h.demur_error_capture.toFixed(4) : 'N/A') + '</td>' +
-            '<td style="color:#888;font-size:12px;">' + (h.demur_random_baseline != null ? h.demur_random_baseline.toFixed(2) : '\u2014') + '</td>' +
+            '<td style="color:var(--fmc-slate);font-family:var(--fmc-mono);font-size:12px;">' + (h.demur_random_baseline != null ? h.demur_random_baseline.toFixed(2) : '\u2014') + '</td>' +
             '</tr>';
         });
         html += '</tbody></table></div>';
@@ -1154,20 +1659,22 @@
         });
       }
 
-      // Epoch tab switching
-      var epochTabs = modelCard.querySelectorAll('.epoch-tab');
+      // Epoch tab switching — scoped to exclude .sp-strategy-tab, which shares the .epoch-tab
+      // class for styling but has its own data-sp-tab attribute and its own handler below.
+      var epochTabs = modelCard.querySelectorAll('.epoch-tab:not(.sp-strategy-tab)');
       epochTabs.forEach(function(tab) {
         tab.addEventListener('click', function() {
           var tabId = this.getAttribute('data-tab');
           var container = this.closest('.section-content');
 
           // Deactivate all tabs and content
-          container.querySelectorAll('.epoch-tab').forEach(function(t) { t.classList.remove('active'); });
-          container.querySelectorAll('.epoch-tab-content').forEach(function(c) { c.classList.remove('active'); });
+          container.querySelectorAll('.epoch-tab:not(.sp-strategy-tab)').forEach(function(t) { t.classList.remove('active'); });
+          container.querySelectorAll('.epoch-tab-content:not(.sp-strategy-content)').forEach(function(c) { c.classList.remove('active'); });
 
           // Activate clicked tab and corresponding content
           this.classList.add('active');
-          container.querySelector('.epoch-tab-content[data-tab="' + tabId + '"]').classList.add('active');
+          var target = container.querySelector('.epoch-tab-content:not(.sp-strategy-content)[data-tab="' + tabId + '"]');
+          if (target) target.classList.add('active');
         });
       });
 
@@ -1273,12 +1780,12 @@
 <div class="featrix-model-card">
   <style>
     .featrix-mc-generating { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 60px 40px; text-align: center; }
-    .featrix-mc-spinner { width: 48px; height: 48px; border: 4px solid #e0e0e0; border-top-color: #1565c0; border-radius: 50%; animation: featrix-spin 0.9s linear infinite; margin-bottom: 24px; }
+    .featrix-mc-spinner { width: 48px; height: 48px; border: 4px solid #dde0e5; border-top-color: #8a5a1e; border-radius: 50%; animation: featrix-spin 0.9s linear infinite; margin-bottom: 24px; }
     @keyframes featrix-spin { to { transform: rotate(360deg); } }
-    .featrix-mc-generating h2 { font-size: 18px; font-weight: 600; color: #333; margin-bottom: 8px; }
-    .featrix-mc-generating p { font-size: 14px; color: #666; margin-bottom: 4px; }
-    .featrix-mc-countdown { font-size: 13px; color: #999; margin-top: 16px; }
-    .featrix-mc-giveup { font-size: 13px; color: #999; margin-top: 16px; }
+    .featrix-mc-generating h2 { font-family: ui-monospace, 'SF Mono', 'Cascadia Code', 'Roboto Mono', Menlo, Consolas, monospace; font-size: 17px; font-weight: 700; color: #14171c; margin-bottom: 8px; }
+    .featrix-mc-generating p { font-size: 14px; color: #454b56; margin-bottom: 4px; }
+    .featrix-mc-countdown { font-size: 13px; color: #6b7280; margin-top: 16px; }
+    .featrix-mc-giveup { font-size: 13px; color: #6b7280; margin-top: 16px; }
   </style>
   <div class="featrix-mc-generating" id="featrix-generating-state">
     <div class="featrix-mc-spinner"></div>
@@ -1384,6 +1891,8 @@
         this.renderSelectivePrediction(modelCardJson),
         this.renderTrainingOptimization(modelCardJson),
         this.renderTrainingDataset(modelCardJson),
+        this.renderFeatureInventory(modelCardJson),
+        this.renderModelArchitecture(modelCardJson),
         this.renderDataProcessingNotes(modelCardJson)
       ].join('');
       
@@ -1391,57 +1900,88 @@
       return `
 <div class="featrix-model-card">
     <style>
-        .featrix-model-card * { margin: 0; padding: 0; box-sizing: border-box; color: #000; }
-        .featrix-model-card { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #fff; color: #000; line-height: 1.5; }
-        .featrix-model-card .page { max-width: 1400px; margin: 0 auto; padding: 20px 40px; color: #000; }
+        .featrix-model-card {
+            --fmc-paper: #ffffff;
+            --fmc-mist: #f4f5f7;
+            --fmc-mist-2: #eceef1;
+            --fmc-ink: #14171c;
+            --fmc-ink-soft: #454b56;
+            --fmc-slate: #6b7280;
+            --fmc-line: #dde0e5;
+            --fmc-line-soft: #e8eaed;
+            --fmc-brass: #8a5a1e;
+            --fmc-brass-strong: #6e480f;
+            --fmc-brass-bg: #f7ecd9;
+            --fmc-brass-border: #e6cd9e;
+            --fmc-good: #1f8a4c;
+            --fmc-good-bg: #e5f5ea;
+            --fmc-good-border: #b9e2c6;
+            --fmc-bad: #b23a32;
+            --fmc-bad-bg: #fbe9e7;
+            --fmc-bad-border: #f0c3bd;
+            --fmc-warn: #a8710c;
+            --fmc-warn-bg: #fbf1dc;
+            --fmc-warn-border: #edd39a;
+            --fmc-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            --fmc-mono: ui-monospace, 'SF Mono', 'Cascadia Code', 'Roboto Mono', Menlo, Consolas, monospace;
+        }
+        .featrix-model-card * { margin: 0; padding: 0; box-sizing: border-box; color: var(--fmc-ink); }
+        .featrix-model-card { font-family: var(--fmc-sans); background: var(--fmc-mist); color: var(--fmc-ink); line-height: 1.5; }
+        .featrix-model-card .page { max-width: 1400px; margin: 0 auto; padding: 20px 40px; color: var(--fmc-ink); }
 
-        .featrix-model-card .header { border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 15px; color: #000; }
-        .featrix-model-card .header h1 { font-size: 24px; font-weight: bold; color: #000; margin-bottom: 4px; }
-        .featrix-model-card .header .meta { font-size: 12px; color: #666; }
+        .featrix-model-card .header { border-bottom: 2px solid var(--fmc-ink); padding-bottom: 10px; margin-bottom: 15px; color: var(--fmc-ink); }
+        .featrix-model-card .header h1 { font-family: var(--fmc-mono); font-size: 22px; font-weight: 700; letter-spacing: -0.01em; color: var(--fmc-ink); margin-bottom: 4px; }
+        .featrix-model-card .header .meta { font-family: var(--fmc-mono); font-size: 12px; color: var(--fmc-slate); }
 
-        .featrix-model-card details { margin: 20px 0; border: 1px solid #ccc; background: white; page-break-inside: avoid; color: #000; }
-        .featrix-model-card details summary { padding: 12px 20px; cursor: pointer; font-weight: bold; background: #f5f5f5; border-bottom: 1px solid #ccc; user-select: none; text-transform: uppercase; font-size: 13px; color: #333; }
-        .featrix-model-card details summary:hover { background: #eee; color: #000; }
-        .featrix-model-card details[open] summary { border-bottom: 1px solid #ccc; color: #333; }
-        .featrix-model-card .section-content { padding: 20px; }
+        .featrix-model-card details { margin: 20px 0; border: 1px solid var(--fmc-line); border-radius: 5px; background: var(--fmc-paper); overflow: hidden; page-break-inside: avoid; color: var(--fmc-ink); }
+        .featrix-model-card details summary { padding: 10px 20px; cursor: pointer; font-weight: 700; background: var(--fmc-mist-2); border-bottom: 1px solid var(--fmc-line); user-select: none; text-transform: uppercase; font-family: var(--fmc-mono); font-size: 11.5px; letter-spacing: 0.06em; color: var(--fmc-ink-soft); }
+        .featrix-model-card details summary:hover { color: var(--fmc-ink); }
+        .featrix-model-card details[open] summary { border-bottom: 1px solid var(--fmc-line); color: var(--fmc-ink-soft); }
+        .featrix-model-card .section-content { padding: 22px; }
 
-        .featrix-model-card .section { margin: 30px 0; page-break-inside: avoid; color: #000; }
-        .featrix-model-card .section-title { font-size: 18px; font-weight: bold; text-transform: uppercase; border-bottom: 2px solid #000; padding-bottom: 5px; margin-bottom: 15px; color: #000; }
+        .featrix-model-card .section { margin: 28px 0; page-break-inside: avoid; color: var(--fmc-ink); }
+        .featrix-model-card .section-title { font-family: var(--fmc-mono); font-size: 16px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; border-bottom: 2px solid var(--fmc-ink); padding-bottom: 5px; margin-bottom: 15px; color: var(--fmc-ink); }
 
-        .featrix-model-card .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; color: #000; }
-        .featrix-model-card .metric { padding: 15px; color: #000; background: #fff; border: 1px solid #ddd; }
-        .featrix-model-card .metric-label { font-size: 11px; text-transform: uppercase; margin-bottom: 6px; color: #666; }
-        .featrix-model-card .metric-value { font-size: 24px; font-weight: bold; color: #000; }
+        .featrix-model-card .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; background: var(--fmc-line); border: 1px solid var(--fmc-line); border-radius: 4px; overflow: hidden; color: var(--fmc-ink); }
+        .featrix-model-card .metric { padding: 14px 15px; color: var(--fmc-ink); background: var(--fmc-paper); border: none; }
+        .featrix-model-card .metric-label { font-family: var(--fmc-mono); font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px; color: var(--fmc-slate); }
+        .featrix-model-card .metric-value { font-family: var(--fmc-mono); font-variant-numeric: tabular-nums; font-size: 22px; font-weight: 700; color: var(--fmc-ink); }
 
-        .featrix-model-card table { width: 100%; border-collapse: collapse; font-size: 14px; color: #000; }
-        .featrix-model-card th { color: #666; padding: 10px 12px; text-align: left; font-weight: normal; font-size: 12px; text-transform: uppercase; border-bottom: 1px solid #ddd; }
-        .featrix-model-card td { padding: 10px 12px; color: #000; border-bottom: 1px solid #eee; }
+        .featrix-model-card table { width: 100%; border-collapse: collapse; font-size: 14px; color: var(--fmc-ink); }
+        .featrix-model-card th { color: var(--fmc-slate); padding: 8px 12px; text-align: left; font-weight: 600; font-family: var(--fmc-mono); font-size: 10.5px; letter-spacing: 0.04em; text-transform: uppercase; border-bottom: 1px solid var(--fmc-line); }
+        .featrix-model-card td { padding: 9px 12px; color: var(--fmc-ink); font-variant-numeric: tabular-nums; border-bottom: 1px solid var(--fmc-line-soft); }
         .featrix-model-card tr:last-child td { border-bottom: none; }
 
-        .featrix-model-card .epoch-tabs { display: flex; gap: 0; margin-bottom: 0; border-bottom: 1px solid #ddd; }
-        .featrix-model-card .epoch-tab { padding: 10px 20px; background: #f5f5f5; border: 1px solid #ddd; border-bottom: none; cursor: pointer; font-size: 13px; font-weight: bold; font-family: inherit; margin-right: -1px; color: #666; }
-        .featrix-model-card .epoch-tab:hover { background: #eee; }
-        .featrix-model-card .epoch-tab.active { background: #fafafa; color: #333; border-bottom: 1px solid #fafafa; position: relative; top: 1px; }
+        .featrix-model-card .epoch-tabs { display: flex; gap: 6px; margin-bottom: 0; border-bottom: 1px solid var(--fmc-line); flex-wrap: wrap; }
+        .featrix-model-card .epoch-tab { padding: 8px 16px; background: none; border: 1px solid var(--fmc-line); border-bottom: none; cursor: pointer; font-size: 12px; font-weight: 700; font-family: var(--fmc-mono); margin-bottom: -1px; border-radius: 4px 4px 0 0; color: var(--fmc-slate); }
+        .featrix-model-card .epoch-tab:hover { color: var(--fmc-ink); }
+        .featrix-model-card .epoch-tab.active { background: var(--fmc-paper); color: var(--fmc-ink); border-color: var(--fmc-line); border-bottom: 1px solid var(--fmc-paper); position: relative; }
         .featrix-model-card .epoch-tab-content { display: none; }
         .featrix-model-card .epoch-tab-content.active { display: block; }
-        .featrix-model-card .epoch-section { padding: 20px; background: #fafafa; border: 1px solid #ddd; border-top: none; }
-        .featrix-model-card .epoch-title { margin: 0 0 15px 0; font-size: 14px; font-weight: bold; color: #333; }
+        .featrix-model-card .epoch-section { padding: 20px; background: var(--fmc-paper); border: 1px solid var(--fmc-line); border-top: none; }
+        .featrix-model-card .epoch-title { margin: 0 0 15px 0; font-family: var(--fmc-mono); font-size: 13.5px; font-weight: 700; color: var(--fmc-ink); }
+        .featrix-model-card .epoch-title .fmc-epoch-num { color: var(--fmc-slate); font-weight: 400; }
+
+        .featrix-model-card .opt-strip { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 16px; }
+        .featrix-model-card .opt-label { font-size: 12.5px; color: var(--fmc-slate); }
+        .featrix-model-card .fmc-badge-brass { display: inline-flex; align-items: center; font-family: var(--fmc-mono); font-size: 11.5px; font-weight: 700; letter-spacing: 0.03em; padding: 4px 10px; border-radius: 3px; background: var(--fmc-brass-bg); color: var(--fmc-brass-strong); border: 1px solid var(--fmc-brass-border); }
+        .featrix-model-card .fmc-tag { font-family: var(--fmc-mono); font-size: 11px; color: var(--fmc-slate); border: 1px solid var(--fmc-line); background: var(--fmc-mist); padding: 2px 7px; border-radius: 3px; }
 
         .featrix-model-card .confusion-wrapper { margin-top: 20px; }
-        .featrix-model-card .confusion-title { margin: 0 0 15px 0; font-size: 13px; font-weight: bold; color: #333; }
-        .featrix-model-card .confusion-layout { display: flex; gap: 30px; align-items: flex-start; flex-wrap: wrap; }
-        .featrix-model-card .cm-cell { border: 1px solid #ccc; font-size: 18px; font-weight: bold; }
-        .featrix-model-card .cm-correct { background: #e8f5e9; }
-        .featrix-model-card .cm-error { background: #ffebee; }
+        .featrix-model-card .confusion-title { margin: 0 0 15px 0; font-family: var(--fmc-mono); font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--fmc-ink-soft); }
+        .featrix-model-card .confusion-layout { display: flex; gap: 36px; align-items: flex-start; flex-wrap: wrap; }
+        .featrix-model-card .cm-cell { border: 1px solid var(--fmc-paper); outline: 1px solid var(--fmc-line-soft); font-family: var(--fmc-mono); font-variant-numeric: tabular-nums; font-size: 16px; font-weight: 700; }
+        .featrix-model-card .cm-correct { background: var(--fmc-good-bg); color: var(--fmc-good); }
+        .featrix-model-card .cm-error { background: var(--fmc-bad-bg); color: var(--fmc-bad); }
         .featrix-model-card .derived-metrics { width: auto !important; display: inline-table; font-size: 13px; }
-        .featrix-model-card .derived-metrics td { padding: 6px 12px; border: none; }
+        .featrix-model-card .derived-metrics td { padding: 6px 12px; border: none; font-family: var(--fmc-mono); font-variant-numeric: tabular-nums; }
         .featrix-model-card .dm-value { text-align: right; }
-        .featrix-model-card .dm-formula { color: #666; }
+        .featrix-model-card .dm-formula { color: var(--fmc-slate); }
 
         .featrix-model-card .show-more { margin-top: 15px; border: none; background: none; }
-        .featrix-model-card .show-more summary { padding: 5px 0; cursor: pointer; font-size: 12px; color: #1976d2; background: none; border: none; font-weight: normal; text-transform: none; }
-        .featrix-model-card .show-more summary:hover { color: #1565c0; text-decoration: underline; }
-        
+        .featrix-model-card .show-more summary { padding: 5px 0; cursor: pointer; font-size: 12px; color: var(--fmc-brass); background: none; border: none; font-weight: 600; text-transform: none; }
+        .featrix-model-card .show-more summary:hover { color: var(--fmc-brass-strong); text-decoration: underline; }
+
         .featrix-model-card .controls {
             margin-bottom: 15px;
             display: flex;
@@ -1450,28 +1990,30 @@
         }
         
         .featrix-model-card .btn {
-            padding: 6px 12px;
-            background: #fff;
-            color: #000;
-            border: 1px solid #999;
+            padding: 6px 13px;
+            background: var(--fmc-paper);
+            color: var(--fmc-ink);
+            border: 1px solid var(--fmc-line);
+            border-radius: 4px;
             cursor: pointer;
             font-size: 12px;
-            font-family: inherit;
+            font-family: var(--fmc-mono);
         }
 
         .featrix-model-card .btn:hover {
-            background: #f0f0f0;
+            border-color: var(--fmc-slate);
+            color: var(--fmc-ink);
         }
-        
+
         .featrix-model-card .btn-secondary {
-            background: #fff;
-            color: #000;
+            background: var(--fmc-paper);
+            color: var(--fmc-ink-soft);
         }
-        
+
         .featrix-model-card .btn-secondary:hover {
-            background: #f5f5f5;
+            border-color: var(--fmc-slate);
         }
-        
+
         @keyframes featrix-training-pulse {
             0%, 100% { opacity: 1; transform: scale(1); }
             50% { opacity: 0.7; transform: scale(1.05); }
@@ -1479,55 +2021,60 @@
         .featrix-model-card .status-badge, .featrix-model-card .quality-badge, .featrix-model-card .severity-badge {
             display: inline-block;
             padding: 4px 12px;
+            border-radius: 3px;
             color: white;
-            font-size: 12px;
-            font-weight: 600;
+            font-family: var(--fmc-mono);
+            font-size: 11.5px;
+            font-weight: 700;
+            letter-spacing: 0.02em;
         }
         .featrix-model-card .status-badge.training {
             animation: featrix-training-pulse 2s ease-in-out infinite;
         }
-        
+
         .featrix-model-card .warning-item {
             padding: 15px;
             margin-bottom: 15px;
-            background: #fff3cd;
-            border-left: 4px solid #ffc107;
-            color: #000;
+            background: var(--fmc-warn-bg);
+            border-left: 4px solid var(--fmc-warn);
+            border-radius: 0 4px 4px 0;
+            color: var(--fmc-ink);
         }
-        
+
         .featrix-model-card .warning-header {
             display: flex;
             align-items: center;
             gap: 10px;
             margin-bottom: 10px;
-            color: #000;
+            color: var(--fmc-ink);
         }
-        
+
         .featrix-model-card .warning-message {
-            color: #000;
+            color: var(--fmc-ink);
         }
-        
+
         .featrix-model-card code {
-            background: #fff;
+            background: var(--fmc-mist-2);
             padding: 2px 6px;
-            border: 1px solid #000;
-            font-family: 'Courier New', monospace;
-            font-size: 13px;
-            color: #000;
+            border: 1px solid var(--fmc-line);
+            border-radius: 3px;
+            font-family: var(--fmc-mono);
+            font-size: 12.5px;
+            color: var(--fmc-ink);
         }
-        
+
         .featrix-model-card h3 {
-            color: #000;
+            color: var(--fmc-ink);
         }
-        
+
         .featrix-model-card strong {
-            color: #000;
+            color: var(--fmc-ink);
         }
-        
+
         .featrix-model-card em {
-            color: #000;
+            color: var(--fmc-ink);
         }
-        
+
         .featrix-model-card .sphere-thumbnail {
             display: inline-block;
             width: 220px;
@@ -1622,9 +2169,9 @@
             <button class="btn btn-secondary featrix-raw-json">Raw JSON</button>
         </div>
 
-        <div class="featrix-raw-json-panel" style="display: none; margin: 20px 0; padding: 20px; background: #f5f5f5; border: 2px solid #000; overflow: auto; max-height: 600px;">
+        <div class="featrix-raw-json-panel" style="display: none; margin: 20px 0; padding: 20px; background: var(--fmc-mist-2); border: 1px solid var(--fmc-line); border-radius: 5px; overflow: auto; max-height: 600px;">
             <div style="margin-bottom: 10px;"><button class="btn btn-secondary featrix-copy-json">Copy to Clipboard</button></div>
-            <pre style="margin: 0; white-space: pre-wrap; word-wrap: break-word; font-size: 12px;">${JSON.stringify(modelCardJson, null, 2)}</pre>
+            <pre style="margin: 0; white-space: pre-wrap; word-wrap: break-word; font-family: var(--fmc-mono); font-size: 12px;">${JSON.stringify(modelCardJson, null, 2)}</pre>
         </div>
 
         ${sections}
@@ -1634,7 +2181,7 @@
                 <div class="sphere-modal-inner" id="featrix-sphere-full"></div>
             </div>
         </div>
-        <div style="text-align: right; padding: 10px 0 5px 0; font-size: 11px; color: #ccc;">FeatrixModelCard v${FeatrixModelCard.VERSION} (${FeatrixModelCard.BUILD})</div>
+        <div style="text-align: right; padding: 10px 0 5px 0; font-family: var(--fmc-mono); font-size: 11px; color: var(--fmc-slate);">FeatrixModelCard v${FeatrixModelCard.VERSION} (${FeatrixModelCard.BUILD})</div>
     </div>
 </div>`;
     }

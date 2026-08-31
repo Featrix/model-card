@@ -12,7 +12,10 @@
     "training_date": "2026-01-15",
     "status": "done | training | failed",
     "model_type": "Single Predictor | Embedding Space",
-    "framework": "FeatrixSphere v0.3"
+    "framework": "FeatrixSphere v0.3",
+    "_comment_multiclass": "PROPOSED, not yet implemented: num_classes / class_labels distinguish a multiclass 'set' target from a binary one (both currently show target_column_type='set' with no way to tell them apart). Renderers fall back to inferring multiclass from the shape of best_epochs when these are absent. See examples/ticket_priority_multiclass.json.",
+    "num_classes": 4,
+    "class_labels": ["P0", "P1", "P2", "P3"]
   },
 
   "embedding_space": {
@@ -48,6 +51,7 @@
 
   "best_epochs": {
     "_comment": "CRITICAL SECTION. The renderer shows two tabs: Best ROC-AUC and Best PR-AUC. Each should contain the epoch that achieved the BEST value for that specific metric (NOT best val_loss). These can be different epochs.",
+    "_comment_multiclass": "PROPOSED, not yet implemented: for models with >2 classes, best_epochs keys are not fixed to best_roc_auc/best_pr_auc — they're named after whatever metrics were actually tracked (e.g. best_macro_f1, best_log_loss, best_accuracy), and the renderer generates one tab per key present, defaulting to whichever matches training_optimization.checkpoint_metric. See examples/ticket_priority_multiclass.json for the full worked example.",
 
     "best_roc_auc": {
       "_comment": "The epoch with the highest ROC-AUC value across all training epochs.",
@@ -66,6 +70,7 @@
           "specificity": { "value": 0.945, "quality": "EXCELLENT", "trend": "↗",  "delta_1": 0.002, "delta_5": 0.012, "delta_10": null }
         },
         "confusion_matrix": {
+          "_comment_multiclass": "PROPOSED, not yet implemented: for >2 classes this becomes { class_labels: [...], matrix: [[...]] } — rows = actual class, columns = predicted class, in class_labels order, diagonal = correct. See examples/ticket_priority_multiclass.json.",
           "tp": 34,
           "fn": 4,
           "fp": 3,
@@ -129,6 +134,7 @@
 
   "class_imbalance": {
     "_comment": "Class distribution stats. Used in MODEL IDENTIFICATION (for PR-AUC lift calculation) and TRAINING DATASET section.",
+    "_comment_multiclass": "PROPOSED, not yet implemented: for >2 classes, minority_class/majority_class/imbalance_ratio don't apply — use class_distribution (array of {label, display_name, count, pct}) instead. train_distribution/val_distribution already support arbitrary keys today; the fix needed is in the renderer, which currently only ever reads 2 of them. See examples/ticket_priority_multiclass.json.",
     "total_samples": 539,
     "minority_class": "1",
     "majority_class": "0",
@@ -156,7 +162,8 @@
     "gamma_adjustments": 3,
     "checkpoint_value": 0.967,
     "checkpoint_epoch": 28,
-    "positive_class": "1"
+    "positive_class": "1",
+    "_comment_multiclass": "PROPOSED, not yet implemented: for >2 classes, positive_class doesn't apply (no single positive class) — use class_labels: [...] instead. See examples/ticket_priority_multiclass.json."
   },
 
   "disk_usage": {

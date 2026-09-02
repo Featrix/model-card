@@ -76,7 +76,7 @@
   }
 
   const FeatrixModelCard = {
-    VERSION: '1.17.3',
+    VERSION: '1.17.4',
     BUILD: 'dev',
 
     /**
@@ -1082,13 +1082,27 @@
                 </tr>
       `;
 
+      var excludedLabels = {
+        random_strings_detected: 'RANDOM/ID',
+        structural_junk_detected: 'JUNK COLUMN',
+        pruned_during_training: 'PRUNED'
+      };
+
       for (var i = 0; i < fi.length; i++) {
         var f = fi[i] || {};
         var s = stats[f.name] || {};
         var typeDisplay = (f.type || 'N/A').replace(/^ColumnType\./, '');
         var predictability = (typeof s.predictability_pct === 'number') ? s.predictability_pct.toFixed(1) + '%' : 'N/A';
-        html += '<tr>';
-        html += '<td style="font-family: var(--fmc-mono);">' + (f.name || 'N/A') + '</td>';
+        var ci = f.column_importance;
+        var isExcluded = !!ci && ci.weight === 0;
+        var excludedBadge = '';
+        if (isExcluded) {
+          var badgeLabel = excludedLabels[ci.reason] || 'EXCLUDED';
+          var badgeTitle = (ci.description || '').replace(/"/g, '&quot;');
+          excludedBadge = ' <span class="fmc-excluded-badge" title="' + badgeTitle + '">' + badgeLabel + '</span>';
+        }
+        html += '<tr' + (isExcluded ? ' style="opacity: 0.65;"' : '') + '>';
+        html += '<td style="font-family: var(--fmc-mono);">' + (f.name || 'N/A') + excludedBadge + '</td>';
         html += '<td>' + typeDisplay + '</td>';
         html += '<td>' + (f.encoder_type || 'N/A') + '</td>';
         html += '<td style="text-align: right;">' + (f.unique_values !== undefined && f.unique_values !== null ? f.unique_values.toLocaleString() : 'N/A') + '</td>';
@@ -2599,6 +2613,20 @@
         }
         .featrix-model-card .status-badge.training {
             animation: featrix-training-pulse 2s ease-in-out infinite;
+        }
+        .featrix-model-card .fmc-excluded-badge {
+            display: inline-block;
+            padding: 1px 7px;
+            margin-left: 6px;
+            border-radius: 3px;
+            background: var(--fmc-warn-bg);
+            color: var(--fmc-warn);
+            border: 1px solid var(--fmc-warn);
+            font-family: var(--fmc-mono);
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: 0.02em;
+            cursor: help;
         }
 
         .featrix-model-card .warning-item {

@@ -1,6 +1,6 @@
 {
   "name": "@featrix/modelcard-js",
-  "version": "1.17.3",
+  "version": "1.17.4",
   "description": "Standalone JavaScript renderer for Featrix Sphere Model Cards - use with <script src>",
   "main": "model-card.js",
   "files": [

@@ -99,7 +99,7 @@
   }
 
   const FeatrixModelCard = {
-    VERSION: '1.17.4',
+    VERSION: '1.17.5',
     BUILD: 'dev',
 
     /**
@@ -1411,14 +1411,33 @@
         return html;
       }
 
-      function renderConfusionMatrixNxN(labels, matrix, classificationMetrics) {
+      // per_class_precision/recall/f1 on the confusion-matrix payload are dicts
+      // keyed by label (no support counts emitted yet) -- reshape into the
+      // {per_class: [{label, precision, recall, f1}]} array renderPerClassMetrics
+      // expects. Returns null when the producer didn't emit any per-class data,
+      // so the caller can skip the side panel entirely rather than show an
+      // empty table.
+      function buildPerClassMetricsFromCm(labels, cm) {
+        if (!cm || !labels || !labels.length) return null;
+        var p = cm.per_class_precision || {};
+        var r = cm.per_class_recall || {};
+        var f = cm.per_class_f1 || {};
+        var hasAny = false;
+        var perClass = labels.map(function(label) {
+          if (p[label] != null || r[label] != null || f[label] != null) hasAny = true;
+          return { label: String(label), precision: p[label], recall: r[label], f1: f[label] };
+        });
+        return hasAny ? { per_class: perClass } : null;
+      }
+
+      function renderConfusionMatrixNxN(labels, matrix, cm, classificationMetrics) {
         var html = '<div class="confusion-wrapper">';
         html += '<h4 class="confusion-title">Confusion Matrix</h4>';
         html += '<div class="confusion-layout">';
 
         html += renderMatrixGrid(labels, matrix);
 
-        var sideHtml = renderPerClassMetrics(classificationMetrics);
+        var sideHtml = renderPerClassMetrics(buildPerClassMetricsFromCm(labels, cm));
         if (sideHtml) {
           html += '<div style="flex: 1; min-width: 300px;">' + sideHtml + renderPerClassAuc(classificationMetrics) + '</div>';
         }
@@ -1430,7 +1449,7 @@
       function renderConfusionMatrix(cm, classificationMetrics) {
         if (!cm) return '';
         if (cm.class_labels && cm.matrix) {
-          return renderConfusionMatrixNxN(cm.class_labels, cm.matrix, classificationMetrics);
+          return renderConfusionMatrixNxN(cm.class_labels, cm.matrix, cm, classificationMetrics);
         }
         var tn = cm.tn || 0, fp = cm.fp || 0, fn = cm.fn || 0, tp = cm.tp || 0;
         var totalPos = tp + fn;

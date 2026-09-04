@@ -26,15 +26,21 @@ export interface ConfusionMatrix {
 export interface ConfusionMatrixNxN {
   class_labels: string[];
   matrix: number[][];
+  /** Keyed by label (from class_labels) -- no support counts emitted yet. */
+  per_class_precision?: Record<string, number>;
+  per_class_recall?: Record<string, number>;
+  per_class_f1?: Record<string, number>;
 }
 
 export interface PerClassMetric {
   label: string;
   display_name?: string;
-  precision: number;
-  recall: number;
-  f1: number;
-  support: number;
+  precision?: number;
+  recall?: number;
+  f1?: number;
+  /** Not emitted by the current producer -- per_class_precision/recall/f1
+   *  on ConfusionMatrixNxN carry no support counts yet. */
+  support?: number;
 }
 
 export interface PerClassAuc {
@@ -824,13 +830,30 @@ export const ModelCard: React.FC<ModelCardProps> = ({ data, className = '', onRe
     );
   };
 
-  const renderConfusionMatrixNxN = (labels: string[], matrix: number[][], metrics: ClassificationDisplayMetadata['classification_metrics']) => {
-    const perClassHtml = renderPerClassMetrics(metrics);
+  // per_class_precision/recall/f1 on the confusion-matrix payload are dicts keyed by
+  // label (no support counts emitted yet) -- reshape into the PerClassMetric[] shape
+  // renderPerClassMetrics expects. Returns undefined when the producer didn't emit
+  // any per-class data, so the caller can skip the side panel entirely.
+  const buildPerClassMetricsFromCm = (cm: ConfusionMatrixNxN): PerClassMetric[] | undefined => {
+    const p = cm.per_class_precision || {};
+    const r = cm.per_class_recall || {};
+    const f = cm.per_class_f1 || {};
+    const perClass = cm.class_labels.map(label => ({
+      label,
+      precision: p[label],
+      recall: r[label],
+      f1: f[label],
+    }));
+    return perClass.some(c => c.precision != null || c.recall != null || c.f1 != null) ? perClass : undefined;
+  };
+
+  const renderConfusionMatrixNxN = (cm: ConfusionMatrixNxN, metrics: ClassificationDisplayMetadata['classification_metrics']) => {
+    const perClassHtml = renderPerClassMetrics({ ...metrics, per_class: buildPerClassMetricsFromCm(cm) });
     return (
       <div className="confusion-wrapper">
         <h4 className="confusion-title">Confusion Matrix</h4>
         <div className="confusion-layout">
-          {renderMatrixGrid(labels, matrix)}
+          {renderMatrixGrid(cm.class_labels, cm.matrix)}
           {perClassHtml && (
             <div style={{ flex: 1, minWidth: '300px' }}>
               {perClassHtml}
@@ -845,7 +868,7 @@ export const ModelCard: React.FC<ModelCardProps> = ({ data, className = '', onRe
   const renderConfusionMatrix = (cm: ConfusionMatrix | ConfusionMatrixNxN | undefined, metrics?: ClassificationDisplayMetadata['classification_metrics']) => {
     if (!cm) return null;
     if (isNxNConfusionMatrix(cm)) {
-      return renderConfusionMatrixNxN(cm.class_labels, cm.matrix, metrics);
+      return renderConfusionMatrixNxN(cm, metrics);
     }
     const { tn, fp, fn, tp } = cm;
     const totalPos = tp + fn;

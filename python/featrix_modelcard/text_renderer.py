@@ -417,8 +417,21 @@ def _render_matrix_ascii(labels: list, matrix: list) -> list:
     return lines
 
 
-def _render_per_class_metrics_ascii(metrics: dict) -> list:
-    per_class = metrics.get("per_class")
+def _per_class_from_cm(cm: dict) -> list:
+    """per_class_precision/recall/f1 on the confusion-matrix payload are dicts keyed
+    by label (no support counts emitted yet) -- reshape into the [{label, precision,
+    recall, f1}] shape _render_per_class_metrics_ascii expects."""
+    labels = cm.get("class_labels") or []
+    p = cm.get("per_class_precision") or {}
+    r = cm.get("per_class_recall") or {}
+    f = cm.get("per_class_f1") or {}
+    if not (p or r or f):
+        return []
+    return [{"label": label, "precision": p.get(label), "recall": r.get(label), "f1": f.get(label)} for label in labels]
+
+
+def _render_per_class_metrics_ascii(metrics: dict, per_class: list = None) -> list:
+    per_class = per_class if per_class is not None else metrics.get("per_class")
     if not per_class:
         return []
     lines = ["", "    Per-Class Metrics:"]
@@ -517,7 +530,7 @@ def _render_best_epochs(data: dict) -> str:
         cm = cdm.get("confusion_matrix")
         if cm and isinstance(cm.get("matrix"), list) and cm.get("class_labels"):
             lines.extend(_render_matrix_ascii(cm["class_labels"], cm["matrix"]))
-            lines.extend(_render_per_class_metrics_ascii(metrics))
+            lines.extend(_render_per_class_metrics_ascii(metrics, per_class=_per_class_from_cm(cm)))
         elif cm:
             tp, fn, fp, tn = cm.get("tp", 0), cm.get("fn", 0), cm.get("fp", 0), cm.get("tn", 0)
             total_pos = tp + fn

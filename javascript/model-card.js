@@ -25,6 +25,29 @@
     return EPOCH_METRIC_LABELS[key] || key.replace(/_/g, ' ').replace(/\b\w/g, function(c) { return c.toUpperCase(); });
   }
 
+  // Epoch -1 is not a bug: it's the SP's "do-no-harm" floor marker — training
+  // never beat the warm-start baseline, so the served checkpoint IS the
+  // pre-training warm-start state, not any fine-tuned epoch. A bare "-1"
+  // reads as broken; spell out what it actually means everywhere an epoch
+  // number would otherwise print it.
+  function formatEpochNum(epoch) {
+    if (epoch === -1) return 'Warm Start (pre-training)';
+    if (epoch === null || epoch === undefined) return 'N/A';
+    return String(epoch);
+  }
+  function formatEpochPhrase(epoch) {
+    return epoch === -1 ? 'Warm Start (pre-training)' : 'Epoch ' + formatEpochNum(epoch);
+  }
+
+  // A short, always-visible summary rendered into a section's <summary> tag
+  // (via the '<!--HL-->' marker each section's opening <details> carries) so
+  // collapsing a section doesn't hide everything about it -- just the detail.
+  // CSS hides it again once the section is expanded, where the real content
+  // says the same thing at greater length.
+  function highlightSpan(text) {
+    return text ? '<span class="fmc-summary-highlights">' + text + '</span>' : '';
+  }
+
   // Shared by the main confusion matrix (Model Details) and the declined-rows breakdown
   // (Selective Prediction) — one N×N heatmap component, reused wherever actual-vs-predicted
   // (or would-have-predicted) class counts need showing.
@@ -292,9 +315,17 @@
       // Map model type to display format. Keyed off target_column_type (authoritative —
       // present whenever there's a target, regardless of exact model_type wording), not on
       // model_type matching a literal "Single Predictor"/"SP" string: production cards say
-      // things like "Foundation + Neural Predictor" / "Foundation + XGBoost Predictor",
-      // which used to fall straight through to the raw-string fallback below and lose the
-      // task-type classification entirely.
+      // things like "Foundation + Neural Predictor" / "Foundation + Nearest-Neighbor
+      // Predictor", which used to fall straight through to the raw-string fallback below and
+      // lose the task-type classification entirely. Covers every real target_col_type, not
+      // just set/scalar — see targets/registry.py CANONICAL_INPUT_TYPES.
+      var TASK_LABELS_BY_TARGET_TYPE = {
+        scalar: 'Regression',
+        ordinal: 'Ordinal Classifier',
+        multi_label: 'Multi-Label Classifier',
+        ranking: 'Ranking Model',
+        free_string: 'Free-Text Predictor'
+      };
       var modelTypeDisplay = 'N/A';
       if (mi.model_type) {
         var modelTypeLower = mi.model_type.toLowerCase();
@@ -302,20 +333,23 @@
 
         if (!targetTypeLower && (modelTypeLower === 'embedding space' || modelTypeLower === 'es' || modelTypeLower === 'foundation')) {
           modelTypeDisplay = 'Foundational Embedding Space';
-        } else if (targetTypeLower === 'set' || targetTypeLower === 'scalar') {
-          // Which predictor head was actually selected (Neural/Linear/XGBoost) is real,
-          // useful info — surface it alongside the task type, not instead of it.
-          var predictorKindMatch = mi.model_type.match(/(Neural|Linear|XGBoost)\s+Predictor/i);
-          var predictorKind = predictorKindMatch ? predictorKindMatch[1] + ' Predictor' : null;
+        } else if (targetTypeLower === 'set' || TASK_LABELS_BY_TARGET_TYPE[targetTypeLower]) {
+          // Which predictor head was actually selected (Neural/Linear/XGBoost/Nearest-
+          // Neighbor/...) is real, useful info — surface it alongside the task type, not
+          // instead of it. Extract "everything after Foundation + " rather than matching a
+          // hardcoded list of kind names, so a new predictor kind on the backend doesn't
+          // need a matching renderer update to show up correctly.
+          var predictorKindMatch = mi.model_type.match(/^Foundation\s*\+\s*(.+)/i);
+          var predictorKind = predictorKindMatch ? predictorKindMatch[1].trim() : null;
           var taskLabel;
-          if (targetTypeLower === 'scalar') {
-            taskLabel = 'Regression';
-          } else {
+          if (targetTypeLower === 'set') {
             // 'set' covers both binary and multiclass targets — numClasses (hoisted above,
             // from num_classes/class_labels) decides which; falls back to whether the
             // best_epochs data itself looks multiclass when numClasses is unknown.
             var modelTypeIsMulticlass = numClasses !== null ? numClasses > 2 : isMulticlass;
             taskLabel = modelTypeIsMulticlass ? 'Multiclass Classifier' : 'Binary Classifier';
+          } else {
+            taskLabel = TASK_LABELS_BY_TARGET_TYPE[targetTypeLower];
           }
           modelTypeDisplay = predictorKind ? (predictorKind + ' • ' + taskLabel) : taskLabel;
         } else {
@@ -576,7 +610,7 @@
         return html;
       }
 
-      var html = '<details class="section" open><summary>MODEL FIT</summary><div class="section-content">';
+      var html = '<details class="section" open><summary>MODEL FIT<!--HL--></summary><div class="section-content">';
 
       // ── Primary block ──────────────────────────────────────────────────────
       var primary = mf.primary;
@@ -695,6 +729,10 @@
       }
 
       html += '</div></details>';
+      var fitHL = (mf.primary && mf.primary.top_fit)
+        ? (mf.primary.top_fit.label + ' • ' + Math.round((mf.primary.top_fit.score || 0) * 100) + '%')
+        : '';
+      html = html.replace('<!--HL-->', highlightSpan(fitHL));
       return html;
     },
 
@@ -726,7 +764,7 @@
       var hasMa = !!(ma.transformer_layers || ma.d_model || ma.attention_heads || ma.total_parameters);
       if (!hasEs && !hasMa) return '';
 
-      var html = '<details class="section" open><summary>MODEL STACK</summary><div class="section-content">';
+      var html = '<details class="section" open><summary>MODEL STACK<!--HL--></summary><div class="section-content">';
 
       if (phase === 'sp' && hasEs) {
         // SP card with full ES + predictor stack
@@ -810,6 +848,10 @@
       }
 
       html += '</div></details>';
+      var stackHL = spRows
+        ? (spRows.toLocaleString() + ' rows • ' + this.formatLargeNumber(spParams) + ' params')
+        : (numRows ? (numRows.toLocaleString() + ' rows • ' + this.formatLargeNumber(numParams) + ' params') : '');
+      html = html.replace('<!--HL-->', highlightSpan(stackHL));
       return html;
     },
 
@@ -833,7 +875,7 @@
         }
       });
 
-      var html = '<details class="section" open><summary>EMBEDDING QUALITY</summary><div class="section-content">';
+      var html = '<details class="section" open><summary>EMBEDDING QUALITY<!--HL--></summary><div class="section-content">';
 
       // Hero metrics
       var aucColor = bestAuc !== null ? (bestAuc >= 0.999 ? 'var(--fmc-good)' : bestAuc >= 0.99 ? 'var(--fmc-warn)' : 'var(--fmc-bad)') : 'var(--fmc-slate)';
@@ -887,6 +929,8 @@
       }
 
       html += '</div></details>';
+      var eqHL = bestAuc !== null ? ((bestAuc * 100).toFixed(2) + '% AUC (epoch ' + bestEpoch + ')') : '';
+      html = html.replace('<!--HL-->', highlightSpan(eqHL));
       return html;
     },
 
@@ -901,7 +945,7 @@
         return '<details class="section" open><summary>BUILT-IN PROBES</summary>' +
           '<div class="section-content" style="color:var(--fmc-slate);font-size:13px;">No probes registered for this embedding space.</div></details>';
       }
-      var html = '<details class="section" open><summary>BUILT-IN PROBES</summary><div class="section-content">' +
+      var html = '<details class="section" open><summary>BUILT-IN PROBES' + highlightSpan(probes.length + ' probe' + (probes.length !== 1 ? 's' : '')) + '</summary><div class="section-content">' +
         '<p style="font-size:13px;color:var(--fmc-ink-soft);margin-bottom:14px;">Predictors trained on top of this embedding space. Each probe is a binary classifier targeting a specific column.</p>' +
         '<table><tr><th>Target column</th><th style="text-align:right;">ROC-AUC</th><th style="text-align:right;">PR-AUC</th><th>Status</th><th></th></tr>';
       probes.forEach(function(p) {
@@ -930,9 +974,13 @@
 
       if (td.total_rows === undefined && !ci.class_distribution && !ci.train_distribution) return '';
 
+      var tdHL = (td.total_rows !== undefined)
+        ? (td.total_rows.toLocaleString() + ' rows' + (td.total_features !== undefined ? ' • ' + td.total_features + ' features' : ''))
+        : '';
+
       var html = `
     <details class="section" open>
-        <summary>TRAINING DATASET</summary>
+        <summary>TRAINING DATASET${highlightSpan(tdHL)}</summary>
         <div class="section-content">
       `;
 
@@ -1067,10 +1115,12 @@
       var fi = data.feature_inventory;
       if (!fi || fi.length === 0) return '';
       var stats = data.column_statistics || {};
+      var fiExcludedCount = fi.filter(function(f) { return f.column_importance && f.column_importance.weight === 0; }).length;
+      var fiHL = fi.length + ' column' + (fi.length !== 1 ? 's' : '') + (fiExcludedCount > 0 ? ' • ' + fiExcludedCount + ' excluded' : '');
 
       var html = `
     <details class="section" open>
-        <summary>FEATURES</summary>
+        <summary>FEATURES${highlightSpan(fiHL)}</summary>
         <div class="section-content">
             <table>
                 <tr>
@@ -1125,9 +1175,13 @@
       var tc = data.training_configuration;
       if (!ma && !tc) return '';
 
+      var maHL = (ma && ma.d_model !== undefined)
+        ? (ma.d_model + 'd' + (ma.transformer_layers !== undefined ? ' × ' + ma.transformer_layers + 'L' : '') + (ma.attention_heads !== undefined ? ' × ' + ma.attention_heads + 'H' : ''))
+        : '';
+
       var html = `
     <details class="section" open>
-        <summary>MODEL ARCHITECTURE</summary>
+        <summary>MODEL ARCHITECTURE${highlightSpan(maHL)}</summary>
         <div class="section-content">
       `;
 
@@ -1152,7 +1206,7 @@
 
       if (tc) {
         html += '<table style="margin-top: 15px;">';
-        html += '<tr><td style="width: 200px;"><strong>Epochs</strong></td><td>' + (tc.best_epoch !== undefined ? tc.best_epoch : 'N/A') + ' best of ' + (tc.epochs_total !== undefined ? tc.epochs_total : 'N/A') + '</td></tr>';
+        html += '<tr><td style="width: 200px;"><strong>Epochs</strong></td><td>' + formatEpochNum(tc.best_epoch) + ' best of ' + (tc.epochs_total !== undefined ? tc.epochs_total : 'N/A') + '</td></tr>';
         html += '<tr><td><strong>Optimizer</strong></td><td>' + (tc.optimizer || 'N/A') + '</td></tr>';
         if (tc.batch_size !== undefined && tc.batch_size !== null) {
           html += '<tr><td><strong>Batch Size</strong></td><td>' + tc.batch_size + '</td></tr>';
@@ -1272,6 +1326,10 @@
       if (this.isTraining(data) && this.getTrainingPhase(data) === 'es') return '';
 
       var self = this;
+      var mdTo = data.training_optimization || {};
+      var mdHL = (mdTo.checkpoint_value != null)
+        ? (formatMetricName(mdTo.checkpoint_metric || '') + '=' + mdTo.checkpoint_value.toFixed(4))
+        : '';
 
       function renderMetricsTable(metrics) {
         if (!metrics) return '';
@@ -1458,7 +1516,7 @@
         if (epochData.regression_display_metadata) {
           var rdm = epochData.regression_display_metadata;
           var rHtml = '<div class="epoch-section">';
-          rHtml += '<h3 class="epoch-title">' + title + ' — Epoch ' + (epochData.epoch || rdm.epoch || 'N/A') + '</h3>';
+          rHtml += '<h3 class="epoch-title">' + title + ' — ' + formatEpochPhrase(epochData.epoch != null ? epochData.epoch : rdm.epoch) + '</h3>';
           rHtml += renderRegressionMetricsTable(rdm.regression_metrics, rdm.skill);
           rHtml += '</div>';
           return rHtml;
@@ -1466,7 +1524,7 @@
 
         var cdm = epochData.classification_display_metadata || {};
         var html = '<div class="epoch-section">';
-        html += '<h3 class="epoch-title">' + title + ' — Epoch ' + (epochData.epoch || cdm.epoch || 'N/A') + '</h3>';
+        html += '<h3 class="epoch-title">' + title + ' — ' + formatEpochPhrase(epochData.epoch != null ? epochData.epoch : cdm.epoch) + '</h3>';
         html += renderMetricsTable(cdm.classification_metrics);
         html += renderConfusionMatrix(cdm.confusion_matrix, cdm.classification_metrics);
 
@@ -1527,7 +1585,7 @@
       var preferredKey = checkpointMetric ? ('best_' + checkpointMetric) : null;
       var activeKey = (preferredKey && be[preferredKey]) ? preferredKey : (be.best_roc_auc ? 'best_roc_auc' : epochKeys[0]);
 
-      var html = '<details class="section" open><summary>MODEL DETAILS</summary><div class="section-content">';
+      var html = '<details class="section" open><summary>MODEL DETAILS' + highlightSpan(mdHL) + '</summary><div class="section-content">';
 
       if (checkpointMetric) {
         html += '<div class="opt-strip"><span class="opt-label">Optimized for</span> <span class="fmc-badge-brass">' + formatMetricName(checkpointMetric).toUpperCase() + '</span></div>';
@@ -1558,9 +1616,13 @@
       var to = data.training_optimization;
       if (!to) return '';
 
+      var toHL = (to.checkpoint_value != null)
+        ? (formatMetricName(to.checkpoint_metric || '') + '=' + to.checkpoint_value.toFixed(4))
+        : '';
+
       var html = `
     <details class="section" open>
-        <summary>TRAINING OPTIMIZATION</summary>
+        <summary>TRAINING OPTIMIZATION${highlightSpan(toHL)}</summary>
         <div class="section-content">
       `;
 
@@ -1621,7 +1683,9 @@
 
       if (to.checkpoint_value !== undefined) {
         html += '<tr><td><strong>Best Checkpoint</strong></td>';
-        html += '<td>' + to.checkpoint_value.toFixed(4) + ' at epoch ' + (to.checkpoint_epoch || 'N/A') + '</td></tr>';
+        html += '<td>' + to.checkpoint_value.toFixed(4) +
+          (to.checkpoint_epoch === -1 ? ' — Warm Start (pre-training; no fine-tuning epoch beat it)' : ' at epoch ' + formatEpochNum(to.checkpoint_epoch)) +
+          '</td></tr>';
       }
 
       if (to.positive_class !== undefined) {
@@ -1658,7 +1722,18 @@
         dataset_sampling: 'Dataset Sampling'
       };
 
-      var html = '<details class="section" open><summary>DATA PROCESSING NOTES</summary><div class="section-content">';
+      var dpnCounts = {};
+      notes.forEach(function(n) {
+        var s = (n.severity || 'info').toLowerCase();
+        dpnCounts[s] = (dpnCounts[s] || 0) + 1;
+      });
+      var dpnParts = [];
+      if (dpnCounts.critical) dpnParts.push(dpnCounts.critical + ' critical');
+      if (dpnCounts.warning) dpnParts.push(dpnCounts.warning + ' warning' + (dpnCounts.warning > 1 ? 's' : ''));
+      if (dpnCounts.info) dpnParts.push(dpnCounts.info + ' info');
+      var dpnHL = dpnParts.join(', ') || (notes.length + ' note' + (notes.length !== 1 ? 's' : ''));
+
+      var html = '<details class="section" open><summary>DATA PROCESSING NOTES' + highlightSpan(dpnHL) + '</summary><div class="section-content">';
       html += '<table style="width:100%; border-collapse:collapse; font-size:13px;">';
       html += '<thead><tr style="border-bottom:2px solid var(--fmc-ink);">';
       html += '<th style="text-align:left; padding:6px 10px; width:110px;">Severity</th>';
@@ -1902,7 +1977,8 @@
         return html;
       }
 
-      var html = '<details class="section" open><summary>SELECTIVE PREDICTION</summary><div class="section-content">';
+      var spHL = (sp.summary && sp.summary.coverage != null) ? (Math.round(sp.summary.coverage * 100) + '% coverage') : '';
+      var html = '<details class="section" open><summary>SELECTIVE PREDICTION' + highlightSpan(spHL) + '</summary><div class="section-content">';
 
       if (sp.summary) {
         html += '<h3 class="epoch-title">Summary</h3>' + renderSPEntry(sp.summary);
@@ -2428,13 +2504,18 @@
         'single_predictor', 'training_configuration', 'provenance', 'technical_details'
       ];
       var OLD_SCHEMA_SIGNAL_KEYS = ['training_metrics', 'model_quality', 'feature_inventory', 'column_statistics'];
+      var CARD_SIGNAL_KEYS = ['best_epochs', 'embedding_space', 'coverage', 'selective_prediction', 'class_imbalance'];
       var topKeys = Object.keys(modelCardJson);
       var unknownKeys = topKeys.filter(function(k) { return KNOWN_KEYS.indexOf(k) < 0; });
       var oldSignalKeys = topKeys.filter(function(k) { return OLD_SCHEMA_SIGNAL_KEYS.indexOf(k) >= 0; });
+      // A valid modern card can legitimately carry legacy debug keys (training_metrics,
+      // column_statistics, etc.) as extra siblings — only warn when the top level does NOT
+      // already look like a real card, otherwise this fires on cards that render fine.
+      var looksLikeValidCard = !!modelCardJson.model_identification &&
+        CARD_SIGNAL_KEYS.some(function(k) { return modelCardJson[k] != null; });
       var schemaWarning = '';
-      if (oldSignalKeys.length >= 1) {
+      if (oldSignalKeys.length >= 1 && !looksLikeValidCard) {
         // Check if a better model card is buried inside one of the top-level keys
-        var CARD_SIGNAL_KEYS = ['best_epochs', 'embedding_space', 'coverage', 'selective_prediction', 'class_imbalance'];
         var buriedKey = null;
         var buriedCard = null;
         for (var bk = 0; bk < topKeys.length; bk++) {
@@ -2520,6 +2601,8 @@
         .featrix-model-card details summary { padding: 10px 20px; cursor: pointer; font-weight: 700; background: var(--fmc-mist-2); border-bottom: 1px solid var(--fmc-line); user-select: none; text-transform: uppercase; font-family: var(--fmc-mono); font-size: 11.5px; letter-spacing: 0.06em; color: var(--fmc-ink-soft); }
         .featrix-model-card details summary:hover { color: var(--fmc-ink); }
         .featrix-model-card details[open] summary { border-bottom: 1px solid var(--fmc-line); color: var(--fmc-ink-soft); }
+        .featrix-model-card .fmc-summary-highlights { float: right; text-transform: none; font-weight: 400; letter-spacing: normal; color: var(--fmc-slate); font-size: 11.5px; font-family: var(--fmc-sans); white-space: nowrap; max-width: 60%; overflow: hidden; text-overflow: ellipsis; }
+        .featrix-model-card details.section[open] > summary > .fmc-summary-highlights { display: none; }
         .featrix-model-card .section-content { padding: 22px; }
 
         .featrix-model-card .section { margin: 28px 0; page-break-inside: avoid; color: var(--fmc-ink); }

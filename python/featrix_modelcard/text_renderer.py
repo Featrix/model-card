@@ -52,7 +52,17 @@ def format_large_number(value) -> str:
     return f"{value:,}"
 
 
-_PREDICTOR_KIND_RE = re.compile(r"(Neural|Linear|XGBoost)\s+Predictor", re.IGNORECASE)
+_PREDICTOR_KIND_RE = re.compile(r"^Foundation\s*\+\s*(.+)", re.IGNORECASE)
+
+# Covers every real target_col_type, not just set/scalar — see targets/registry.py
+# CANONICAL_INPUT_TYPES in taco-fixes.
+_TASK_LABELS_BY_TARGET_TYPE = {
+    "scalar": "Regression",
+    "ordinal": "Ordinal Classifier",
+    "multi_label": "Multi-Label Classifier",
+    "ranking": "Ranking Model",
+    "free_string": "Free-Text Predictor",
+}
 
 
 def _map_model_type(mi: dict, is_multiclass_fallback: bool = False) -> str:
@@ -61,8 +71,8 @@ def _map_model_type(mi: dict, is_multiclass_fallback: bool = False) -> str:
     Keyed off target_column_type (authoritative — present whenever there's a target,
     regardless of exact model_type wording), not on model_type matching a literal "Single
     Predictor"/"SP" string: production cards say things like "Foundation + Neural Predictor" /
-    "Foundation + XGBoost Predictor", which used to fall straight through to the raw-string
-    fallback and lose the task-type classification entirely.
+    "Foundation + Nearest-Neighbor Predictor", which used to fall straight through to the
+    raw-string fallback and lose the task-type classification entirely.
 
     'set' covers both binary and multiclass targets — num_classes/class_labels (once the
     backend emits them) decide which; until then, is_multiclass_fallback (derived from
@@ -74,17 +84,20 @@ def _map_model_type(mi: dict, is_multiclass_fallback: bool = False) -> str:
 
     if not target_type and mt in ("embedding space", "es", "foundation"):
         return "Foundational Embedding Space"
-    if target_type in ("set", "scalar"):
-        # Which predictor head was actually selected (Neural/Linear/XGBoost) is real, useful
-        # info — surface it alongside the task type, not instead of it.
-        predictor_match = _PREDICTOR_KIND_RE.search(model_type)
-        predictor_kind = f"{predictor_match.group(1)} Predictor" if predictor_match else None
-        if target_type == "scalar":
-            task_label = "Regression"
-        else:
+    if target_type == "set" or target_type in _TASK_LABELS_BY_TARGET_TYPE:
+        # Which predictor head was actually selected (Neural/Linear/XGBoost/Nearest-
+        # Neighbor/...) is real, useful info — surface it alongside the task type, not instead
+        # of it. Extract "everything after Foundation + " rather than matching a hardcoded
+        # list of kind names, so a new predictor kind on the backend doesn't need a matching
+        # renderer update to show up correctly.
+        predictor_match = _PREDICTOR_KIND_RE.match(model_type)
+        predictor_kind = predictor_match.group(1).strip() if predictor_match else None
+        if target_type == "set":
             num_classes = mi.get("num_classes") or (len(mi["class_labels"]) if mi.get("class_labels") else None)
             is_multiclass = num_classes > 2 if num_classes is not None else is_multiclass_fallback
             task_label = "Multiclass Classifier" if is_multiclass else "Binary Classifier"
+        else:
+            task_label = _TASK_LABELS_BY_TARGET_TYPE[target_type]
         return f"{predictor_kind} • {task_label}" if predictor_kind else task_label
     return model_type or "N/A"
 

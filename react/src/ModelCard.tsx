@@ -388,8 +388,17 @@ const formatLargeNumber = (value: number | null | undefined): string => {
 // Keyed off target_column_type (authoritative — present whenever there's a target,
 // regardless of exact model_type wording), not on model_type matching a literal "Single
 // Predictor"/"SP" string: production cards say things like "Foundation + Neural Predictor" /
-// "Foundation + XGBoost Predictor", which used to fall straight through to the raw-string
-// fallback and lose the task-type classification entirely.
+// "Foundation + Nearest-Neighbor Predictor", which used to fall straight through to the
+// raw-string fallback and lose the task-type classification entirely. Covers every real
+// target_col_type, not just set/scalar — see targets/registry.py CANONICAL_INPUT_TYPES.
+const TASK_LABELS_BY_TARGET_TYPE: Record<string, string> = {
+  scalar: 'Regression',
+  ordinal: 'Ordinal Classifier',
+  multi_label: 'Multi-Label Classifier',
+  ranking: 'Ranking Model',
+  free_string: 'Free-Text Predictor',
+};
+
 const getModelTypeDisplay = (
   modelType: string,
   targetType: string | null,
@@ -402,20 +411,22 @@ const getModelTypeDisplay = (
 
   if (!targetTypeLower && (modelTypeLower === 'embedding space' || modelTypeLower === 'es' || modelTypeLower === 'foundation')) {
     return 'Foundational Embedding Space';
-  } else if (targetTypeLower === 'set' || targetTypeLower === 'scalar') {
-    // Which predictor head was actually selected (Neural/Linear/XGBoost) is real, useful
-    // info — surface it alongside the task type, not instead of it.
-    const predictorKindMatch = modelType.match(/(Neural|Linear|XGBoost)\s+Predictor/i);
-    const predictorKind = predictorKindMatch ? `${predictorKindMatch[1]} Predictor` : null;
+  } else if (targetTypeLower === 'set' || TASK_LABELS_BY_TARGET_TYPE[targetTypeLower]) {
+    // Which predictor head was actually selected (Neural/Linear/XGBoost/Nearest-Neighbor/...)
+    // is real, useful info — surface it alongside the task type, not instead of it. Extract
+    // "everything after Foundation + " rather than matching a hardcoded list of kind names,
+    // so a new predictor kind on the backend doesn't need a matching renderer update.
+    const predictorKindMatch = modelType.match(/^Foundation\s*\+\s*(.+)/i);
+    const predictorKind = predictorKindMatch ? predictorKindMatch[1].trim() : null;
     let taskLabel: string;
-    if (targetTypeLower === 'scalar') {
-      taskLabel = 'Regression';
-    } else {
+    if (targetTypeLower === 'set') {
       // 'set' covers both binary and multiclass targets — num_classes/class_labels (once the
       // backend emits them) decide which; until then, fall back to whether the best_epochs
       // data itself looks multiclass (see isMulticlass in the caller).
       const isMulticlass = numClasses != null ? numClasses > 2 : !!isMulticlassFallback;
       taskLabel = isMulticlass ? 'Multiclass Classifier' : 'Binary Classifier';
+    } else {
+      taskLabel = TASK_LABELS_BY_TARGET_TYPE[targetTypeLower];
     }
     return predictorKind ? `${predictorKind} • ${taskLabel}` : taskLabel;
   }

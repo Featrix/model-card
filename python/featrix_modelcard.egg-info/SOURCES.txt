@@ -1,0 +1,10 @@
+MANIFEST.in
+README.md
+setup.py
+featrix_modelcard/__init__.py
+featrix_modelcard/html_renderer.py
+featrix_modelcard/text_renderer.py
+featrix_modelcard.egg-info/PKG-INFO
+featrix_modelcard.egg-info/SOURCES.txt
+featrix_modelcard.egg-info/dependency_links.txt
+featrix_modelcard.egg-info/top_level.txt

@@ -1632,7 +1632,9 @@ export const ModelCard: React.FC<ModelCardProps> = ({ data, className = '', onRe
                         <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, flexWrap: 'wrap', marginBottom: 10 }}>
                           <span style={{ fontSize: 20, fontWeight: 'bold', color: '#000', textTransform: 'uppercase' }}>{tf.label}</span>
                           <span style={{ fontSize: 16, fontWeight: 'bold', color }}>{pct}%</span>
-                          <span style={{ fontSize: 11, color: '#999' }}>under {intentLabel} intent</span>
+                          {intentLabel && (
+                            <span style={{ fontSize: 11, color: '#999' }}>under {intentLabel} intent</span>
+                          )}
                         </div>
                         <TopFitDetail tf={tf} />
                         {primaryEntry && primaryEntry.shape_scores && primaryEntry.shape_scores.length > 1 && (

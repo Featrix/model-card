@@ -626,7 +626,7 @@
             '<div style="display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:10px;">' +
             '<span style="font-size:20px;font-weight:bold;color:var(--fmc-ink);text-transform:uppercase;">' + tf.label + '</span>' +
             '<span style="font-size:16px;font-weight:bold;color:' + color + ';">' + pct + '%</span>' +
-            '<span style="font-size:11px;color:var(--fmc-slate);">under ' + intentLabel + ' intent</span>' +
+            (intentLabel ? '<span style="font-size:11px;color:var(--fmc-slate);">under ' + intentLabel + ' intent</span>' : '') +
             '</div>' +
             renderTopFitDetail(tf);
 

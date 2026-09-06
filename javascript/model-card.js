@@ -62,34 +62,79 @@
       }
     }
     var cell = n <= 4 ? 56 : (n <= 6 ? 46 : 36);
-    var rowHeadW = 42;
     var cmLabel = 'font-family: var(--fmc-mono); font-size: 11px; color: var(--fmc-slate);';
+
+    // Row/column headers used to be a fixed, unrotated 42px -- fine for short
+    // labels ("Yes"/"No") but real class names ("pre_analysis_architecture")
+    // just overflowed into neighboring cells and became unreadable. Size the
+    // row-header column to the actual longest label, and rotate the column
+    // headers whenever a label wouldn't fit centered in one cell.
+    var maxLabelLen = 0;
+    for (var li = 0; li < n; li++) {
+      var len = String(labels[li]).length;
+      if (len > maxLabelLen) maxLabelLen = len;
+    }
+    var avgCharPx = 6.5; // ~width of one var(--fmc-mono) char at 11px
+    var rowHeadW = Math.max(42, Math.min(220, Math.round(maxLabelLen * avgCharPx) + 14));
+    var rotateHeaders = (maxLabelLen * avgCharPx) > (cell - 6);
+    var colHeadH = rotateHeaders ? Math.max(60, Math.min(200, Math.round(maxLabelLen * avgCharPx * 0.78) + 20)) : 18;
+    // A rotated label is anchored at its own cell's left-bottom and runs
+    // up-and-to-the-right from there (rotate(-50deg): dx = cos(50deg)*len),
+    // so the rightmost column's label reaches past the grid's nominal width.
+    // Reserve that reach as padding, or the horizontal-scroll wrapper below
+    // clips it -- found by actually rendering a 16-class matrix, not by eye.
+    var rightPad = rotateHeaders ? Math.max(0, Math.round(maxLabelLen * avgCharPx * 0.65 - cell / 2)) + 16 : 0;
 
     var html = '<div class="cm-block" style="display: flex;">';
     html += '<div style="width: 16px; display: flex; align-items: center; justify-content: center; writing-mode: vertical-lr; transform: rotate(180deg); ' + cmLabel + '">Actual</div>';
-    html += '<div>';
+    html += '<div style="overflow-x: auto; padding-bottom: 4px; padding-right: ' + rightPad + 'px;">';
     html += '<div style="text-align: center; margin-left: ' + rowHeadW + 'px; margin-bottom: 4px; ' + cmLabel + '">Predicted</div>';
-    html += '<div style="display: flex; margin-left: ' + rowHeadW + 'px; margin-bottom: 3px;">';
-    for (var j0 = 0; j0 < n; j0++) {
-      html += '<div style="width: ' + cell + 'px; text-align: center; font-weight: 600; ' + cmLabel + '">' + labels[j0] + '</div>';
+    if (rotateHeaders) {
+      html += '<div style="display: flex; margin-left: ' + rowHeadW + 'px; height: ' + colHeadH + 'px;">';
+      for (var j0 = 0; j0 < n; j0++) {
+        html += '<div style="width: ' + cell + 'px; position: relative;"><span style="position: absolute; left: ' + Math.round(cell / 2) + 'px; bottom: 4px; transform: rotate(-50deg); transform-origin: left bottom; white-space: nowrap; font-weight: 600; ' + cmLabel + '">' + labels[j0] + '</span></div>';
+      }
+      html += '</div>';
+    } else {
+      html += '<div style="display: flex; margin-left: ' + rowHeadW + 'px; margin-bottom: 3px;">';
+      for (var j0b = 0; j0b < n; j0b++) {
+        html += '<div style="width: ' + cell + 'px; text-align: center; font-weight: 600; ' + cmLabel + '">' + labels[j0b] + '</div>';
+      }
+      html += '</div>';
     }
-    html += '</div>';
 
     for (var i1 = 0; i1 < n; i1++) {
       html += '<div style="display: flex; align-items: center; margin-bottom: 1px;">';
-      html += '<div style="width: ' + rowHeadW + 'px; text-align: right; padding-right: 6px; font-weight: 600; ' + cmLabel + '">' + labels[i1] + '</div>';
+      html += '<div style="width: ' + rowHeadW + 'px; text-align: right; padding-right: 6px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; ' + cmLabel + '" title="' + labels[i1] + '">' + labels[i1] + '</div>';
       for (var j1 = 0; j1 < n; j1++) {
         var val = (matrix[i1] && matrix[i1][j1]) || 0;
-        var cellStyle;
+        var cellStyle, cellText;
         if (i1 === j1) {
-          var alpha = maxDiag > 0 ? Math.min(0.86, 0.30 + 0.56 * (val / maxDiag)) : 0.3;
-          var textColor = alpha >= 0.45 ? '#fff' : 'var(--fmc-good)';
-          cellStyle = 'background: rgba(31,138,76,' + alpha.toFixed(2) + '); color: ' + textColor + ';';
+          if (val === 0) {
+            // A class with zero correct predictions used to still get the
+            // diagonal's baseline green tint (the alpha formula has a 0.30
+            // floor even at value 0) -- looked "fine" when recall is actually 0.
+            cellStyle = 'background: var(--fmc-mist-2); color: var(--fmc-slate);';
+          } else {
+            var alpha = maxDiag > 0 ? Math.min(0.86, 0.30 + 0.56 * (val / maxDiag)) : 0.3;
+            var textColor = alpha >= 0.45 ? '#fff' : 'var(--fmc-good)';
+            cellStyle = 'background: rgba(31,138,76,' + alpha.toFixed(2) + '); color: ' + textColor + ';';
+          }
+          cellText = val;
         } else {
-          var oAlpha = (val === 0 || maxOffDiag === 0) ? 0 : Math.min(0.5, 0.06 + 0.44 * (val / maxOffDiag));
-          cellStyle = 'background: rgba(178,58,50,' + oAlpha.toFixed(2) + '); color: var(--fmc-bad);';
+          if (val === 0) {
+            // Blank instead of printing "0" -- with many classes, most of an
+            // NxN grid is zero, and a red "0" in every one of those cells was
+            // most of the visual noise.
+            cellStyle = 'background: var(--fmc-paper);';
+            cellText = '';
+          } else {
+            var oAlpha = maxOffDiag === 0 ? 0 : Math.min(0.5, 0.06 + 0.44 * (val / maxOffDiag));
+            cellStyle = 'background: rgba(178,58,50,' + oAlpha.toFixed(2) + '); color: var(--fmc-bad);';
+            cellText = val;
+          }
         }
-        html += '<div class="cm-cell" style="width: ' + cell + 'px; height: ' + cell + 'px; display: flex; align-items: center; justify-content: center; ' + cellStyle + '">' + val + '</div>';
+        html += '<div class="cm-cell" style="width: ' + cell + 'px; height: ' + cell + 'px; display: flex; align-items: center; justify-content: center; ' + cellStyle + '">' + cellText + '</div>';
       }
       html += '</div>';
     }
@@ -1361,9 +1406,20 @@
         if (!cmetrics || !cmetrics.per_class || !cmetrics.per_class.length) return '';
         var html = '<p class="confusion-title" style="margin-top: 0;">Per-Class Metrics</p>';
         html += '<table><tr><th>Class</th><th>Precision</th><th>Recall</th><th>F1</th><th>Support</th></tr>';
-        cmetrics.per_class.forEach(function(c) {
+        // Sorted worst-F1-first: the classes that need attention surface at
+        // the top instead of being buried in whatever order the labels came in.
+        var sortedClasses = cmetrics.per_class.slice().sort(function(a, b) {
+          var af = (typeof a.f1 === 'number') ? a.f1 : 1;
+          var bf = (typeof b.f1 === 'number') ? b.f1 : 1;
+          return af - bf;
+        });
+        sortedClasses.forEach(function(c) {
           var name = c.display_name ? (c.label + ' — ' + c.display_name) : c.label;
-          html += '<tr><td>' + name + '</td>' +
+          var band = '';
+          if (typeof c.f1 === 'number') {
+            band = c.f1 < 0.3 ? 'cm-band-bad' : (c.f1 < 0.7 ? 'cm-band-warn' : 'cm-band-good');
+          }
+          html += '<tr class="' + band + '"><td>' + name + '</td>' +
             '<td>' + fmt3(c.precision) + '</td>' +
             '<td>' + fmt3(c.recall) + '</td>' +
             '<td>' + fmt3(c.f1) + '</td>' +
@@ -1412,37 +1468,97 @@
       }
 
       // per_class_precision/recall/f1 on the confusion-matrix payload are dicts
-      // keyed by label (no support counts emitted yet) -- reshape into the
-      // {per_class: [{label, precision, recall, f1}]} array renderPerClassMetrics
-      // expects. Returns null when the producer didn't emit any per-class data,
-      // so the caller can skip the side panel entirely rather than show an
-      // empty table.
-      function buildPerClassMetricsFromCm(labels, cm) {
+      // keyed by label -- reshape into the {per_class: [{label, precision,
+      // recall, f1, support}]} array renderPerClassMetrics expects. Support is
+      // each class's row sum in the confusion matrix (total actual instances
+      // of that class), so it doesn't need a backend field -- it's already
+      // sitting in `matrix`. Returns null when the producer didn't emit any
+      // per-class data, so the caller can skip the side panel entirely rather
+      // than show an empty table.
+      function buildPerClassMetricsFromCm(labels, cm, matrix) {
         if (!cm || !labels || !labels.length) return null;
         var p = cm.per_class_precision || {};
         var r = cm.per_class_recall || {};
         var f = cm.per_class_f1 || {};
         var hasAny = false;
-        var perClass = labels.map(function(label) {
+        var perClass = labels.map(function(label, i) {
           if (p[label] != null || r[label] != null || f[label] != null) hasAny = true;
-          return { label: String(label), precision: p[label], recall: r[label], f1: f[label] };
+          var support = null;
+          if (matrix && matrix[i]) {
+            support = matrix[i].reduce(function(sum, v) { return sum + (v || 0); }, 0);
+          }
+          return { label: String(label), precision: p[label], recall: r[label], f1: f[label], support: support };
         });
         return hasAny ? { per_class: perClass } : null;
       }
 
+      // Every off-diagonal cell in the matrix, ranked by count -- the "where
+      // does it actually go wrong" list a dense NxN grid otherwise makes you
+      // hunt for by eye. `share` is that cell's count as a % of its row's
+      // total errors.
+      function computeTopConfusions(labels, matrix, limit) {
+        var n = labels.length;
+        var confusions = [];
+        for (var i = 0; i < n; i++) {
+          var rowTotal = 0;
+          for (var k = 0; k < n; k++) rowTotal += (matrix[i] && matrix[i][k]) || 0;
+          var rowErrors = rowTotal - ((matrix[i] && matrix[i][i]) || 0);
+          for (var j = 0; j < n; j++) {
+            if (i === j) continue;
+            var v = (matrix[i] && matrix[i][j]) || 0;
+            if (v <= 0) continue;
+            confusions.push({ from: labels[i], to: labels[j], count: v, share: rowErrors > 0 ? Math.round((v / rowErrors) * 100) : 0 });
+          }
+        }
+        confusions.sort(function(a, b) { return b.count - a.count; });
+        var top = confusions.slice(0, limit || 5);
+        var maxCount = top.length ? top[0].count : 1;
+        top.forEach(function(c) { c.pct = Math.round((c.count / maxCount) * 100); });
+        return top;
+      }
+
+      function renderTopConfusions(labels, matrix) {
+        var top = computeTopConfusions(labels, matrix, 5);
+        if (!top.length) return '';
+        var html = '<p class="confusion-title" style="margin-top: 0;">Where The Model Gets Confused</p>';
+        html += '<div class="cm-confusions">';
+        top.forEach(function(c) {
+          html += '<div class="cm-confusion-row">' +
+            '<div class="cm-confusion-pair">' + c.from + '<span class="cm-confusion-arrow">&rarr;</span>' + c.to + '</div>' +
+            '<div class="cm-confusion-bar-wrap"><div class="cm-confusion-bar" style="width:' + c.pct + '%"></div></div>' +
+            '<div class="cm-confusion-count"><b>' + c.count + '</b> &middot; ' + c.share + '% of ' + c.from + '&rsquo;s errors</div>' +
+            '</div>';
+        });
+        html += '</div>';
+        return html;
+      }
+
       function renderConfusionMatrixNxN(labels, matrix, cm, classificationMetrics) {
+        var n = labels.length;
+        // Past ~6 classes, the side-by-side grid+table layout is what turns
+        // into an unreadable wall of overlapping labels. Lead with the ranked
+        // confusions + a worst-first per-class table instead, and demote the
+        // full grid into a details/summary the way every other secondary
+        // section in this card already works -- still there, not the first
+        // thing you have to parse.
+        var manyClasses = n > 6;
+        var perClassHtml = renderPerClassMetrics(buildPerClassMetricsFromCm(labels, cm, matrix)) + renderPerClassAuc(classificationMetrics);
+
         var html = '<div class="confusion-wrapper">';
         html += '<h4 class="confusion-title">Confusion Matrix</h4>';
-        html += '<div class="confusion-layout">';
 
-        html += renderMatrixGrid(labels, matrix);
-
-        var sideHtml = renderPerClassMetrics(buildPerClassMetricsFromCm(labels, cm));
-        if (sideHtml) {
-          html += '<div style="flex: 1; min-width: 300px;">' + sideHtml + renderPerClassAuc(classificationMetrics) + '</div>';
+        if (manyClasses) {
+          html += renderTopConfusions(labels, matrix);
+          if (perClassHtml) html += perClassHtml;
+          html += '<details style="margin-top: 20px;"><summary>Full Confusion Matrix</summary><div class="section-content">' + renderMatrixGrid(labels, matrix) + '</div></details>';
+        } else {
+          html += '<div class="confusion-layout">';
+          html += renderMatrixGrid(labels, matrix);
+          if (perClassHtml) html += '<div style="flex: 1; min-width: 300px;">' + perClassHtml + '</div>';
+          html += '</div>';
         }
 
-        html += '</div></div>';
+        html += '</div>';
         return html;
       }
 
@@ -2658,6 +2774,18 @@
         .featrix-model-card .cm-cell { border: 1px solid var(--fmc-paper); outline: 1px solid var(--fmc-line-soft); font-family: var(--fmc-mono); font-variant-numeric: tabular-nums; font-size: 16px; font-weight: 700; }
         .featrix-model-card .cm-correct { background: var(--fmc-good-bg); color: var(--fmc-good); }
         .featrix-model-card .cm-error { background: var(--fmc-bad-bg); color: var(--fmc-bad); }
+        .featrix-model-card .cm-confusions { background: var(--fmc-paper); border: 1px solid var(--fmc-line); border-radius: 6px; padding: 4px 16px; margin-bottom: 20px; }
+        .featrix-model-card .cm-confusion-row { display: flex; align-items: center; gap: 14px; padding: 10px 0; border-bottom: 1px solid var(--fmc-line-soft); }
+        .featrix-model-card .cm-confusion-row:last-child { border-bottom: none; }
+        .featrix-model-card .cm-confusion-pair { font-family: var(--fmc-mono); font-size: 12.5px; font-weight: 600; width: 280px; flex: 0 0 280px; }
+        .featrix-model-card .cm-confusion-arrow { color: var(--fmc-bad); margin: 0 4px; }
+        .featrix-model-card .cm-confusion-bar-wrap { flex: 1; background: var(--fmc-mist-2); border-radius: 3px; height: 8px; overflow: hidden; }
+        .featrix-model-card .cm-confusion-bar { height: 100%; background: var(--fmc-bad); border-radius: 3px; }
+        .featrix-model-card .cm-confusion-count { width: 150px; flex: 0 0 150px; text-align: right; font-family: var(--fmc-mono); font-size: 12px; color: var(--fmc-ink-soft); }
+        .featrix-model-card .cm-confusion-count b { font-size: 15px; color: var(--fmc-bad); }
+        .featrix-model-card tr.cm-band-bad td:first-child { border-left: 3px solid var(--fmc-bad); }
+        .featrix-model-card tr.cm-band-warn td:first-child { border-left: 3px solid var(--fmc-warn); }
+        .featrix-model-card tr.cm-band-good td:first-child { border-left: 3px solid var(--fmc-good); }
         .featrix-model-card .derived-metrics { width: auto !important; display: inline-table; font-size: 13px; }
         .featrix-model-card .derived-metrics td { padding: 6px 12px; border: none; font-family: var(--fmc-mono); font-variant-numeric: tabular-nums; }
         .featrix-model-card .dm-value { text-align: right; }

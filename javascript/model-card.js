@@ -48,6 +48,38 @@
     return text ? '<span class="fmc-summary-highlights">' + text + '</span>' : '';
   }
 
+  // Plain-language column-type labels for the FEATURES table. Mirrors (a
+  // shortened form of) es_logging.py's _COLUMN_TYPE_PLAIN_DESCRIPTIONS so the
+  // "Type" column reads as a real label instead of the raw ColumnType enum
+  // name -- this also lets Type absorb what used to be a separate, always-
+  // redundant "Encoder" column (HybridScalarSetCodec tells a reader nothing
+  // that "Hybrid (scalar + set)" doesn't already say).
+  var COLUMN_TYPE_LABELS = {
+    set: 'Category (set)', scalar: 'Number (scalar)', hybrid_scalar_set: 'Hybrid (scalar + set)',
+    free_string: 'Free text', sparse_multihot: 'Multi-label (tags)', vector: 'Vector (precomputed)',
+    url: 'URL', json: 'JSON', timestamp: 'Timestamp', time_interval: 'Duration', email: 'Email',
+    domain_name: 'Domain', phone: 'Phone', zip_code: 'Zip code', fips_code: 'FIPS code',
+    year_json: 'Year series (JSON)', geo_json: 'Geo series (JSON)', timezone: 'Timezone',
+    multi_label: 'Multi-label', image_url: 'Image URL', flat_dict_json: 'Flat dict (JSON)',
+    hybrid_string_set: 'Hybrid (string + set)', hybrid_time_scalar: 'Hybrid (time + scalar)',
+    es_lookup: 'ES lookup'
+  };
+  var COLUMN_TYPE_DESCRIPTIONS = {
+    set: 'A fixed set of category labels — one representation per distinct value.',
+    scalar: 'A plain number, used directly as a numeric value.',
+    hybrid_scalar_set: 'Few distinct values (like a 1-10 rating) — tried as both a number and a category, whichever works better wins.',
+    free_string: 'Free-form text, read with a language-style text encoder.',
+    sparse_multihot: 'Each row can hold multiple labels at once, not just one.',
+    vector: 'Already a list of numbers (e.g. a precomputed embedding), used as-is.',
+    hybrid_string_set: 'Mostly repeated categories but a little noisy — tried as both a category list and a text encoder, whichever works better wins.',
+    hybrid_time_scalar: 'A numeric timestamp — tried as both calendar decomposition and a raw number, whichever works better wins.',
+    flat_dict_json: 'A flat JSON dict of string keys to numbers, read as a small structured record.'
+  };
+  function columnTypeLabel(rawType) {
+    var key = String(rawType || '').replace(/^ColumnType\./, '').toLowerCase();
+    return { label: COLUMN_TYPE_LABELS[key] || key.replace(/_/g, ' ').replace(/\b\w/g, function(c) { return c.toUpperCase(); }), description: COLUMN_TYPE_DESCRIPTIONS[key] || '' };
+  }
+
   // Shared by the main confusion matrix (Model Details) and the declined-rows breakdown
   // (Selective Prediction) — one N×N heatmap component, reused wherever actual-vs-predicted
   // (or would-have-predicted) class counts need showing.
@@ -92,23 +124,23 @@
     if (rotateHeaders) {
       html += '<div style="display: flex; margin-left: ' + rowHeadW + 'px; height: ' + colHeadH + 'px;">';
       for (var j0 = 0; j0 < n; j0++) {
-        html += '<div style="width: ' + cell + 'px; position: relative;"><span style="position: absolute; left: ' + Math.round(cell / 2) + 'px; bottom: 4px; transform: rotate(-50deg); transform-origin: left bottom; white-space: nowrap; font-weight: 600; ' + cmLabel + '">' + labels[j0] + '</span></div>';
+        html += '<div class="cm-col-label" data-col="' + j0 + '" style="width: ' + cell + 'px; position: relative;"><span style="position: absolute; left: ' + Math.round(cell / 2) + 'px; bottom: 4px; transform: rotate(-50deg); transform-origin: left bottom; white-space: nowrap; font-weight: 600; ' + cmLabel + '">' + labels[j0] + '</span></div>';
       }
       html += '</div>';
     } else {
       html += '<div style="display: flex; margin-left: ' + rowHeadW + 'px; margin-bottom: 3px;">';
       for (var j0b = 0; j0b < n; j0b++) {
-        html += '<div style="width: ' + cell + 'px; text-align: center; font-weight: 600; ' + cmLabel + '">' + labels[j0b] + '</div>';
+        html += '<div class="cm-col-label" data-col="' + j0b + '" style="width: ' + cell + 'px; text-align: center; font-weight: 600; ' + cmLabel + '">' + labels[j0b] + '</div>';
       }
       html += '</div>';
     }
 
     for (var i1 = 0; i1 < n; i1++) {
       html += '<div style="display: flex; align-items: center; margin-bottom: 1px;">';
-      html += '<div style="width: ' + rowHeadW + 'px; text-align: right; padding-right: 6px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; ' + cmLabel + '" title="' + labels[i1] + '">' + labels[i1] + '</div>';
+      html += '<div class="cm-row-label" data-row="' + i1 + '" style="width: ' + rowHeadW + 'px; text-align: right; padding-right: 6px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; ' + cmLabel + '" title="' + labels[i1] + '">' + labels[i1] + '</div>';
       for (var j1 = 0; j1 < n; j1++) {
         var val = (matrix[i1] && matrix[i1][j1]) || 0;
-        var cellStyle, cellText;
+        var cellStyle, cellText, cellTitle = '';
         if (i1 === j1) {
           if (val === 0) {
             // A class with zero correct predictions used to still get the
@@ -132,9 +164,13 @@
             var oAlpha = maxOffDiag === 0 ? 0 : Math.min(0.5, 0.06 + 0.44 * (val / maxOffDiag));
             cellStyle = 'background: rgba(178,58,50,' + oAlpha.toFixed(2) + '); color: var(--fmc-bad);';
             cellText = val;
+            // Off-diagonal + non-zero = an actual error: say what happened in
+            // plain terms rather than making the reader cross-reference two
+            // rotated axis labels by hand.
+            cellTitle = ' title="Predicted ' + labels[j1] + ' (' + val + ')&#10;But ground truth was: ' + labels[i1] + '"';
           }
         }
-        html += '<div class="cm-cell" style="width: ' + cell + 'px; height: ' + cell + 'px; display: flex; align-items: center; justify-content: center; ' + cellStyle + '">' + cellText + '</div>';
+        html += '<div class="cm-cell" data-row="' + i1 + '" data-col="' + j1 + '"' + cellTitle + ' style="width: ' + cell + 'px; height: ' + cell + 'px; display: flex; align-items: center; justify-content: center; ' + cellStyle + '">' + cellText + '</div>';
       }
       html += '</div>';
     }
@@ -144,7 +180,7 @@
   }
 
   const FeatrixModelCard = {
-    VERSION: '1.17.5',
+    VERSION: '1.17.6',
     BUILD: 'dev',
 
     /**
@@ -1099,6 +1135,48 @@
           html += '<div style="margin-top: 15px; color: var(--fmc-slate); font-size: 13px;">' +
             'Class balance: <strong>' + minC.label + '</strong> is ' + minC.pct.toFixed(1) + '% of data, <strong>' + maxC.label + '</strong> is ' + maxC.pct.toFixed(1) + '%</div>';
         }
+      } else if (ci.class_distribution && !Array.isArray(ci.class_distribution) && Object.keys(ci.class_distribution).length > 2) {
+        // Dict-shaped class_distribution with >2 classes (multiclass targets send
+        // {label: count, ...} rather than the newer array-of-objects shape above).
+        // The old code fell through to the binary branch below, which only knows
+        // minority_class/majority_class -- with 15-20 classes that silently threw
+        // away everything except the two extremes. A wide one-column-per-class
+        // table doesn't work at this cardinality either (unreadable past ~8), so
+        // this renders a sorted population bar per class instead, matching the
+        // bar style already used for renderTopConfusions.
+        var distDict = ci.class_distribution;
+        var trainDistN = ci.train_distribution || {};
+        var valDistN = ci.val_distribution || {};
+        var entries = Object.keys(distDict).map(function(label) {
+          return {
+            label: label,
+            total: distDict[label] || 0,
+            train: trainDistN[label] || 0,
+            val: valDistN[label] || 0,
+          };
+        }).sort(function(a, b) { return b.total - a.total; });
+        var grandTotal = entries.reduce(function(sum, e) { return sum + e.total; }, 0) || 1;
+        var maxTotal = entries.length ? entries[0].total : 1;
+
+        html += '<div class="cls-dist">';
+        entries.forEach(function(e) {
+          var pct = (e.total / grandTotal) * 100;
+          var barPct = maxTotal > 0 ? Math.max((e.total / maxTotal) * 100, e.total > 0 ? 1.5 : 0) : 0;
+          html += '<div class="cls-dist-row">' +
+            '<div class="cls-dist-label" title="' + e.label + '">' + e.label + '</div>' +
+            '<div class="cls-dist-bar-wrap"><div class="cls-dist-bar" style="width:' + barPct.toFixed(1) + '%"></div></div>' +
+            '<div class="cls-dist-count">' + e.total.toLocaleString() + ' <span class="cls-dist-pct">(' + pct.toFixed(1) + '%)</span></div>' +
+            '</div>';
+        });
+        html += '</div>';
+
+        var imbalanceTotal = ci.total_samples || grandTotal;
+        if (ci.imbalance_ratio || (ci.minority_class_count && ci.majority_class_count)) {
+          html += '<div style="margin-top: 15px; color: var(--fmc-slate); font-size: 13px;">' +
+            'Imbalance ratio: <strong>' + (ci.imbalance_ratio || Math.round(ci.majority_class_count / Math.max(ci.minority_class_count, 1))) + ':1</strong>' +
+            ' (<strong>' + (ci.minority_class || entries[entries.length - 1].label) + '</strong> is ' + ((ci.minority_class_count || entries[entries.length - 1].total) / imbalanceTotal * 100).toFixed(1) + '% of data)' +
+            '</div>';
+        }
       } else if (ci.class_distribution || ci.train_distribution) {
         // Legacy binary distribution table (also covers the legacy dict-shaped class_distribution).
         var minClass = ci.minority_class || '1';
@@ -1171,7 +1249,7 @@
                 <tr>
                     <th style="text-align: left;">Column</th>
                     <th style="text-align: left;">Type</th>
-                    <th style="text-align: left;">Encoder</th>
+                    <th style="text-align: left;">Details</th>
                     <th style="text-align: right;">Unique Values</th>
                     <th style="text-align: right;">Predictability</th>
                 </tr>
@@ -1186,7 +1264,7 @@
       for (var i = 0; i < fi.length; i++) {
         var f = fi[i] || {};
         var s = stats[f.name] || {};
-        var typeDisplay = (f.type || 'N/A').replace(/^ColumnType\./, '');
+        var typeInfo = columnTypeLabel(f.type);
         var predictability = (typeof s.predictability_pct === 'number') ? s.predictability_pct.toFixed(1) + '%' : 'N/A';
         var ci = f.column_importance;
         var isExcluded = !!ci && ci.weight === 0;
@@ -1196,10 +1274,30 @@
           var badgeTitle = (ci.description || '').replace(/"/g, '&quot;');
           excludedBadge = ' <span class="fmc-excluded-badge" title="' + badgeTitle + '">' + badgeLabel + '</span>';
         }
+
+        // Details column: hybrid columns show which path is actually winning
+        // and by how much (routing was previously invisible -- the class
+        // name "HybridScalarSetCodec" doesn't say whether it landed on
+        // scalar, set, or a blend). Plain scalar columns fall back to
+        // mean/std when the codec exposed statistics. Everything else -- an
+        // em dash, nothing interesting to add beyond Type + Unique Values.
+        var details = '&mdash;';
+        if (f.hybrid_routing) {
+          var hr = f.hybrid_routing;
+          var pctA = Math.round((hr.weight_a || 0) * 100);
+          var pctB = 100 - pctA;
+          details = '<div class="hr-label">' + hr.selected_mode + ': ' + hr.path_a + ' ' + pctA + '% &middot; ' + hr.path_b + ' ' + pctB + '%</div>' +
+            '<div class="hr-bar"><div class="hr-bar-a" style="width:' + pctA + '%"></div><div class="hr-bar-b" style="width:' + pctB + '%"></div></div>';
+        } else if (f.statistics && typeof f.statistics.mean === 'number') {
+          var meanStr = f.statistics.mean.toFixed(2);
+          var stdStr = (typeof f.statistics.std === 'number') ? ' &plusmn; ' + f.statistics.std.toFixed(2) : '';
+          details = '<span style="font-family: var(--fmc-mono);">&mu;=' + meanStr + stdStr + '</span>';
+        }
+
         html += '<tr' + (isExcluded ? ' style="opacity: 0.65;"' : '') + '>';
         html += '<td style="font-family: var(--fmc-mono);">' + (f.name || 'N/A') + excludedBadge + '</td>';
-        html += '<td>' + typeDisplay + '</td>';
-        html += '<td>' + (f.encoder_type || 'N/A') + '</td>';
+        html += '<td' + (typeInfo.description ? ' title="' + typeInfo.description.replace(/"/g, '&quot;') + '"' : '') + '>' + typeInfo.label + '</td>';
+        html += '<td>' + details + '</td>';
         html += '<td style="text-align: right;">' + (f.unique_values !== undefined && f.unique_values !== null ? f.unique_values.toLocaleString() : 'N/A') + '</td>';
         html += '<td style="text-align: right; font-weight: bold;">' + predictability + '</td>';
         html += '</tr>';
@@ -1643,6 +1741,65 @@
         return html;
       }
 
+      function fmtMeanStd(mean, std) {
+        if (typeof mean !== 'number') return 'N/A';
+        var s = mean.toFixed(2);
+        if (typeof std === 'number') s += ' &plusmn; ' + std.toFixed(2);
+        return s;
+      }
+
+      // "What do the rows the model always gets wrong have in common?" --
+      // find_feature_commonality() on the backend already answers this (it
+      // diffs the hardest rows against the rest on every feature and keeps
+      // the top few by effect size / frequency gap); this was computed and
+      // shipped in every model card's per_row_tracking.feature_analysis but
+      // never rendered anywhere, so the answer only ever existed in Raw JSON.
+      function renderFeatureCommonality(fa) {
+        if (!fa) return '';
+        var catP = fa.categorical_patterns || [];
+        var numP = fa.numeric_patterns || [];
+        if (catP.length === 0 && numP.length === 0) return '';
+
+        var html = '<h4 style="margin: 15px 0 10px 0; font-family: var(--fmc-mono); font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; font-weight: bold; color: var(--fmc-ink-soft);">What The Hardest Rows Have In Common</h4>';
+
+        if (catP.length > 0) {
+          html += '<div class="fa-cat-list">';
+          for (var ci = 0; ci < catP.length; ci++) {
+            var p = catP[ci];
+            var hardPct = Math.round((p.hard_freq || 0) * 100);
+            var easyPct = Math.round((p.easy_freq || 0) * 100);
+            var valueStr = String(p.value);
+            var labelTitle = (p.feature + ' = ' + valueStr).replace(/"/g, '&quot;');
+            html += '<div class="fa-row">';
+            html += '<div class="fa-label" title="' + labelTitle + '"><strong>' + p.feature + '</strong> = ' + valueStr + '</div>';
+            html += '<div class="fa-bars">';
+            html += '<div class="fa-bar-line"><span class="fa-bar-tag fa-bar-tag-hard">HARD</span><div class="fa-bar-track"><div class="fa-bar-fill fa-bar-fill-hard" style="width:' + hardPct + '%"></div></div><span class="fa-bar-val">' + hardPct + '% (' + p.hard_count + ')</span></div>';
+            html += '<div class="fa-bar-line"><span class="fa-bar-tag fa-bar-tag-easy">EASY</span><div class="fa-bar-track"><div class="fa-bar-fill fa-bar-fill-easy" style="width:' + easyPct + '%"></div></div><span class="fa-bar-val">' + easyPct + '% (' + p.easy_count + ')</span></div>';
+            html += '</div></div>';
+          }
+          html += '</div>';
+        }
+
+        if (numP.length > 0) {
+          html += '<table style="margin-top: ' + (catP.length > 0 ? '15px' : '0') + ';">';
+          html += '<tr><th>Feature</th><th style="text-align: right;">Easy Rows</th><th style="text-align: right;">Hard Rows</th><th style="text-align: right;">Effect Size</th></tr>';
+          for (var ni = 0; ni < numP.length; ni++) {
+            var np = numP[ni];
+            var effect = (typeof np.effect_size === 'number') ? np.effect_size : null;
+            var effectColor = effect === null ? 'var(--fmc-slate)' : (effect >= 0.8 ? 'var(--fmc-bad)' : (effect >= 0.5 ? 'var(--fmc-warn)' : 'var(--fmc-slate)'));
+            html += '<tr>';
+            html += '<td style="font-family: var(--fmc-mono);">' + np.feature + '</td>';
+            html += '<td style="text-align: right; font-family: var(--fmc-mono);">' + fmtMeanStd(np.easy_mean, np.easy_std) + '</td>';
+            html += '<td style="text-align: right; font-family: var(--fmc-mono);">' + fmtMeanStd(np.hard_mean, np.hard_std) + '</td>';
+            html += '<td style="text-align: right; font-weight: bold; font-family: var(--fmc-mono); color: ' + effectColor + ';">' + (effect !== null ? effect.toFixed(2) : 'N/A') + '</td>';
+            html += '</tr>';
+          }
+          html += '</table>';
+        }
+
+        return html;
+      }
+
       function renderEpochSection(title, epochData) {
         if (!epochData) return '';
 
@@ -1691,6 +1848,22 @@
           html += '<td style="font-family: var(--fmc-mono); font-variant-numeric: tabular-nums; font-weight: bold; color: var(--fmc-bad);">' + cc.always_wrong + '</td>';
           html += '</tr></table>';
         }
+        if (prt && prt.hardest_rows && prt.hardest_rows.length > 0) {
+          html += '<h4 style="margin: 15px 0 10px 0; font-family: var(--fmc-mono); font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; font-weight: bold; color: var(--fmc-ink-soft);">Hardest Rows</h4>';
+          html += '<table>';
+          html += '<tr><th>Row</th><th>Ground Truth</th><th style="text-align: right;">Wrong</th><th style="text-align: right;">Error Rate</th></tr>';
+          for (var hri = 0; hri < prt.hardest_rows.length; hri++) {
+            var hr2 = prt.hardest_rows[hri];
+            html += '<tr>';
+            html += '<td style="font-family: var(--fmc-mono);">#' + hr2.row_idx + '</td>';
+            html += '<td style="font-family: var(--fmc-mono);">' + (hr2.ground_truth != null ? hr2.ground_truth : '&mdash;') + '</td>';
+            html += '<td style="text-align: right; font-family: var(--fmc-mono);">' + hr2.epochs_wrong + ' / ' + hr2.window + '</td>';
+            html += '<td style="text-align: right; font-weight: bold; color: var(--fmc-bad); font-family: var(--fmc-mono);">' + (hr2.error_rate * 100).toFixed(1) + '%</td>';
+            html += '</tr>';
+          }
+          html += '</table>';
+        }
+        html += renderFeatureCommonality(prt && prt.feature_analysis);
         if (prt && (prt.this_epoch || prt.cumulative_categories)) {
           html += '</details>';
         }
@@ -2356,6 +2529,41 @@
 
       // Initialize sphere viewer if thumbnail is present
       this._initSphere(modelCard);
+
+      this._initConfusionMatrixHover(modelCard);
+    },
+
+    /**
+     * Cross-highlight the row and column of whichever confusion-matrix cell
+     * the mouse is over, so a reader can tell which two class labels a cell
+     * intersects without tracing rotated axis labels by eye. Delegated per
+     * .cm-block (a card can have several -- one per epoch tab, plus the
+     * declined-rows breakdown) so it keeps working after re-renders/polling.
+     */
+    _initConfusionMatrixHover: function(modelCard) {
+      var blocks = modelCard.querySelectorAll('.cm-block');
+      blocks.forEach(function(block) {
+        function clear() {
+          var hl = block.querySelectorAll('.cm-hl');
+          for (var k = 0; k < hl.length; k++) hl[k].classList.remove('cm-hl');
+        }
+        block.addEventListener('mouseover', function(e) {
+          var cell = e.target.closest ? e.target.closest('.cm-cell') : null;
+          clear();
+          if (!cell) return;
+          var row = cell.getAttribute('data-row');
+          var col = cell.getAttribute('data-col');
+          if (row === null || col === null) return;
+          block.querySelectorAll('.cm-cell[data-row="' + row + '"], .cm-cell[data-col="' + col + '"]').forEach(function(c) {
+            c.classList.add('cm-hl');
+          });
+          var rl = block.querySelector('.cm-row-label[data-row="' + row + '"]');
+          if (rl) rl.classList.add('cm-hl');
+          var cl = block.querySelector('.cm-col-label[data-col="' + col + '"]');
+          if (cl) cl.classList.add('cm-hl');
+        });
+        block.addEventListener('mouseleave', clear);
+      });
     },
 
     /**
@@ -2771,7 +2979,33 @@
         .featrix-model-card .confusion-wrapper { margin-top: 20px; }
         .featrix-model-card .confusion-title { margin: 0 0 15px 0; font-family: var(--fmc-mono); font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--fmc-ink-soft); }
         .featrix-model-card .confusion-layout { display: flex; gap: 36px; align-items: flex-start; flex-wrap: wrap; }
+        .featrix-model-card .hr-label { font-size: 12px; color: var(--fmc-ink-soft); margin-bottom: 3px; white-space: nowrap; }
+        .featrix-model-card .hr-bar { display: flex; width: 120px; height: 6px; border-radius: 3px; overflow: hidden; background: var(--fmc-mist-2); }
+        .featrix-model-card .hr-bar-a { background: var(--fmc-brass); height: 100%; }
+        .featrix-model-card .hr-bar-b { background: var(--fmc-slate); opacity: 0.45; height: 100%; }
+        .featrix-model-card .cls-dist { display: flex; flex-direction: column; gap: 3px; }
+        .featrix-model-card .cls-dist-row { display: flex; align-items: center; gap: 10px; }
+        .featrix-model-card .cls-dist-label { width: 220px; flex: 0 0 220px; font-family: var(--fmc-mono); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .featrix-model-card .cls-dist-bar-wrap { flex: 1; background: var(--fmc-mist-2); border-radius: 3px; height: 10px; overflow: hidden; }
+        .featrix-model-card .cls-dist-bar { height: 100%; background: var(--fmc-brass); border-radius: 3px; }
+        .featrix-model-card .cls-dist-count { width: 130px; flex: 0 0 130px; text-align: right; font-family: var(--fmc-mono); font-size: 12px; color: var(--fmc-ink-soft); }
+        .featrix-model-card .cls-dist-pct { color: var(--fmc-slate); }
+        .featrix-model-card .fa-cat-list { display: flex; flex-direction: column; gap: 12px; }
+        .featrix-model-card .fa-row { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+        .featrix-model-card .fa-label { width: 260px; flex: 0 0 260px; font-family: var(--fmc-mono); font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .featrix-model-card .fa-bars { display: flex; flex-direction: column; gap: 3px; flex: 1; min-width: 220px; }
+        .featrix-model-card .fa-bar-line { display: flex; align-items: center; gap: 8px; }
+        .featrix-model-card .fa-bar-tag { width: 36px; flex: 0 0 36px; font-family: var(--fmc-mono); font-size: 10px; font-weight: 700; letter-spacing: 0.03em; }
+        .featrix-model-card .fa-bar-tag-hard { color: var(--fmc-bad); }
+        .featrix-model-card .fa-bar-tag-easy { color: var(--fmc-good); }
+        .featrix-model-card .fa-bar-track { flex: 1; background: var(--fmc-mist-2); border-radius: 3px; height: 8px; overflow: hidden; }
+        .featrix-model-card .fa-bar-fill { height: 100%; border-radius: 3px; }
+        .featrix-model-card .fa-bar-fill-hard { background: var(--fmc-bad); }
+        .featrix-model-card .fa-bar-fill-easy { background: var(--fmc-good); }
+        .featrix-model-card .fa-bar-val { width: 90px; flex: 0 0 90px; text-align: right; font-family: var(--fmc-mono); font-size: 11.5px; color: var(--fmc-ink-soft); }
         .featrix-model-card .cm-cell { border: 1px solid var(--fmc-paper); outline: 1px solid var(--fmc-line-soft); font-family: var(--fmc-mono); font-variant-numeric: tabular-nums; font-size: 16px; font-weight: 700; }
+        .featrix-model-card .cm-cell.cm-hl { box-shadow: inset 0 0 0 2px var(--fmc-brass-strong); filter: brightness(1.1) saturate(1.15); cursor: default; }
+        .featrix-model-card .cm-row-label.cm-hl, .featrix-model-card .cm-col-label.cm-hl { background: var(--fmc-brass-bg); border-radius: 3px; }
         .featrix-model-card .cm-correct { background: var(--fmc-good-bg); color: var(--fmc-good); }
         .featrix-model-card .cm-error { background: var(--fmc-bad-bg); color: var(--fmc-bad); }
         .featrix-model-card .cm-confusions { background: var(--fmc-paper); border: 1px solid var(--fmc-line); border-radius: 6px; padding: 4px 16px; margin-bottom: 20px; }

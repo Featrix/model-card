@@ -1,5 +1,5 @@
 {
-  "_comment": "PROPOSED multiclass shape — not yet emitted by generate_model_card.py (taco-fixes). This is the target fixture for the model-card renderer's multiclass work (see docs/multiclass-redesign-mockup.html). Scenario: 4-class support-ticket priority classifier, P0 (Critical) .. P3 (Low), 2,400 held-out rows.",
+  "_comment": "Multiclass fixture matching the REAL backend schema (generate_model_card.py), confirmed against actual end-to-end training runs — not speculative. Scenario: 4-class support-ticket priority classifier, P0 (Critical) .. P3 (Low), 2,400 held-out rows. See commits ca97f13, af7cd25, 591c2cf, b92e53c for the schema facts this reflects.",
 
   "model_identification": {
     "session_id": "predictor-ticket-priority-7f3a9c21-1e4b-4a2f-9c3d-8b7e6f5a4d3c",
@@ -9,7 +9,7 @@
     "compute_cluster": "DEFAULT",
     "training_date": "2026-07-30",
     "status": "done",
-    "model_type": "Single Predictor",
+    "model_type": "Foundation + Neural Predictor",
     "framework": "FeatrixSphere v0.3",
     "num_classes": 4,
     "class_labels": ["P0", "P1", "P2", "P3"]
@@ -29,32 +29,20 @@
   },
 
   "best_epochs": {
-    "_comment": "PROPOSED: for multiclass models, keys are named after whatever metrics were actually tracked during training — not fixed to best_roc_auc/best_pr_auc. The renderer should generate one tab per key present here, defaulting to the tab matching training_optimization.checkpoint_metric.",
+    "_comment": "Multiclass models track whatever metrics were actually optimized -- keys aren't fixed to best_roc_auc/best_pr_auc. A real end-to-end run's card had best_roc_auc populated too (auc = macro one-vs-rest), alongside best_accuracy and whatever checkpoint_metric was configured -- so best_roc_auc is included here as a real epoch entry, not just a binary-only key.",
 
-    "best_macro_f1": {
+    "best_roc_auc": {
       "epoch": 34,
-      "macro_f1": 0.888,
+      "roc_auc": 0.9621,
       "classification_display_metadata": {
         "epoch": 34,
         "classification_metrics": {
           "accuracy":  { "value": 0.8896, "quality": "GOOD", "trend": "↗", "delta_1": 0.004, "delta_5": 0.02, "delta_10": null },
+          "auc":       { "value": 0.9621, "quality": "EXCELLENT", "trend": "↗", "delta_1": 0.002, "delta_5": 0.011, "delta_10": null },
           "macro_f1":  { "value": 0.888,  "quality": "GOOD", "trend": "↗", "delta_1": 0.003, "delta_5": 0.018, "delta_10": null },
           "weighted_f1": { "value": 0.890, "quality": "GOOD", "trend": "↗", "delta_1": 0.003, "delta_5": 0.017, "delta_10": null },
           "log_loss":  { "value": 0.284, "quality": "GOOD", "trend": "↘", "delta_1": -0.01, "delta_5": -0.03, "delta_10": null },
           "macro_auc_ovr": { "value": 0.9621, "quality": "EXCELLENT", "trend": "↗", "delta_1": 0.002, "delta_5": 0.011, "delta_10": null },
-
-          "_comment_per_class": "PROPOSED: replaces the binary Hit Rate/Miss Rate/Specificity/FPR/Precision table when there are more than 2 classes.",
-          "per_class": [
-            { "label": "P0", "display_name": "Critical", "precision": 0.876, "recall": 0.900, "f1": 0.888, "support": 180 },
-            { "label": "P1", "display_name": "High",     "precision": 0.868, "recall": 0.867, "f1": 0.867, "support": 540 },
-            { "label": "P2", "display_name": "Medium",   "precision": 0.883, "recall": 0.883, "f1": 0.883, "support": 920 },
-            { "label": "P3", "display_name": "Low",      "precision": 0.917, "recall": 0.912, "f1": 0.914, "support": 760 }
-          ],
-          "averaging": {
-            "macro":    { "precision": 0.886, "recall": 0.891, "f1": 0.888 },
-            "weighted": { "precision": 0.890, "recall": 0.890, "f1": 0.890 },
-            "support": 2400
-          },
           "per_class_auc_ovr": [
             { "label": "P0", "auc": 0.9840 },
             { "label": "P1", "auc": 0.9510 },
@@ -62,18 +50,18 @@
             { "label": "P3", "auc": 0.9528 }
           ]
         },
-
         "confusion_matrix": {
-          "_comment": "PROPOSED: replaces the binary {tp,tn,fp,fn} shape. Rows = actual class, columns = predicted class, in class_labels order. Diagonal = correct.",
           "class_labels": ["P0", "P1", "P2", "P3"],
           "matrix": [
             [162, 14, 3, 1],
             [21, 468, 44, 7],
             [2, 51, 812, 55],
             [0, 6, 61, 693]
-          ]
+          ],
+          "per_class_precision": { "P0": 0.876, "P1": 0.868, "P2": 0.883, "P3": 0.917 },
+          "per_class_recall":    { "P0": 0.900, "P1": 0.867, "P2": 0.883, "P3": 0.912 },
+          "per_class_f1":        { "P0": 0.888, "P1": 0.867, "P2": 0.883, "P3": 0.914 }
         },
-
         "per_row_tracking": {
           "this_epoch": { "correct": 2135, "wrong": 265, "accuracy_pct": 88.96 },
           "cumulative_categories": {
@@ -82,57 +70,6 @@
             "sometimes_wrong": 210,
             "frequently_wrong": 95,
             "always_wrong": 35
-          }
-        }
-      }
-    },
-
-    "best_log_loss": {
-      "epoch": 29,
-      "log_loss": 0.251,
-      "classification_display_metadata": {
-        "epoch": 29,
-        "classification_metrics": {
-          "accuracy":  { "value": 0.8830, "quality": "GOOD", "trend": "↗", "delta_1": 0.003, "delta_5": 0.018, "delta_10": null },
-          "macro_f1":  { "value": 0.881,  "quality": "GOOD", "trend": "↗", "delta_1": 0.002, "delta_5": 0.014, "delta_10": null },
-          "weighted_f1": { "value": 0.883, "quality": "GOOD", "trend": "↗", "delta_1": 0.002, "delta_5": 0.014, "delta_10": null },
-          "log_loss":  { "value": 0.251, "quality": "EXCELLENT", "trend": "↘↘", "delta_1": -0.02, "delta_5": -0.05, "delta_10": null },
-          "macro_auc_ovr": { "value": 0.9588, "quality": "EXCELLENT", "trend": "↗", "delta_1": 0.001, "delta_5": 0.009, "delta_10": null },
-          "per_class": [
-            { "label": "P0", "display_name": "Critical", "precision": 0.865, "recall": 0.894, "f1": 0.879, "support": 180 },
-            { "label": "P1", "display_name": "High",     "precision": 0.860, "recall": 0.859, "f1": 0.859, "support": 540 },
-            { "label": "P2", "display_name": "Medium",   "precision": 0.878, "recall": 0.876, "f1": 0.877, "support": 920 },
-            { "label": "P3", "display_name": "Low",      "precision": 0.910, "recall": 0.905, "f1": 0.907, "support": 760 }
-          ],
-          "averaging": {
-            "macro":    { "precision": 0.878, "recall": 0.884, "f1": 0.881 },
-            "weighted": { "precision": 0.883, "recall": 0.883, "f1": 0.883 },
-            "support": 2400
-          },
-          "per_class_auc_ovr": [
-            { "label": "P0", "auc": 0.9812 },
-            { "label": "P1", "auc": 0.9472 },
-            { "label": "P2", "auc": 0.9571 },
-            { "label": "P3", "auc": 0.9497 }
-          ]
-        },
-        "confusion_matrix": {
-          "class_labels": ["P0", "P1", "P2", "P3"],
-          "matrix": [
-            [161, 15, 3, 1],
-            [24, 464, 45, 7],
-            [3, 54, 806, 57],
-            [0, 7, 65, 688]
-          ]
-        },
-        "per_row_tracking": {
-          "this_epoch": { "correct": 2119, "wrong": 281, "accuracy_pct": 88.29 },
-          "cumulative_categories": {
-            "never_wrong": 1622,
-            "rarely_wrong": 402,
-            "sometimes_wrong": 224,
-            "frequently_wrong": 103,
-            "always_wrong": 49
           }
         }
       }
@@ -149,17 +86,6 @@
           "weighted_f1": { "value": 0.901, "quality": "EXCELLENT", "trend": "↗", "delta_1": 0.005, "delta_5": 0.022, "delta_10": null },
           "log_loss":  { "value": 0.269, "quality": "GOOD", "trend": "↘", "delta_1": -0.005, "delta_5": -0.02, "delta_10": null },
           "macro_auc_ovr": { "value": 0.9605, "quality": "EXCELLENT", "trend": "→", "delta_1": 0.0, "delta_5": 0.007, "delta_10": null },
-          "per_class": [
-            { "label": "P0", "display_name": "Critical", "precision": 0.890, "recall": 0.878, "f1": 0.884, "support": 180 },
-            { "label": "P1", "display_name": "High",     "precision": 0.883, "recall": 0.850, "f1": 0.866, "support": 540 },
-            { "label": "P2", "display_name": "Medium",   "precision": 0.895, "recall": 0.907, "f1": 0.901, "support": 920 },
-            { "label": "P3", "display_name": "Low",      "precision": 0.921, "recall": 0.928, "f1": 0.924, "support": 760 }
-          ],
-          "averaging": {
-            "macro":    { "precision": 0.897, "recall": 0.891, "f1": 0.894 },
-            "weighted": { "precision": 0.902, "recall": 0.902, "f1": 0.901 },
-            "support": 2400
-          },
           "per_class_auc_ovr": [
             { "label": "P0", "auc": 0.9825 },
             { "label": "P1", "auc": 0.9498 },
@@ -174,7 +100,10 @@
             [16, 459, 58, 7],
             [1, 40, 835, 44],
             [0, 4, 51, 705]
-          ]
+          ],
+          "per_class_precision": { "P0": 0.890, "P1": 0.883, "P2": 0.895, "P3": 0.921 },
+          "per_class_recall":    { "P0": 0.878, "P1": 0.850, "P2": 0.907, "P3": 0.928 },
+          "per_class_f1":        { "P0": 0.884, "P1": 0.866, "P2": 0.901, "P3": 0.924 }
         },
         "per_row_tracking": {
           "this_epoch": { "correct": 2157, "wrong": 243, "accuracy_pct": 89.88 },
@@ -187,32 +116,113 @@
           }
         }
       }
+    },
+
+    "best_macro_f1": {
+      "epoch": 34,
+      "macro_f1": 0.888,
+      "classification_display_metadata": {
+        "epoch": 34,
+        "classification_metrics": {
+          "accuracy":  { "value": 0.8896, "quality": "GOOD", "trend": "↗", "delta_1": 0.004, "delta_5": 0.02, "delta_10": null },
+          "macro_f1":  { "value": 0.888,  "quality": "GOOD", "trend": "↗", "delta_1": 0.003, "delta_5": 0.018, "delta_10": null },
+          "weighted_f1": { "value": 0.890, "quality": "GOOD", "trend": "↗", "delta_1": 0.003, "delta_5": 0.017, "delta_10": null },
+          "log_loss":  { "value": 0.284, "quality": "GOOD", "trend": "↘", "delta_1": -0.01, "delta_5": -0.03, "delta_10": null },
+          "macro_auc_ovr": { "value": 0.9621, "quality": "EXCELLENT", "trend": "↗", "delta_1": 0.002, "delta_5": 0.011, "delta_10": null },
+          "per_class_auc_ovr": [
+            { "label": "P0", "auc": 0.9840 },
+            { "label": "P1", "auc": 0.9510 },
+            { "label": "P2", "auc": 0.9605 },
+            { "label": "P3", "auc": 0.9528 }
+          ]
+        },
+        "confusion_matrix": {
+          "class_labels": ["P0", "P1", "P2", "P3"],
+          "matrix": [
+            [162, 14, 3, 1],
+            [21, 468, 44, 7],
+            [2, 51, 812, 55],
+            [0, 6, 61, 693]
+          ],
+          "per_class_precision": { "P0": 0.876, "P1": 0.868, "P2": 0.883, "P3": 0.917 },
+          "per_class_recall":    { "P0": 0.900, "P1": 0.867, "P2": 0.883, "P3": 0.912 },
+          "per_class_f1":        { "P0": 0.888, "P1": 0.867, "P2": 0.883, "P3": 0.914 }
+        },
+        "per_row_tracking": {
+          "this_epoch": { "correct": 2135, "wrong": 265, "accuracy_pct": 88.96 },
+          "cumulative_categories": {
+            "never_wrong": 1680,
+            "rarely_wrong": 380,
+            "sometimes_wrong": 210,
+            "frequently_wrong": 95,
+            "always_wrong": 35
+          }
+        }
+      }
+    },
+
+    "best_cross_entropy": {
+      "epoch": 29,
+      "cross_entropy": 0.251,
+      "classification_display_metadata": {
+        "epoch": 29,
+        "classification_metrics": {
+          "accuracy":  { "value": 0.8830, "quality": "GOOD", "trend": "↗", "delta_1": 0.003, "delta_5": 0.018, "delta_10": null },
+          "macro_f1":  { "value": 0.881,  "quality": "GOOD", "trend": "↗", "delta_1": 0.002, "delta_5": 0.014, "delta_10": null },
+          "weighted_f1": { "value": 0.883, "quality": "GOOD", "trend": "↗", "delta_1": 0.002, "delta_5": 0.014, "delta_10": null },
+          "log_loss":  { "value": 0.251, "quality": "EXCELLENT", "trend": "↘↘", "delta_1": -0.02, "delta_5": -0.05, "delta_10": null },
+          "macro_auc_ovr": { "value": 0.9588, "quality": "EXCELLENT", "trend": "↗", "delta_1": 0.001, "delta_5": 0.009, "delta_10": null },
+          "per_class_auc_ovr": [
+            { "label": "P0", "auc": 0.9812 },
+            { "label": "P1", "auc": 0.9472 },
+            { "label": "P2", "auc": 0.9571 },
+            { "label": "P3", "auc": 0.9497 }
+          ]
+        },
+        "confusion_matrix": {
+          "class_labels": ["P0", "P1", "P2", "P3"],
+          "matrix": [
+            [161, 15, 3, 1],
+            [24, 464, 45, 7],
+            [3, 54, 806, 57],
+            [0, 7, 65, 688]
+          ],
+          "per_class_precision": { "P0": 0.865, "P1": 0.860, "P2": 0.878, "P3": 0.910 },
+          "per_class_recall":    { "P0": 0.894, "P1": 0.859, "P2": 0.876, "P3": 0.905 },
+          "per_class_f1":        { "P0": 0.879, "P1": 0.859, "P2": 0.877, "P3": 0.907 }
+        },
+        "per_row_tracking": {
+          "this_epoch": { "correct": 2119, "wrong": 281, "accuracy_pct": 88.29 },
+          "cumulative_categories": {
+            "never_wrong": 1622,
+            "rarely_wrong": 402,
+            "sometimes_wrong": 224,
+            "frequently_wrong": 103,
+            "always_wrong": 49
+          }
+        }
+      }
     }
   },
 
   "class_imbalance": {
-    "_comment": "PROPOSED: class_distribution generalizes minority_class/majority_class to N classes. train_distribution/val_distribution already support arbitrary keys today — the fix needed is on the renderer side, which currently only ever reads 2 of them.",
+    "_comment": "Real multiclass targets send class_distribution as the same {label: count} dict binary targets always used -- just with more than 2 keys -- not a new array shape. total_samples is the only other field that applies; minority_class/majority_class/imbalance_ratio are binary-only concepts and are omitted here (a >2-class distribution has no single ratio).",
     "total_samples": 2400,
-    "class_distribution": [
-      { "label": "P0", "display_name": "Critical", "count": 180, "pct": 7.5 },
-      { "label": "P1", "display_name": "High", "count": 540, "pct": 22.5 },
-      { "label": "P2", "display_name": "Medium", "count": 920, "pct": 38.3 },
-      { "label": "P3", "display_name": "Low", "count": 760, "pct": 31.7 }
-    ],
+    "class_distribution": { "P0": 180, "P1": 540, "P2": 920, "P3": 760 },
     "train_distribution": { "P0": 144, "P1": 432, "P2": 736, "P3": 608 },
     "val_distribution": { "P0": 36, "P1": 108, "P2": 184, "P3": 152 }
   },
 
   "training_optimization": {
-    "_comment": "PROPOSED: positive_class is dropped for multiclass (no single positive class exists) — class_labels replaces it.",
+    "_comment": "positive_class is dropped for multiclass (no single positive class exists) -- class_labels replaces it. checkpoint_metric is cross_entropy, the real name multiclass training actually checkpoints on (not log_loss, though classification_metrics still reports the value under the log_loss key).",
     "loss_function": "CrossEntropyLoss",
-    "optimization_priority": "macro_f1",
-    "checkpoint_metric": "macro_f1",
+    "optimization_priority": "cross_entropy",
+    "checkpoint_metric": "cross_entropy",
     "optimization_description": "Standard cross-entropy with class-weighted sampling across 4 priority tiers to counteract the P0/P1 minority classes",
     "class_weights": [1.85, 1.10, 0.75, 0.85],
     "adaptive_loss": false,
-    "checkpoint_value": 0.888,
-    "checkpoint_epoch": 34,
+    "checkpoint_value": 0.251,
+    "checkpoint_epoch": 29,
     "class_labels": ["P0", "P1", "P2", "P3"]
   },
 
@@ -225,7 +235,7 @@
   },
 
   "coverage": {
-    "_comment": "PROPOSED: multiclass selective prediction. 'declined_matrix' reuses the confusion_matrix class_labels/matrix shape, filtered to demurred rows. Strategies are data-driven — the renderer should render one tab per key present under strategies rather than assuming a fixed set.",
+    "_comment": "declined_matrix reuses the confusion_matrix class_labels/matrix shape, filtered to demurred rows. Strategies are data-driven -- the renderer renders one tab per key present under strategies rather than assuming a fixed set.",
 
     "summary": {
       "coverage": 0.9642,

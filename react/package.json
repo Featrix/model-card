@@ -1,6 +1,6 @@
 {
   "name": "@featrix/modelcard",
-  "version": "1.17.5",
+  "version": "1.17.7",
   "description": "React component for rendering Featrix Sphere Model Cards",
   "main": "ModelCard.tsx",
   "scripts": {

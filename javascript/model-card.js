@@ -180,7 +180,7 @@
   }
 
   const FeatrixModelCard = {
-    VERSION: '1.17.6',
+    VERSION: '1.17.7',
     BUILD: 'dev',
 
     /**
@@ -1504,14 +1504,9 @@
         if (!cmetrics || !cmetrics.per_class || !cmetrics.per_class.length) return '';
         var html = '<p class="confusion-title" style="margin-top: 0;">Per-Class Metrics</p>';
         html += '<table><tr><th>Class</th><th>Precision</th><th>Recall</th><th>F1</th><th>Support</th></tr>';
-        // Sorted worst-F1-first: the classes that need attention surface at
-        // the top instead of being buried in whatever order the labels came in.
-        var sortedClasses = cmetrics.per_class.slice().sort(function(a, b) {
-          var af = (typeof a.f1 === 'number') ? a.f1 : 1;
-          var bf = (typeof b.f1 === 'number') ? b.f1 : 1;
-          return af - bf;
-        });
-        sortedClasses.forEach(function(c) {
+        // Keep the same order the confusion matrix uses (cmetrics.per_class is
+        // already built in cm.class_labels order) so the two tables line up.
+        cmetrics.per_class.forEach(function(c) {
           var name = c.display_name ? (c.label + ' — ' + c.display_name) : c.label;
           var band = '';
           if (typeof c.f1 === 'number') {

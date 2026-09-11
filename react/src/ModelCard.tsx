@@ -229,10 +229,10 @@ export interface ModelCardData {
     imbalance_ratio?: number;
     train_distribution?: { [key: string]: number };
     val_distribution?: { [key: string]: number };
-    /** PROPOSED, not yet implemented: N-class distribution — array shape only. Some existing
-     *  cards already send class_distribution as a legacy {label: count} dict; that shape is
-     *  still handled, just not through this field. */
-    class_distribution?: Array<{ label: string; display_name?: string; count?: number; pct?: number }>;
+    /** Real multiclass cards send this as a {label: count} dict (the same shape binary
+     *  targets always used) — the array-of-objects shape below never shipped from the
+     *  backend but is still handled for anyone who built a card by hand against it. */
+    class_distribution?: Array<{ label: string; display_name?: string; count?: number; pct?: number }> | { [label: string]: number };
   };
   best_epochs?: {
     best_roc_auc?: BestEpochData;
@@ -838,11 +838,14 @@ export const ModelCard: React.FC<ModelCardProps> = ({ data, className = '', onRe
     const p = cm.per_class_precision || {};
     const r = cm.per_class_recall || {};
     const f = cm.per_class_f1 || {};
-    const perClass = cm.class_labels.map(label => ({
+    // Support isn't emitted alongside precision/recall/f1 -- derive it from each
+    // class's row sum in the matrix itself (same approach JS/Python use).
+    const perClass = cm.class_labels.map((label, i) => ({
       label,
       precision: p[label],
       recall: r[label],
       f1: f[label],
+      support: cm.matrix[i] ? cm.matrix[i].reduce((sum, v) => sum + (v || 0), 0) : undefined,
     }));
     return perClass.some(c => c.precision != null || c.recall != null || c.f1 != null) ? perClass : undefined;
   };
@@ -1395,6 +1398,14 @@ export const ModelCard: React.FC<ModelCardProps> = ({ data, className = '', onRe
         .featrix-model-card .status-badge.training { animation: featrix-training-pulse 2s ease-in-out infinite; }
 
         .featrix-model-card code { background: var(--fmc-mist-2); padding: 2px 6px; border: 1px solid var(--fmc-line); border-radius: 3px; font-family: var(--fmc-mono); font-size: 12.5px; }
+
+        .featrix-model-card .cls-dist { display: flex; flex-direction: column; gap: 3px; }
+        .featrix-model-card .cls-dist-row { display: flex; align-items: center; gap: 10px; }
+        .featrix-model-card .cls-dist-label { width: 220px; flex: 0 0 220px; font-family: var(--fmc-mono); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .featrix-model-card .cls-dist-bar-wrap { flex: 1; background: var(--fmc-mist-2); border-radius: 3px; height: 10px; overflow: hidden; }
+        .featrix-model-card .cls-dist-bar { height: 100%; background: var(--fmc-brass); border-radius: 3px; }
+        .featrix-model-card .cls-dist-count { width: 130px; flex: 0 0 130px; text-align: right; font-family: var(--fmc-mono); font-size: 12px; color: var(--fmc-ink-soft); }
+        .featrix-model-card .cls-dist-pct { color: var(--fmc-slate); }
 
         @media print {
           .featrix-model-card .page { padding: 0; max-width: 100%; }
@@ -1991,6 +2002,49 @@ export const ModelCard: React.FC<ModelCardProps> = ({ data, className = '', onRe
                     {minC && maxC && (
                       <div style={{ marginTop: '15px', color: 'var(--fmc-slate)', fontSize: '13px' }}>
                         Class balance: <strong>{minC.label}</strong> is {minC.pct!.toFixed(1)}% of data, <strong>{maxC.label}</strong> is {maxC.pct!.toFixed(1)}%
+                      </div>
+                    )}
+                  </>
+                );
+              })() : (!Array.isArray(ci.class_distribution) && ci.class_distribution && Object.keys(ci.class_distribution).length > 2) ? (() => {
+                // Dict-shaped class_distribution with >2 classes (multiclass targets send
+                // {label: count, ...} rather than the array-of-objects shape above -- that's
+                // what real multiclass cards actually emit; the array shape never shipped).
+                // The old code fell through to the binary branch below, which only knows
+                // minority_class/majority_class -- with more than 2 classes that silently
+                // threw away everything except two of them. A wide one-column-per-class
+                // table doesn't work at this cardinality either, so this renders a sorted
+                // population bar per class instead, matching the JS renderer.
+                const distDict = ci.class_distribution as { [label: string]: number };
+                const trainDistN = ci.train_distribution ?? {};
+                const valDistN = ci.val_distribution ?? {};
+                const entries = Object.keys(distDict)
+                  .map(label => ({ label, total: distDict[label] || 0, train: trainDistN[label] || 0, val: valDistN[label] || 0 }))
+                  .sort((a, b) => b.total - a.total);
+                const grandTotal = entries.reduce((sum, e) => sum + e.total, 0) || 1;
+                const maxTotal = entries.length ? entries[0].total : 1;
+                const imbalanceTotal = ci.total_samples || grandTotal;
+                const showImbalance = ci.imbalance_ratio || (ci.minority_class_count && ci.majority_class_count);
+                const smallest = entries[entries.length - 1];
+                return (
+                  <>
+                    <div className="cls-dist">
+                      {entries.map(e => {
+                        const pct = (e.total / grandTotal) * 100;
+                        const barPct = maxTotal > 0 ? Math.max((e.total / maxTotal) * 100, e.total > 0 ? 1.5 : 0) : 0;
+                        return (
+                          <div className="cls-dist-row" key={e.label}>
+                            <div className="cls-dist-label" title={e.label}>{e.label}</div>
+                            <div className="cls-dist-bar-wrap"><div className="cls-dist-bar" style={{ width: `${barPct.toFixed(1)}%` }} /></div>
+                            <div className="cls-dist-count">{e.total.toLocaleString()} <span className="cls-dist-pct">({pct.toFixed(1)}%)</span></div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    {showImbalance && (
+                      <div style={{ marginTop: '15px', color: 'var(--fmc-slate)', fontSize: '13px' }}>
+                        Imbalance ratio: <strong>{ci.imbalance_ratio || Math.round((ci.majority_class_count || 0) / Math.max(ci.minority_class_count || 1, 1))}:1</strong>
+                        {' '}(<strong>{ci.minority_class || smallest.label}</strong> is {(((ci.minority_class_count ?? smallest.total)) / imbalanceTotal * 100).toFixed(1)}% of data)
                       </div>
                     )}
                   </>

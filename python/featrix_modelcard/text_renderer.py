@@ -419,15 +419,22 @@ def _render_matrix_ascii(labels: list, matrix: list) -> list:
 
 def _per_class_from_cm(cm: dict) -> list:
     """per_class_precision/recall/f1 on the confusion-matrix payload are dicts keyed
-    by label (no support counts emitted yet) -- reshape into the [{label, precision,
-    recall, f1}] shape _render_per_class_metrics_ascii expects."""
+    by label (no support counts emitted alongside them) -- reshape into the
+    [{label, precision, recall, f1, support}] shape _render_per_class_metrics_ascii
+    expects, deriving support from each class's row sum in the matrix itself (same
+    approach the JS/React renderers use)."""
     labels = cm.get("class_labels") or []
+    matrix = cm.get("matrix") or []
     p = cm.get("per_class_precision") or {}
     r = cm.get("per_class_recall") or {}
     f = cm.get("per_class_f1") or {}
     if not (p or r or f):
         return []
-    return [{"label": label, "precision": p.get(label), "recall": r.get(label), "f1": f.get(label)} for label in labels]
+    result = []
+    for i, label in enumerate(labels):
+        support = sum(matrix[i]) if i < len(matrix) else None
+        result.append({"label": label, "precision": p.get(label), "recall": r.get(label), "f1": f.get(label), "support": support})
+    return result
 
 
 def _render_per_class_metrics_ascii(metrics: dict, per_class: list = None) -> list:
@@ -676,6 +683,35 @@ def _render_training_dataset(data: dict) -> str:
                 f"  Class balance: {min_c['label']} is {min_c['pct']:.1f}% of data, "
                 f"{max_c['label']} is {max_c['pct']:.1f}%"
             )
+    elif isinstance(class_distribution, dict) and len(class_distribution) > 2:
+        # Dict-shaped class_distribution with >2 classes (multiclass targets send
+        # {label: count, ...} rather than the array-of-objects shape above -- that's
+        # what real multiclass cards actually emit; the array shape never shipped).
+        # A one-column-per-class table doesn't scale past a handful of classes, so
+        # this renders a sorted count/pct table instead, matching the JS renderer's
+        # population-bar view (minus the bar, which doesn't translate to text).
+        train_dist = ci.get("train_distribution") or {}
+        val_dist = ci.get("val_distribution") or {}
+        entries = sorted(
+            ({"label": label, "total": count or 0, "train": train_dist.get(label, 0), "val": val_dist.get(label, 0)}
+             for label, count in class_distribution.items()),
+            key=lambda e: e["total"], reverse=True,
+        )
+        grand_total = sum(e["total"] for e in entries) or 1
+        label_w = max(10, max(len(e["label"]) for e in entries) + 2)
+
+        lines.append(f"  {'Class':<{label_w}}{'Train':>10}{'Val':>10}{'Total':>10}{'Pct':>8}")
+        for e in entries:
+            pct = e["total"] / grand_total * 100
+            lines.append(f"  {e['label']:<{label_w}}{e['train']:>10,}{e['val']:>10,}{e['total']:>10,}{pct:>7.1f}%")
+        lines.append("")
+
+        imbalance_total = ci.get("total_samples") or grand_total
+        if ci.get("imbalance_ratio") or (ci.get("minority_class_count") and ci.get("majority_class_count")):
+            ratio = ci.get("imbalance_ratio") or round(ci["majority_class_count"] / max(ci["minority_class_count"], 1))
+            smallest = ci.get("minority_class") or entries[-1]["label"]
+            smallest_count = ci.get("minority_class_count") or entries[-1]["total"]
+            lines.append(f"  Imbalance ratio: {ratio}:1 ({smallest} is {smallest_count / imbalance_total * 100:.1f}% of data)")
     elif ci.get("train_distribution") or ci.get("class_distribution") or ci.get("minority_class") or ci.get("majority_class"):
         # Legacy binary distribution table (also covers the legacy dict-shaped class_distribution).
         minority = ci.get("minority_class", "1")

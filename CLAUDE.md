@@ -15,7 +15,7 @@ Never edit files outside of this repository (`model-card/`). If a bug or issue i
 ## Version Files
 
 - Version bumps in this repo are OK when making meaningful changes
-- Current version: **1.17.4**
+- Current version: **1.17.7**
 
 ## Code Style
 
@@ -42,6 +42,13 @@ Status is set by the backend (taco-fixes repo), NOT by this library. We only ren
 - `training` — still training (yellow)
 - `failed` — training failed (red)
 - `unknown` — fallback (gray)
+
+## Testing
+
+- Playwright regression tests live in `tests/` (separate from the three published packages — not part of what ships). Covers the JS and React renderers against every fixture in `examples/`, including click-driven tab-switching (a real bug class: JS's epoch/strategy tabs once shared a CSS class that made a generic click handler crash on the wrong one).
+- Run: `cd tests && npm install && npm test` (first time also needs `npx playwright install chromium`)
+- When you change rendering logic in `javascript/model-card.js` or `react/src/ModelCard.tsx`, or touch `examples/*.json`, run this before considering the change done.
+- Python's text renderer has no browser to drive — verify it by rendering `examples/*.json` through `render_detailed_text`/`render_brief_text` directly (no crash + spot-check the output).
 
 ## Publishing
 
